@@ -102,7 +102,7 @@
 
   TrackInfoEncoder proj_param1(1, 10);
   TrackInfoEncoder proj_param2(0, 36);
-  TrackInfoEncoder proj_param4(0, 127);
+ // TrackInfoEncoder proj_param4(0, 127);
   TrackInfoPage proj_page(&proj_param1,&proj_param2);
 
   TrackInfoEncoder loadproj_param1(1, 64);
@@ -764,16 +764,17 @@ void onNoteOffCallback(uint8_t *msg) {
      if (note_num < 16) {
       
        if (notes[note_num] == 1)  {
-          if (curpage == 5) {
-          notes[note_num] = 0;
-          }
-          else {
+      //    if (curpage == 5) {
+      //    notes[note_num] = 0;
+      //    }
+      //    else {
           notes[note_num] = 3;
-          }
+       //   }
        }
      }
      //If we're on track read/write page then check to see
-     if ((curpage == 3) || (curpage == 4) || (curpage == 5)) {
+       //   if ((curpage == 3) || (curpage == 4) || (curpage == 5)) {
+     if ((curpage == 3) || (curpage == 4)) {
                   //store_tracks_in_mem(param1.getValue(),param2.getValue(), 254);
 
 
@@ -805,14 +806,11 @@ void onNoteOffCallback(uint8_t *msg) {
                   exploit_off();
                   write_tracks_to_md(patternload_param2.cur + (patternload_param1.cur * 16), param1.getValue(),param2.getValue());
         } 
-        if (curpage == 5) {
-                  return; 
-        }
+   //     if (curpage == 5) {
+   //               return; 
+   //     }
            GUI.setPage(&page);
                  curpage = 0;
-
-
-
 
         }
 
@@ -1779,7 +1777,7 @@ void setup() {
   param4.effect = MD_FX_ECHO;
   param4.fxparam = MD_ECHO_FB;
   
- proj_param4.handler = encoder_level_handle;
+ //proj_param4.handler = encoder_level_handle;
   //Setup Turbo Midi
   TurboMidi.setup();
   //Start the SD Card Initialisation.
@@ -2314,26 +2312,36 @@ void exploit_on() {
        global_page = 0;
 
             	uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
-         if (MidiClock.state == MidiClock.STARTED) { MidiUart.putc_immediate(MIDI_STOP); }
+         if ((MidiClock.state == MidiClock.STARTED) && (MidiClock.mode = MidiClock.EXTERNAL_UART2)) { 
+         MidiUart.putc_immediate(MIDI_STOP); 
+       }
 
 	MD.sendSysex(data, countof(data));
-        if (MidiClock.state == MidiClock.STARTED) { MidiUart.putc_immediate(MIDI_CONTINUE); }
+        if ((MidiClock.state == MidiClock.STARTED) &&  (MidiClock.mode = MidiClock.EXTERNAL_UART2)) {
+        MidiUart.putc_immediate(MIDI_CONTINUE); 
+      }
       //  MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,200);
         collect_notes = true;
        
 }
 
+
 void exploit_off() {
            collect_notes = false;
          global_page = 1;
   uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
-    global_new.tempo = MidiClock.tempo;
+   //
+   global_new.tempo = MidiClock.tempo;
    //   global_new.baseChannel = 3;
    //    ElektronDataToSysexEncoder encoder(&MidiUart);
     //   global_new.toSysex(encoder);
-         if (MidiClock.state == MidiClock.STARTED) { MidiUart.putc_immediate(MIDI_STOP); }
+         if ((MidiClock.state == MidiClock.STARTED) && (MidiClock.mode = MidiClock.EXTERNAL_UART2)) { 
+         MidiUart.putc_immediate(MIDI_STOP);
+       }
 	MD.sendSysex(data, countof(data));
-        if (MidiClock.state == MidiClock.STARTED) { MidiUart.putc_immediate(MIDI_CONTINUE); }
+        if ((MidiClock.state == MidiClock.STARTED) && (MidiClock.mode = MidiClock.EXTERNAL_UART2)) { 
+        MidiUart.putc_immediate(MIDI_CONTINUE); 
+      }
 
                                
 }
@@ -2578,7 +2586,7 @@ bool handleEvent(gui_event_t *evt) {
             return true;
           }
          if (EVENT_RELEASED(evt, Buttons.BUTTON4)) {
-                     exploit_off();
+           //          exploit_off();
            GUI.setPage(&page);
            curpage = 0;
            return true;
@@ -2668,7 +2676,11 @@ bool handleEvent(gui_event_t *evt) {
     //   exploit_on();
       //   GUI.setPage(&trackinfo_page);
         //           curpage = 5;
-                 return true; 
+            //...
+    //        .................................
+  
+            
+        //.............................000    return true; 
          // }
         
         /*IF button1 and encoder buttons are pressed, store current track selected on MD into the corresponding Grid*/
