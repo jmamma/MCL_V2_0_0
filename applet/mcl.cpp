@@ -18,6 +18,7 @@
  #include <TurboMidi.hh>
  #include <SDCard.h>
  #include <string.h>
+ #include <midi-common.hh>
  //#include <TrigCapture.h>
 
 
@@ -35,14 +36,13 @@ void draw_notes();
 void md_setsysex_recpos();
 void setLevel(int curtrack, int value);
 void splashscreen();
+void encoder_level_handle(Encoder *enc);
 void encoder_fx_handle(Encoder *enc);
 void toggle_fx1();
 void toggle_fx2();
 void store_tracks_in_mem(int column, int row, int num);
 void store_pattern_in_mem(int pattern, int column, int row);
 void write_tracks_to_md(int pattern, int column, int row);
-void trackwrite_queue_init();
-void puton_trackwrite_queue(int column, int row);
 void toggle_cue(int i);
 void modify_track(int looptrack_);
 void loadtrackinfo_page(uint8_t i);
@@ -62,7 +62,7 @@ void exploit_off();
 bool handleEvent(gui_event_t *evt);
 MDPattern pattern_rec;
   MDKit kit_new;
-
+  MDGlobal global_new;
 
 /*Current Loaded project file, set to test.mcl as initial name*/
   SDCardFile file("/test.mcl");
@@ -97,9 +97,6 @@ MDPattern pattern_rec;
   char newprj[18];
 
 
-/*A queue used to hold the tracks that are to be written to the MD*/
-
- uint8_t trackwrite_queue[16][2];
 
 /*A toggle for sending tracks in their original pattern position or not*/
   bool trackposition = false;
@@ -142,6 +139,7 @@ MDPattern pattern_rec;
 
   TrackInfoEncoder proj_param1(1, 10);
   TrackInfoEncoder proj_param2(0, 36);
+  TrackInfoEncoder proj_param4(0, 127);
   TrackInfoPage proj_page(&proj_param1,&proj_param2);
 
   TrackInfoEncoder loadproj_param1(1, 64);
@@ -803,11 +801,16 @@ void onNoteOffCallback(uint8_t *msg) {
      if (note_num < 16) {
       
        if (notes[note_num] == 1)  {
+          if (curpage == 5) {
+          notes[note_num] = 0;
+          }
+          else {
           notes[note_num] = 3;
+          }
        }
      }
      //If we're on track read/write page then check to see
-     if ((curpage == 3) || (curpage == 4)) {
+     if ((curpage == 3) || (curpage == 4) || (curpage == 5)) {
                   //store_tracks_in_mem(param1.getValue(),param2.getValue(), 254);
 
 
@@ -839,6 +842,9 @@ void onNoteOffCallback(uint8_t *msg) {
                   exploit_off();
                   write_tracks_to_md(patternload_param2.cur + (patternload_param1.cur * 16), param1.getValue(),param2.getValue());
         } 
+        if (curpage == 5) {
+                  return; 
+        }
            GUI.setPage(&page);
                  curpage = 0;
 
@@ -920,10 +926,18 @@ class MDHandler2 : public MDCallback {
  
         MDSysexListener.addOnPatternMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onPatternMessage); 
         MDSysexListener.addOnKitMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onKitMessage); 
+        MDSysexListener.addOnGlobalMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onGlobalMessage); 
     }
   
+  
+    void onGlobalMessage() {
+              setLed2();
+              if (!global_new.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) { GUI.flash_strings_fill("GLOBAL", "ERROR");  }
+              clearLed2();
+    }
 /*A kit has been received by the Minicommand in the form of a Sysex message which is residing 
 in memory*/
+
    void onKitMessage() {
         setLed2();
         /*If patternswitch == 0 then the Kit request is for the purpose of obtaining track data*/
@@ -1010,33 +1024,33 @@ if (patternswitch == 5) {
         
 
          if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {    
-                     
-          /*Get current track number from MD*/
+                     /*
+          //Get current track number from MD
                        int curtrack = MD.getCurrentTrack(callback_timeout);
                        int i = 0;
 
-          /*Data structure for holding the parameter locks of a single step*/                                        
+          //Data structure for holding the parameter locks of a single step                                       
                        uint8_t templocks[24];
 
-          /*Retrevieve trig masks and store them temporarily*/
+          //Retrevieve trig masks and store them temporarily
           
                        uint64_t temptrig = pattern_rec.trigPatterns[curtrack];
                        uint64_t tempslide = pattern_rec.slidePatterns[curtrack];
                        uint64_t tempaccent = pattern_rec.accentPatterns[curtrack];
                        uint64_t tempswing = pattern_rec.swingPatterns[curtrack];
           
-          /*Reversing a track requires reflecting a track about its mid point*/ 
-          /*We can therefore start from the beginning and end of the pattern, swapping triggers and working our way to the middle*/
+          //Reversing a track requires reflecting a track about its mid point
+          //We can therefore start from the beginning and end of the pattern, swapping triggers and working our way to the middle
           
                      while (i < pattern_rec.patternLength / 2) {
 
-          /*Initialize locks*/
+          //Initialize locks
                               for (uint8_t g = 0; g < (24); g++) { templocks[g] = 254; }
           
-          /*If there is a trigger, then we'll need to swap it*/                    
+          //If there is a trigger, then we'll need to swap it                    
                              if (IS_BIT_SET64(pattern_rec.trigPatterns[curtrack],i)) { 
                     
-                                /*backup the locks*/
+                                //backup the locks
                                 
                                        for (int m = 0; m < 24; m++) {
                                              if (IS_BIT_SET32(pattern_rec.lockPatterns[curtrack], m)) {
@@ -1052,7 +1066,7 @@ if (patternswitch == 5) {
 
                               }
                               
-                              /*Clear the existing locks for the step*/
+                              //Clear the existing locks for the step
                               clear_step_locks(curtrack,i);
                            
                               
@@ -1061,7 +1075,7 @@ if (patternswitch == 5) {
                                  SET_BIT64(pattern_rec.trigPatterns[curtrack],i);
                               }
                                  else {  CLEAR_BIT64(pattern_rec.trigPatterns[curtrack],i); }                     
-                               /*Copy the parameter locks of the loop step, to the new step*/
+                               //Copy the parameter locks of the loop step, to the new step
                                 for (int m = 0; m < 24; m++) {
                                            if (IS_BIT_SET32(pattern_rec.lockPatterns[curtrack], m)) {
                                               int8_t idx = pattern_rec.paramLocks[curtrack][m];
@@ -1073,7 +1087,7 @@ if (patternswitch == 5) {
                                  
                                         }
                                
-                               /*Clear the existing locks for the step*/
+                               //Clear the existing locks for the step
                                clear_step_locks(curtrack, pattern_rec.patternLength - i - 1) ;
                               
                             // pattern_rec.clearTrig(curtrack, pattern_rec.patternLength - i - 1 );
@@ -1092,47 +1106,48 @@ if (patternswitch == 5) {
                         
 
                              
-                            /*If there is a accent trigger on the loop step, copy the accent trigger to the new step*/
+                            //If there is a accent trigger on the loop step, copy the accent trigger to the new step
                             if (IS_BIT_SET64(tempaccent,pattern_rec.patternLength - i - 1)) {  SET_BIT64(pattern_rec.accentPatterns[curtrack],i); }
                             else { CLEAR_BIT64(pattern_rec.accentPatterns[curtrack],i); }
                              if (IS_BIT_SET64(tempaccent,i)) { SET_BIT64(pattern_rec.accentPatterns[curtrack],pattern_rec.patternLength - i - 1); }
                             else { CLEAR_BIT64(pattern_rec.accentPatterns[curtrack],pattern_rec.patternLength - i - 1); }
                             
-                                      /*If there is a accent trigger on the loop step, copy the accent trigger to the new step*/
+                                      //If there is a accent trigger on the loop step, copy the accent trigger to the new step
                             if (IS_BIT_SET64(tempslide,pattern_rec.patternLength - i - 1)) { SET_BIT64(pattern_rec.slidePatterns[curtrack],i); }
                             else { CLEAR_BIT64(pattern_rec.slidePatterns[curtrack],i); }
                              if (IS_BIT_SET64(tempslide,i)) { SET_BIT64(pattern_rec.slidePatterns[curtrack],pattern_rec.patternLength - i - 1); }
                             else { CLEAR_BIT64(pattern_rec.slidePatterns[curtrack],pattern_rec.patternLength - i - 1); }
-                                      /*If there is a accent trigger on the loop step, copy the accent trigger to the new step*/
+                                      //If there is a accent trigger on the loop step, copy the accent trigger to the new step
                             if (IS_BIT_SET64(tempswing,pattern_rec.patternLength - i - 1)) { SET_BIT64(pattern_rec.swingPatterns[curtrack],i); }
                             else { CLEAR_BIT64(pattern_rec.swingPatterns[curtrack],i); }
                              if (IS_BIT_SET64(tempswing,i)) { SET_BIT64(pattern_rec.swingPatterns[curtrack],pattern_rec.patternLength - i - 1); }
                             else { CLEAR_BIT64(pattern_rec.swingPatterns[curtrack],pattern_rec.patternLength - i - 1); }
-                                      /*If there is a accent trigger on the loop step, copy the accent trigger to the new step*/
+                                      //If there is a accent trigger on the loop step, copy the accent trigger to the new step
                              
                           i++;
                       }
                       
-                             /*Define sysex encoder objects for the Pattern and Kit*/
+                             //Define sysex encoder objects for the Pattern and Kit
                   ElektronDataToSysexEncoder encoder(&MidiUart);
                 
                   setLed();
                   
-                  /*Send the encoded pattern to the MD via sysex*/
+                  //Send the encoded pattern to the MD via sysex
                   pattern_rec.toSysex(encoder);
                   clearLed();
                   patternswitch = 254;
+                  */
          }
                    //         else { GUI.flash_strings_fill("SYSEX", "ERROR");  }
       } 
 
 
-      /*Loop track switch*/
+      //Loop track switch
     else if (patternswitch == 4) {
-          /*Retrieve the pattern from the Sysex buffer and store it in the pattern_rec object. The MD header is 5 bytes long, hence the offset and length change*/
+          //Retrieve the pattern from the Sysex buffer and store it in the pattern_rec object. The MD header is 5 bytes long, hence the offset and length change
          if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {    
                      
-
+/*
                        int curtrack = MD.getCurrentTrack(callback_timeout);
                        int i = encodervalue;
                       
@@ -1140,23 +1155,23 @@ if (patternswitch == 5) {
                        if (pattern_rec.patternLength < encodervalue) { encodervalue = pattern_rec.patternLength; }
                        
                            while (i < pattern_rec.patternLength) {
-                        /*Loop for x amount of steps, where x = encodervalue. Eg loop the first 4 steps or 8 steps*/
+                        //Loop for x amount of steps, where x = encodervalue. Eg loop the first 4 steps or 8 steps
                           for (int n = 0; n < encodervalue; n++) {
              
                             
                             
-                     /*Clear the locks*/       
+                     //Clear the locks     
                      
                               clear_step_locks(curtrack,i+n);
 
 
-                             /*Check to see if the current bit is set in the loop*/
+                             //Check to see if the current bit is set in the loop
                              if (IS_BIT_SET64(pattern_rec.trigPatterns[curtrack],n)) { 
-                             /*Set the new step to match the loop step*/
+                             //Set the new step to match the loop step
                              
                              
                                 SET_BIT64(pattern_rec.trigPatterns[curtrack],i + n);
-                                /*Copy the parameter locks of the loop step, to the new step*/
+                                //Copy the parameter locks of the loop step, to the new step
                                 for (int m = 0; m < 24; m++) {
                                            if (IS_BIT_SET32(pattern_rec.lockPatterns[curtrack], m)) {
                                     int8_t idx = pattern_rec.paramLocks[curtrack][m];
@@ -1167,27 +1182,28 @@ if (patternswitch == 5) {
                                  }
                              }  
                              else { CLEAR_BIT64(pattern_rec.trigPatterns[curtrack],i + n); }
-                            /*If there is a accent trigger on the loop step, copy the accent trigger to the new step*/
+                            //If there is a accent trigger on the loop step, copy the accent trigger to the new step
                             if (IS_BIT_SET64(pattern_rec.accentPatterns[curtrack],n)) { SET_BIT64(pattern_rec.accentPatterns[curtrack],i + n); }
                             else { CLEAR_BIT64(pattern_rec.accentPatterns[curtrack],i + n); }
-                            /*If there is a accent trigger on the loop step, copy the accent trigger to the new step*/
+                            //If there is a accent trigger on the loop step, copy the accent trigger to the new step
                              if (IS_BIT_SET64(pattern_rec.swingPatterns[curtrack],n)) { SET_BIT64(pattern_rec.swingPatterns[curtrack],i + n); }
                             else { CLEAR_BIT64(pattern_rec.swingPatterns[curtrack],i + n); }
-                             /*If there is a slide trigger on the loop step, copy the slide trigger to the new step*/
+                             //If there is a slide trigger on the loop step, copy the slide trigger to the new step
                              if (IS_BIT_SET64(pattern_rec.slidePatterns[curtrack],n)) { SET_BIT64(pattern_rec.slidePatterns[curtrack],i + n); }
                             else { CLEAR_BIT64(pattern_rec.slidePatterns[curtrack],i + n); }
                           }
                           i = i + encodervalue;
                       }
                       
-                             /*Define sysex encoder objects for the Pattern and Kit*/
+                             //Define sysex encoder objects for the Pattern and Kit
                   ElektronDataToSysexEncoder encoder(&MidiUart);
                 
                   setLed();
                   
-                  /*Send the encoded pattern to the MD via sysex*/
+                  //Send the encoded pattern to the MD via sysex
                   pattern_rec.toSysex(encoder);
                   clearLed();
+                  */
                   patternswitch = 254;
          }
                          //   else { GUI.flash_strings_fill("SYSEX", "ERROR");  }
@@ -1401,7 +1417,7 @@ void setLevel(int curtrack, int value) {
     else if (curtrack < 12) { cc = curtrack; }
     else if (curtrack < 16) { cc = curtrack - 4; }
 
-    MidiUart.sendCC(channel + MD.global.baseChannel, cc , value);
+    MidiUart.sendCC(channel + 4, cc , value);
 }
 
 
@@ -1448,6 +1464,16 @@ void splashscreen() {
     GUI.setPage(&page);
 }
 
+
+
+void encoder_level_handle(Encoder *enc) {
+TrackInfoEncoder *mdEnc = (TrackInfoEncoder *)enc;
+   for (int i = 0; i < 16; i++) {
+       if (notes[i] == 1) {
+          setLevel(i,mdEnc->getValue());
+       }
+   }
+}
 void encoder_fx_handle(Encoder *enc) {
     GridEncoder *mdEnc = (GridEncoder *)enc;
    
@@ -1534,14 +1560,15 @@ void store_tracks_in_mem(int column, int row, int num) {
   
        store_n_tracks = num;
        setLed();
-       int curkit = MD.getCurrentKit(callback_timeout);
-       patternswitch = 0;
+         int curkit = MD.getCurrentKit(callback_timeout);
+                     patternswitch = 0;
     //  int curkit = MD.getBlockingStatus(MD_CURRENT_KIT_REQUEST, callback_timeout);
 
 
        
-       MD.saveCurrentKit(curkit);
-       MD.getBlockingKit(curkit);
+                     MD.saveCurrentKit(curkit);
+                     MD.getBlockingKit(curkit);
+     
        MD.getBlockingPattern(MD.currentPattern);
          
        clearLed(); 
@@ -1623,53 +1650,7 @@ void write_tracks_to_md(int pattern, int column, int row) {
         
 }
 
-//void notes_init() {
-//  for (int i = 0; i < 16; i++) {
-//    notes[i] = 0;  
-//  }
-//}
-/* 
- ================
- function: trackwrite_queue_init() 
- ================
- Clear the trackwrite queue by initialising the arrays.
- 
- Note:
- Values stored in the track write queue are shifted by 1. This is to prevent NULL == 0 bug
 
- */ 
- 
-void trackwrite_queue_init() {
-	for (int i = 0; i < 16; i++) {
-        trackwrite_queue[i][0] = 254;
-        trackwrite_queue[i][1] = 254;
-
-	}
-}
-/* 
- ================
- function: puton_trackwrite_queue(int column, int row)
- ================
- Called by the GUI, when an encoder button is pressed to signal that a track is to be written to the Machinedrum, 
- it is first inserted in to the track write queue.
- 
- This enables multiple tracks to be written to the MD in one shot, rather than processing each track separately.
-
- */ 
-
-void puton_trackwrite_queue(int column, int row) {
-            
-        if (load_track(column, row)) {
-           if (temptrack.active == true) {
-
-              int i = 0;
-              while ((i < 16) && (trackwrite_queue[i][0] != 254)) { i++; }
-	      trackwrite_queue[i][0] = column;
-	      trackwrite_queue[i][1] = row;
-        			
-           }
-	}
-}
 
 /* 
  ================
@@ -1826,9 +1807,6 @@ void setup() {
  }
    
    set_midinote_totrack_mapping();
-
-   //Initialise the TrackWrite Queue
- trackwrite_queue_init();
  
    //Initalise the  Effects Ecnodres
   param3.handler = encoder_fx_handle;
@@ -1838,20 +1816,25 @@ void setup() {
   param4.effect = MD_FX_ECHO;
   param4.fxparam = MD_ECHO_FB;
   
+// proj_param4.handler = encoder_level_handle;
   //Setup Turbo Midi
   TurboMidi.setup();
-  
   //Start the SD Card Initialisation.
   sd_load_init();
+  
+
+  
   TrigCaptureClass trigger;
 
   trigger.setup();
+//  
   MidiClock.mode = MidiClock.EXTERNAL;
                                                 //      GUI.flash_strings_fill("MIDI CLOCK SRC", "MIDI PORT 2");
   MidiClock.start();
 // patternswitch = 7;
   //     int curkit = MD.getCurrentKit(callback_timeout);
  //      MD.getBlockingKit(curkit);
+
 }
 
 
@@ -2105,10 +2088,10 @@ void TrackInfoEncoder::displayAt(int encoder_offset) {
                GUI.put_string_at(0,getTrackKit(cur_col,cur_row,true));
                GUI.put_value_at(8,(1 + trackinfo_param1.getValue()) * 160);
 
-                if (trackinfo_param2.getValue() == 1) { GUI.put_string_at(10," Swing"); }
+               if (trackinfo_param2.getValue() == 1) { GUI.put_string_at(10," Swing"); }
                else if (trackinfo_param2.getValue() == 2) { GUI.put_string_at(10," Slide"); }
                else if (trackinfo_param2.getValue() == 3) { GUI.put_string_at(10," Accen"); }
-                else { GUI.put_string_at(10," Trigs"); }
+               else { GUI.put_string_at(10," Trigs"); }
       
                GUI.setLine(GUI.LINE2);
                /*str is a string used to display 16 steps of the patternmask at a time*/
@@ -2349,9 +2332,9 @@ void init_notes() {
 }
 
 void exploit_on() {
-       
+      // MD.getBlockingGlobal(0);
        init_notes();
-       
+    
        if (MidiClock.state == 2) {
        div16th_last = MidiClock.div16th_counter;
        noteproceed = 0;
@@ -2361,9 +2344,17 @@ void exploit_on() {
        }
 
        notecount = 0;
-       global_page = 1;
+   //   global_new.baseChannel = 9;
+     //  ElektronDataToSysexEncoder encoder(&MidiUart);
+    //   global_new.toSysex(encoder);
+    //    MD.setTempo(MidiClock.tempo); 
+       global_page = 0;
+
             	uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
+         if (MidiClock.state == MidiClock.STARTED) { MidiUart.putc_immediate(MIDI_STOP); }
+
 	MD.sendSysex(data, countof(data));
+        if (MidiClock.state == MidiClock.STARTED) { MidiUart.putc_immediate(MIDI_CONTINUE); }
       //  MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,200);
         collect_notes = true;
        
@@ -2371,10 +2362,15 @@ void exploit_on() {
 
 void exploit_off() {
            collect_notes = false;
-         global_page = 0;
+         global_page = 1;
   uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
+    global_new.tempo = MidiClock.tempo;
+   //   global_new.baseChannel = 3;
+   //    ElektronDataToSysexEncoder encoder(&MidiUart);
+    //   global_new.toSysex(encoder);
+         if (MidiClock.state == MidiClock.STARTED) { MidiUart.putc_immediate(MIDI_STOP); }
 	MD.sendSysex(data, countof(data));
-
+        if (MidiClock.state == MidiClock.STARTED) { MidiUart.putc_immediate(MIDI_CONTINUE); }
 
                                
 }
@@ -2619,6 +2615,7 @@ bool handleEvent(gui_event_t *evt) {
             return true;
           }
          if (EVENT_RELEASED(evt, Buttons.BUTTON4)) {
+                     exploit_off();
            GUI.setPage(&page);
            curpage = 0;
            return true;
@@ -2658,10 +2655,12 @@ bool handleEvent(gui_event_t *evt) {
                     patternload_param2.cur = MD.currentPattern - 16 * ((int) MD.currentPattern / (int) 16);
                     
                     exploit_on();
-                    GUI.setPage(&patternload_page);
 
-            curpage = 3;
+
+                    curpage = 3;
                    
+                     GUI.setPage(&patternload_page);
+
 
            return true; 
         }
@@ -2701,12 +2700,13 @@ bool handleEvent(gui_event_t *evt) {
           }
         
           
-          
-          //Track Cue Page commands
-         //  GUI.setPage(&trackinfo_page);
-          //         curpage = 5;
-          //        return true; 
-         
+   //      if (EVENT_PRESSED(evt, Buttons.BUTTON3)) { 
+         // Track Cue Page commands
+    //   exploit_on();
+      //   GUI.setPage(&trackinfo_page);
+        //           curpage = 5;
+                 return true; 
+         // }
         
         /*IF button1 and encoder buttons are pressed, store current track selected on MD into the corresponding Grid*/
         if (EVENT_PRESSED(evt, Buttons.ENCODER1) && BUTTON_DOWN(Buttons.BUTTON1)) {
