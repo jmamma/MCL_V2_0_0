@@ -159,7 +159,7 @@ class MDTrack {
   /* 
   ================
   method: storeTrack (int tracknumber, uint8_t column);
-  ================
+  ================**
   
   Store track in memory by reading it from the Pattern Data
   Both a current Pattern and current Kit must be received from the MD first
@@ -241,8 +241,8 @@ class MDTrack {
   */
   
   void placeTrack(int tracknumber, uint8_t column) {
-
-    
+//Check that the track is active, we don't want to write empty/corrupt data to the MD
+    if (active == true) {
     for (int x = 0; x < 64; x++) {
    clear_step_locks(tracknumber, x);
     }
@@ -287,7 +287,7 @@ class MDTrack {
   kit_new.muteGroups[tracknumber] = machine.muteGroup;
                    
   }
-  
+  }
 };
 
 
@@ -2310,16 +2310,18 @@ void exploit_on() {
     //   global_new.toSysex(encoder);
     //    MD.setTempo(MidiClock.tempo); 
        global_page = 0;
-
+    int flag = 0;
             	uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
-         if ((MidiClock.state == MidiClock.STARTED) && (MidiClock.mode = MidiClock.EXTERNAL_UART2)) { 
-         MidiUart.putc_immediate(MIDI_STOP); 
-       }
+    //     if ((MidiClock.state == 2) && (MidiClock.mode == MidiClock.EXTERNAL_UART2)) { 
+          if ((MidiClock.state == 2) && (MidiClock.mode == MidiClock.EXTERNAL_UART2)) { flag = 1;}
+          
+      if (flag == 1) { MidiUart.putc_immediate(MIDI_STOP); }
+    //   }
 
 	MD.sendSysex(data, countof(data));
-        if ((MidiClock.state == MidiClock.STARTED) &&  (MidiClock.mode = MidiClock.EXTERNAL_UART2)) {
-        MidiUart.putc_immediate(MIDI_CONTINUE); 
-      }
+   //     if ((MidiClock.state == 2) &&  (MidiClock.mode == MidiClock.EXTERNAL_UART2)) {
+      if (flag == 1) { MidiUart.putc_immediate(MIDI_CONTINUE); }
+  //    }
       //  MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,200);
         collect_notes = true;
        
@@ -2335,13 +2337,14 @@ void exploit_off() {
    //   global_new.baseChannel = 3;
    //    ElektronDataToSysexEncoder encoder(&MidiUart);
     //   global_new.toSysex(encoder);
-         if ((MidiClock.state == MidiClock.STARTED) && (MidiClock.mode = MidiClock.EXTERNAL_UART2)) { 
-         MidiUart.putc_immediate(MIDI_STOP);
-       }
+    int flag = 0;
+    if ((MidiClock.state == 2) && (MidiClock.mode == MidiClock.EXTERNAL_UART2)) { flag = 1;}
+        if (flag == 1) { MidiUart.putc_immediate(MIDI_STOP); }
+    //   }
 	MD.sendSysex(data, countof(data));
-        if ((MidiClock.state == MidiClock.STARTED) && (MidiClock.mode = MidiClock.EXTERNAL_UART2)) { 
-        MidiUart.putc_immediate(MIDI_CONTINUE); 
-      }
+    //    if ((MidiClock.state == 2) && (MidiClock.mode == MidiClock.EXTERNAL_UART2)) { 
+        if (flag == 1) { MidiUart.putc_immediate(MIDI_CONTINUE); }
+   //   }
 
                                
 }
@@ -2618,14 +2621,17 @@ bool handleEvent(gui_event_t *evt) {
         //TRACK READ PAGE
         if (EVENT_RELEASED(evt, Buttons.BUTTON1) )
        {
-         
-         
-                    MD.getCurrentPattern(callback_timeout);
+                   	uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
+
+
+       
+
+                   MD.getCurrentPattern(callback_timeout);
                     patternload_param1.cur = (int) MD.currentPattern / (int) 16;
           
                     patternload_param2.cur = MD.currentPattern - 16 * ((int) MD.currentPattern / (int) 16);
                     
-                    exploit_on();
+                   exploit_on();
 
 
                     curpage = 3;
