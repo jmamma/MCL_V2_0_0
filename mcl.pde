@@ -832,7 +832,7 @@ void onNoteOnCallback(uint8_t *msg) {
     //       firstnote = msg[1];
      //      notecheck = 1; 
      //  }
-         if (MidiClock.div16th_counter >= (div16th_last + 4)) {
+         if ((MidiClock.div16th_counter >= (div16th_last + 4)) && (write_ready == 1)) {
           noteproceed = 1; 
          }
  
@@ -1253,8 +1253,8 @@ if (patternswitch == 5) {
             /*Retrieve the pattern from the Sysex buffer and store it in the pattern_rec object. The MD header is 5 bytes long, hence the offset and length change*/
            if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
 
+            write_ready = 1;
 
-       send_pattern_kit_to_md();
                   patternswitch = 254;
     } 
    // else { GUI.flash_strings_fill("SYSEX", "ERROR"); }
@@ -1521,7 +1521,7 @@ void write_tracks_to_md(int pattern, int column, int row) {
         /*Request both the Kit and Pattern from the MD for extracing the Pattern and Machine data respectively*/
         /*blocking nethods provided by Wesen kindly prevent the minicommand from doing anything else whilst the precious sysex data is received*/
      //   setLed();
-      
+             send_pattern_kit_to_md();
        
     
      //If the user has sleceted a different destination pattern then we'll need to pull data from that pattern/kit instead.
@@ -1536,7 +1536,7 @@ void write_tracks_to_md(int pattern, int column, int row) {
         // currentkit_temp = MD.getCurrentKit(callback_timeout);
      //    MD.saveCurrentKit(currentkit_temp);
       //   MD.getBlockingKit(currentkit_temp);             
-       MD.getBlockingPattern(MD.currentPattern);
+    //   MD.getBlockingPattern(MD.currentPattern);
 
      //  }
         
@@ -1565,7 +1565,7 @@ void send_pattern_kit_to_md() {
                                    
                            if ((notes[i] > 1)) {
                                place_track_inpattern(i, cur_col + i, cur_row);
-                               MD.muteTrack(i,true);
+
                            }
                       i++;
                     
@@ -1577,10 +1577,13 @@ void send_pattern_kit_to_md() {
                 
                   setLed();
                 
-  
-                  /*Send the encoded pattern to the MD via sysex*/
-                  pattern_rec.toSysex(encoder);
-     
+     /* Retrieve the position of the current kit loaded by the MD.
+                  Use this position to store the modi
+                  */
+                  kit_new.origPosition = currentkit_temp;
+
+
+              
                   //int temp = MD.getCurrentKit(callback_timeout);
                   
                   /*If kit_sendmode == 1 then we'll be sending the Machine via sysex kit dump. */
@@ -1588,25 +1591,25 @@ void send_pattern_kit_to_md() {
                   /*Tell the MD to receive the kit sysexdump in the current kit position*/
 
 
-                  /* Retrieve the position of the current kit loaded by the MD.
-                  Use this position to store the modi
-                  */
-                  kit_new.origPosition = currentkit_temp;
+               
+                  
+                //  pattern_rec.setPosition(pattern_rec.origPosition);
+                  
+                       for (i=0; i < 16; i++) {
+                         if ((notes[i] > 1)) {
+         //            MD.muteTrack(i,true);
+                               }
+                  }
 
-
+                  /*Instruct the MD to reload the kit, as the kit changes won't update until the kit is reloaded*/
+           //           if ((writepattern == -1) || (writepattern == pattern_new.origPosition)) { MD.loadKit(currentkit_temp); }
+                       /*Send the encoded pattern to the MD via sysex*/
+                  pattern_rec.toSysex(encoder);
+     
                   md_setsysex_recpos();
                   /*Send the encoded kit to the MD via sysex*/
 
                       kit_new.toSysex(encoder2);
-                  
-                //  pattern_rec.setPosition(pattern_rec.origPosition);
-                  
-                  
-
-
-                  /*Instruct the MD to reload the kit, as the kit changes won't update until the kit is reloaded*/
-           //           if ((writepattern == -1) || (writepattern == pattern_new.origPosition)) { MD.loadKit(currentkit_temp); }
-                   
                   MD.loadKit(pattern_rec.kit);
                   
                   /*kit_sendmode != 1 therefore we are going to send the Machine via Sysex and Midi cc without sending the kit*/
@@ -1619,13 +1622,13 @@ void send_pattern_kit_to_md() {
             //      }
                 // }
                   if (MidiClock.state == 2) {
-                 while (((MidiClock.div32th_counter + 3) % 32)  != 0)
+                 while (((MidiClock.div32th_counter + 3) % 8)  != 0)
                  // while (1);
                   ;
                   }
            
                   for (i=0; i < 16; i++) {
-                     MD.muteTrack(i,false);
+         //            MD.muteTrack(i,false);
                   }
                
                   clearLed();
@@ -2666,7 +2669,7 @@ bool handleEvent(gui_event_t *evt) {
         
          if (EVENT_RELEASED(evt, Buttons.BUTTON4)) { 
          
-
+                    write_ready = 0;
                     MD.getCurrentPattern(callback_timeout);
                     patternload_param1.cur = (int) MD.currentPattern / (int) 16;
           
@@ -2674,7 +2677,12 @@ bool handleEvent(gui_event_t *evt) {
                                      patternswitch = 1;
                      currentkit_temp = MD.getCurrentKit(callback_timeout);
                     MD.saveCurrentKit(currentkit_temp);
-                    MD.getBlockingKit(currentkit_temp);
+
+
+                  //   MD.requestKit(currentkit_temp);
+                  //  MD.requestPattern(MD.currentPattern);
+                   MD.getBlockingKit(currentkit_temp);
+                   MD.getBlockingPattern(MD.currentPattern);
                     exploit_on();
                     GUI.setPage(&patternload_page);
                    // GUI.display();
