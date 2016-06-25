@@ -5,7 +5,7 @@
   ==============================
   Version 1.0
   Author: Justin Valerp
-  Date: 2/04/2014
+  Date: 2/04/2014 
 */
 
 
@@ -59,7 +59,7 @@
 
   char newprj[18];
 
-
+  uint8_t write_ready = 0;
 
 /*A toggle for sending tracks in their original pattern position or not*/
   bool trackposition = false;
@@ -309,7 +309,6 @@ class ParameterLock {
  uint8_t value;
  uint8_t step;
 };
-
 
 
 
@@ -865,6 +864,17 @@ void onNoteOnCallback(uint8_t *msg) {
 
 };
 
+
+/*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
+
+void place_track_inpattern(int curtrack, int column, int row) {
+          //       if (Grids[encodervaluer] != NULL) {
+                 if (load_track(column,row)) {
+                 temptrack.placeTrack(curtrack, column);
+                 }
+         //        }
+}
+
 /*
   ===================
   class: MDHandler2
@@ -949,15 +959,6 @@ in memory*/
 
 
 
-/*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
-
-void place_track_inpattern(int curtrack, int column, int row) {
-          //       if (Grids[encodervaluer] != NULL) {
-                 if (load_track(column,row)) {
-                 temptrack.placeTrack(curtrack, column);
-                 }
-         //        }
-}
 
 
 /*
@@ -1252,76 +1253,8 @@ if (patternswitch == 5) {
             /*Retrieve the pattern from the Sysex buffer and store it in the pattern_rec object. The MD header is 5 bytes long, hence the offset and length change*/
            if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
 
-                /*Send a quick sysex message to get the current selected track of the MD*/       
-                  int curtrack = MD.getCurrentTrack(callback_timeout);
 
-                  /*Write the selected trackinto a Pattern object by moving it from a Track object into a Pattern object
-                  The destination track is the currently selected track on the machinedrum.
-                  */
-
-                    int i = 0;
-
-                    while ((i < 16) && ((cur_col + i) < 16)) {
-                                   
-                           if ((notes[i] > 1)) {
-                                place_track_inpattern(i, cur_col + i, cur_row);
-                               MD.muteTrack(i);
-                           }
-                      i++;
-                    
-                  }
-
-   
-                  /*Set the pattern position on the MD the pattern is to be written to*/
-              
-                   pattern_rec.setPosition(writepattern); 
-                   
-                   
-                  /*Define sysex encoder objects for the Pattern and Kit*/
-                  ElektronDataToSysexEncoder encoder(&MidiUart);
-                  ElektronDataToSysexEncoder encoder2(&MidiUart);
-                
-                  setLed();
-                
-  
-                  /*Send the encoded pattern to the MD via sysex*/
-                  pattern_rec.toSysex(encoder);
-     
-                  //int temp = MD.getCurrentKit(callback_timeout);
-                  
-                  /*If kit_sendmode == 1 then we'll be sending the Machine via sysex kit dump. */
-
-                  /*Tell the MD to receive the kit sysexdump in the current kit position*/
-
-
-                  /* Retrieve the position of the current kit loaded by the MD.
-                  Use this position to store the modi
-                  */
-                  kit_new.origPosition = currentkit_temp;
-
-
-                  md_setsysex_recpos();
-                  /*Send the encoded kit to the MD via sysex*/
-
-                      kit_new.toSysex(encoder2);
-                  
-                //  pattern_rec.setPosition(pattern_rec.origPosition);
-                  
-                  
-
-
-                  /*Instruct the MD to reload the kit, as the kit changes won't update until the kit is reloaded*/
-           //           if ((writepattern == -1) || (writepattern == pattern_new.origPosition)) { MD.loadKit(currentkit_temp); }
-                   
-                  MD.loadKit(pattern_rec.kit);
-                  
-                  /*kit_sendmode != 1 therefore we are going to send the Machine via Sysex and Midi cc without sending the kit*/
-                  for (i=0; i < 16; i++) {
-                     MD.muteTrack(i,false);
-                  }
-                  clearLed();
-                  /*All the tracks have been sent so clear the write queue*/
-
+       send_pattern_kit_to_md();
                   patternswitch = 254;
     } 
    // else { GUI.flash_strings_fill("SYSEX", "ERROR"); }
@@ -1587,32 +1520,118 @@ void write_tracks_to_md(int pattern, int column, int row) {
         
         /*Request both the Kit and Pattern from the MD for extracing the Pattern and Machine data respectively*/
         /*blocking nethods provided by Wesen kindly prevent the minicommand from doing anything else whilst the precious sysex data is received*/
-        setLed();
+     //   setLed();
       
        
     
      //If the user has sleceted a different destination pattern then we'll need to pull data from that pattern/kit instead.
 
-       if (pattern != MD.currentPattern) {
+   //    if (pattern != MD.currentPattern) {
 
-         MD.getBlockingPattern(pattern);
-         currentkit_temp = pattern_rec.kit;
-         MD.getBlockingKit(currentkit_temp);
-         }
-       else {
-         currentkit_temp = MD.getCurrentKit(callback_timeout);
-         MD.saveCurrentKit(currentkit_temp);
-         MD.getBlockingKit(currentkit_temp);             
-         MD.getBlockingPattern(MD.currentPattern);
+ //        MD.getBlockingPattern(pattern);
+   //      currentkit_temp = pattern_rec.kit;
+     //    MD.getBlockingKit(currentkit_temp);
+        // }
+       //else {
+        // currentkit_temp = MD.getCurrentKit(callback_timeout);
+     //    MD.saveCurrentKit(currentkit_temp);
+      //   MD.getBlockingKit(currentkit_temp);             
+       MD.getBlockingPattern(MD.currentPattern);
 
-       }
+     //  }
         
-       clearLed();
+       //clearLed();
         
 }
 
+void send_pattern_kit_to_md() {
+
+ /*Send a quick sysex message to get the current selected track of the MD*/       
+                  int curtrack = MD.getCurrentTrack(callback_timeout);
+   
+                   pattern_rec.setPosition(writepattern); 
+                   
+                   
+                  /*Define sysex encoder objects for the Pattern and Kit*/
+                  ElektronDataToSysexEncoder encoder(&MidiUart);
+                  ElektronDataToSysexEncoder encoder2(&MidiUart);
+                  /*Write the selected trackinto a Pattern object by moving it from a Track object into a Pattern object
+                  The destination track is the currently selected track on the machinedrum.
+                  */
+
+                    int i = 0;
+
+                    while ((i < 16) && ((cur_col + i) < 16)) {
+                                   
+                           if ((notes[i] > 1)) {
+                               place_track_inpattern(i, cur_col + i, cur_row);
+                               MD.muteTrack(i,true);
+                           }
+                      i++;
+                    
+                  }
+
+   
+                  /*Set the pattern position on the MD the pattern is to be written to*/
+           
+                
+                  setLed();
+                
+  
+                  /*Send the encoded pattern to the MD via sysex*/
+                  pattern_rec.toSysex(encoder);
+     
+                  //int temp = MD.getCurrentKit(callback_timeout);
+                  
+                  /*If kit_sendmode == 1 then we'll be sending the Machine via sysex kit dump. */
+
+                  /*Tell the MD to receive the kit sysexdump in the current kit position*/
 
 
+                  /* Retrieve the position of the current kit loaded by the MD.
+                  Use this position to store the modi
+                  */
+                  kit_new.origPosition = currentkit_temp;
+
+
+                  md_setsysex_recpos();
+                  /*Send the encoded kit to the MD via sysex*/
+
+                      kit_new.toSysex(encoder2);
+                  
+                //  pattern_rec.setPosition(pattern_rec.origPosition);
+                  
+                  
+
+
+                  /*Instruct the MD to reload the kit, as the kit changes won't update until the kit is reloaded*/
+           //           if ((writepattern == -1) || (writepattern == pattern_new.origPosition)) { MD.loadKit(currentkit_temp); }
+                   
+                  MD.loadKit(pattern_rec.kit);
+                  
+                  /*kit_sendmode != 1 therefore we are going to send the Machine via Sysex and Midi cc without sending the kit*/
+                  
+                  //I fthe sequencer is running then we will pause and wait for the next divison
+               //  for (int n=0; n < 16; n++) {
+            //      MD.global.baseChannel = 10;
+            //      for (i=0; i < 16; i++) {
+             //       MD.muteTrack(i,true);
+            //      }
+                // }
+                  if (MidiClock.state == 2) {
+                 while (((MidiClock.div32th_counter + 3) % 32)  != 0)
+                 // while (1);
+                  ;
+                  }
+           
+                  for (i=0; i < 16; i++) {
+                     MD.muteTrack(i,false);
+                  }
+               
+                  clearLed();
+                  /*All the tracks have been sent so clear the write queue*/
+
+}
 /* 
  ================
  function: toggle_cue(int i) 
@@ -1783,8 +1802,8 @@ void setup() {
   //Start the SD Card Initialisation.
   sd_load_init();
   
-
-  
+  //For base channel 10
+  MD.global.baseChannel = 9;
   TrigCaptureClass trigger;
 
   trigger.setup();
@@ -2349,6 +2368,7 @@ void exploit_off() {
                                
 }
 
+
 /*
  ================
  function: bool handleEvent(gui_event_t *evt) 
@@ -2646,16 +2666,24 @@ bool handleEvent(gui_event_t *evt) {
         
          if (EVENT_RELEASED(evt, Buttons.BUTTON4)) { 
          
-         
+
                     MD.getCurrentPattern(callback_timeout);
                     patternload_param1.cur = (int) MD.currentPattern / (int) 16;
           
                     patternload_param2.cur = MD.currentPattern - 16 * ((int) MD.currentPattern / (int) 16);
-                    
+                                     patternswitch = 1;
+                     currentkit_temp = MD.getCurrentKit(callback_timeout);
+                    MD.saveCurrentKit(currentkit_temp);
+                    MD.getBlockingKit(currentkit_temp);
                     exploit_on();
                     GUI.setPage(&patternload_page);
+                   // GUI.display();
+                    curpage = 4; 
 
-                   curpage = 4; 
+
+
+
+
            return true; 
         }
        if (BUTTON_DOWN(Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON3)) {
@@ -2709,7 +2737,15 @@ bool handleEvent(gui_event_t *evt) {
             store_tracks_in_mem(param1.getValue() + 3, param2.getValue(),1);
             return true;
          }
-      
+    //  if (BUTTON_PRESSED(Buttons.BUTTON3)) {
+           //      MD.getBlockingGlobal(1);
+       //          MD.global.baseChannel = 9; 
+        //        //global_new.baseChannel;
+        //          for (int i=0; i < 16; i++) {
+        //            MD.muteTrack(i,true);
+        //          }
+        //           setLevel(8,100);
+    //  }
       if (BUTTON_DOWN(Buttons.ENCODER1) && BUTTON_DOWN(Buttons.BUTTON3))  {
 
            loadtrackinfo_page(0);
