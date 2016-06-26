@@ -90,7 +90,7 @@
   TrackInfoEncoder trackinfo_param1(0, 3);
   TrackInfoEncoder trackinfo_param2(0, 3);
   TrackInfoEncoder trackinfo_param3(0, 6);
-  TrackInfoPage trackinfo_page(&trackinfo_param1,&trackinfo_param2);
+  TrackInfoPage trackinfo_page(&trackinfo_param1,&trackinfo_param2,&trackinfo_param3);
   
   PatternLoadEncoder patternload_param1(0, 7);
   PatternLoadEncoder patternload_param2(0, 7);
@@ -670,7 +670,10 @@ void draw_notes() {
                 /*For 16 tracks check to see if there is a cue*/
                 for (int i = 0; i < 16; i++) {
                                              if (curpage == 5) {
-                                               str[i] = (char) 22;
+
+                                                if  (IS_BIT_SET32(cue1,i)) {
+                                                  str[i] = (char) 220;
+                                                }
                                              }
                                              if (notes[i] > 0)  {
                 /*If the bit is set, there is a cue at this position. We'd like to display it as [] on screen*/
@@ -687,11 +690,7 @@ void draw_notes() {
 }
 
 class TrigCaptureClass : public MidiCallback {
-	/**
-	 * \addtogroup midi_TrigCapture 
-	 *
-	 * @{
-	 **/
+	
 	
 public:
 
@@ -751,7 +750,7 @@ void onNoteOffCallback(uint8_t *msg) {
   //   clearLed();
    }
    
-};
+}
 
 void onNoteOnCallback(uint8_t *msg) {
       if (msg[2] > 0) {
@@ -769,7 +768,7 @@ void onNoteOnCallback(uint8_t *msg) {
      
            if (notes[note_num] == 0) { notes[note_num] = 1; }
            
-           if ((curpage == 5) && (trackinfo_param3.getValue() == 0) { toggle_mute(note_num); }
+           if ((curpage == 5) && (trackinfo_param3.getValue() == 0)) { toggle_cue(note_num); }
            draw_notes();
         }
       
@@ -778,8 +777,9 @@ void onNoteOnCallback(uint8_t *msg) {
    
       }
 
-};
+}
 
+};
 
 /*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
 
@@ -1577,7 +1577,7 @@ void toggle_cues_batch() {
   
     uint8_t quantize_mute;
     quantize_mute = 1 << trackinfo_param3.getValue(); 
-
+    int i;
      for (i = 0; i < 16; i++) {
          if (notes[i] == 3) {
               MD.muteTrack(i,true);
@@ -1990,17 +1990,17 @@ void TrackInfoEncoder::displayAt(int encoder_offset) {
 
                GUI.setLine(GUI.LINE2);
 
-               GUI.put_string_at(12,"Cue");
-               draw_notes();
+              // GUI.put_string_at(12,"Cue");
+
                
                   uint8_t x;
              if (trackinfo_param3.getValue() == 0) {  GUI.put_string_at(10,"--");  }
             else { 
              x = 1 << patternload_param3.getValue(); 
              GUI.put_value_at(9,x); 
-             GUI.put_string_at(4,"Mute:");
+             GUI.put_string_at(4,"Quan:");
             }
-              
+                             draw_notes();
               }
             else {
                GUI.setLine(GUI.LINE1);
@@ -2643,10 +2643,10 @@ bool handleEvent(gui_event_t *evt) {
         
           
         if (EVENT_PRESSED(evt, Buttons.BUTTON3)) { 
-         Track Cue Page commands
          exploit_on();
-         GUI.setPage(&trackinfo_page);
          curpage = 5;
+         GUI.setPage(&trackinfo_page);
+
             //...
     //        .................................
   
