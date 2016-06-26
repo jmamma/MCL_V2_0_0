@@ -26,6 +26,9 @@
   MDPattern pattern_rec;
   MDKit kit_new;
   MDGlobal global_new;
+  
+  MDGlobal global_one;
+  MDGlobal global_two;
 
 /*Current Loaded project file, set to test.mcl as initial name*/
   SDCardFile file("/test.mcl");
@@ -89,12 +92,12 @@
 
   TrackInfoEncoder trackinfo_param1(0, 3);
   TrackInfoEncoder trackinfo_param2(0, 3);
-  TrackInfoEncoder trackinfo_param3(0, 6);
+  TrackInfoEncoder trackinfo_param3(0, 7);
   TrackInfoPage trackinfo_page(&trackinfo_param1,&trackinfo_param2,&trackinfo_param3);
   
-  PatternLoadEncoder patternload_param1(0, 7);
-  PatternLoadEncoder patternload_param2(0, 7);
-  PatternLoadEncoder patternload_param3(0, 7);
+  PatternLoadEncoder patternload_param1(0, 8);
+  PatternLoadEncoder patternload_param2(0, 8);
+  PatternLoadEncoder patternload_param3(0, 8);
   PatternLoadPage patternload_page(&patternload_param1,&patternload_param2,&patternload_param3);
 
   OptionsEncoder options_param1(0, 3);
@@ -672,7 +675,7 @@ void draw_notes() {
                                              if (curpage == 5) {
 
                                                 if  (IS_BIT_SET32(cue1,i)) {
-                                                  str[i] = (char) 220;
+                                                  str[i] = 'X';
                                                 }
                                              }
                                              if (notes[i] > 0)  {
@@ -705,7 +708,12 @@ void onNoteOffCallback(uint8_t *msg) {
   
 
    uint8_t note_num;
-   note_num = (msg[1] - 36);
+     for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+            if (msg[1] == MD.global.drumMapping[i])
+                note_num = i;
+        }   
+
+  
 
    if (msg[2] == 0) {
 
@@ -740,7 +748,7 @@ void onNoteOffCallback(uint8_t *msg) {
         if (all_notes_off == 1) {
           if (curpage == 3)  { exploit_off(); store_tracks_in_mem(param1.getValue(),param2.getValue(), 254);  GUI.setPage(&page);  curpage = 0; }
           if (curpage == 4) { exploit_off(); write_tracks_to_md(MD.currentPattern, param1.getValue(),param2.getValue()); GUI.setPage(&page); curpage = 0; } 
-          if ((curpage == 5) && (trackinfo_param3.getValue() > 0)) { toggle_cues_batch(); exploit_off();  GUI.setPage(&page); curpage = 0; }
+          if ((curpage == 5) && (trackinfo_param3.getValue() > 0)) { toggle_cues_batch(); send_globals(); exploit_off(); GUI.setPage(&page); curpage = 0; }
         }
 
      }
@@ -756,19 +764,23 @@ void onNoteOnCallback(uint8_t *msg) {
       if (msg[2] > 0) {
 
        int note_num;
+    
 
          if (MidiClock.div16th_counter >= (div16th_last + 4)) {
           noteproceed = 1; 
          }
 
       if ((collect_notes) && (msg[0] == 153) && (noteproceed == 1)) {
+      for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+            if (msg[1] == MD.global.drumMapping[i])
+                note_num = i;
+        } 
 
-        note_num = (msg[1] - 36);
         if (note_num < 16) {
      
            if (notes[note_num] == 0) { notes[note_num] = 1; }
            
-           if ((curpage == 5) && (trackinfo_param3.getValue() == 0)) { toggle_cue(note_num); }
+           if ((curpage == 5) && (trackinfo_param3.getValue() == 0)) { toggle_cue(note_num); send_globals(); }
            draw_notes();
         }
       
@@ -819,7 +831,12 @@ class MDHandler2 : public MDCallback {
   
     void onGlobalMessage() {
               setLed2();
-              if (!global_new.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) { GUI.flash_strings_fill("GLOBAL", "ERROR");  }
+              if (!global_one.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) { GUI.flash_strings_fill("GLOBAL", "ERROR");  }
+                send_globals();
+  uint8_t global_page = 7;
+  uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
+  MD.sendSysex(data, countof(data));
+
               clearLed2();
     }
 /*A kit has been received by the Minicommand in the form of a Sysex message which is residing 
@@ -1466,10 +1483,10 @@ void send_pattern_kit_to_md() {
                   int curtrack = MD.getCurrentTrack(callback_timeout);
    
                    pattern_rec.setPosition(writepattern); 
-                   uint8_t quantize_mute;
+                   uint16_t quantize_mute;
                    if (patternload_param3.getValue() == 0) {  quantize_mute = 0;  }
-                    else if (patternload_param3.getValue() != 7) { quantize_mute = 1 << patternload_param3.getValue(); }
-                   else { quantize_mute = 7; }
+                    else if (patternload_param3.getValue() != 8) { quantize_mute = 1 << patternload_param3.getValue(); }
+                   else { quantize_mute = 8; }
                   /*Define sysex encoder objects for the Pattern and Kit*/
                   ElektronDataToSysexEncoder encoder(&MidiUart);
                   ElektronDataToSysexEncoder encoder2(&MidiUart);
@@ -1538,7 +1555,7 @@ void send_pattern_kit_to_md() {
                   if (quantize_mute > 0) {
                   if (MidiClock.state == 2) {
                     
-                   if (quantize_mute != 7) {
+                   if (quantize_mute != 8) {
                  while (((MidiClock.div32th_counter + 3) % (quantize_mute * 2))  != 0)
                  // while (1);
                   ;
@@ -1548,11 +1565,12 @@ void send_pattern_kit_to_md() {
                   for (i=0; i < 16; i++) {
                      //If we're in cue mode, send the track to cue before unmuting
                      if ((notes[i] > 1)) {
-                     if (quantize_mute == 7) { toggle_cue(i); }
+                     if (quantize_mute == 8) { SET_BIT32(cue1, i); MD.setTrackRouting(i,5); }
                      MD.muteTrack(i,false);
                      }
                   }
                   }
+                  send_globals();
                   clearLed();
                   /*All the tracks have been sent so clear the write queue*/
 
@@ -1575,7 +1593,7 @@ void toggle_cue(int i) {
 
 void toggle_cues_batch() {
   
-    uint8_t quantize_mute;
+    uint16_t quantize_mute;
     quantize_mute = 1 << trackinfo_param3.getValue(); 
     int i;
      for (i = 0; i < 16; i++) {
@@ -1707,6 +1725,75 @@ Utility Functions
   Initialization function for the MCL firmware, run when the Minicommand is powered on.
 */
 
+void send_globals() {
+    ElektronDataToSysexEncoder encoder(&MidiUart);
+    ElektronDataToSysexEncoder encoder2(&MidiUart);
+    setup_global(0);
+    global_one.toSysex(encoder);
+    setup_global(1);
+   global_one.toSysex(encoder2);
+}
+void setup_global(int global_num) {
+     /** Original position of the global inside the MD (0 to 7). **/
+     if (global_num == 0) {
+     global_one.origPosition = 6;
+     }
+     else {
+     global_one.origPosition = 7;
+     }
+    /** Stores the audio output for each track. **/
+    
+
+
+        for (uint8_t track_n=0; track_n < 16; track_n++) {
+         if (IS_BIT_SET32(cue1, track_n)) {
+               global_one.drumRouting[track_n] = 5;
+          }
+         else {
+              global_one.drumRouting[track_n] = 6; 
+         }
+          
+      
+
+        }
+
+    /** The MIDI base channel of the MachineDrum. **/
+    if (global_num == 0) {
+   global_one.baseChannel = 3;
+    }
+    else {
+ global_one.baseChannel = 9;
+    }
+       
+    global_one.extendedMode = true;
+    if (MidiClock.mode == MidiClock.EXTERNAL) {
+    global_one.clockIn = false;
+    global_one.clockOut = true;
+   }
+    else {
+    global_one.clockIn = true;
+     global_one.clockOut = false;
+    }
+    global_one.transportIn = true;
+    //some bug
+    global_one.transportOut = true;
+    global_one.localOn = 1;
+/*
+    global_one.drumLeft = 0;
+    global_one.drumRight = 0;
+    global_one.gateLeft = 0;
+    global_one.gateRight = 0;
+    global_one.senseLeft = 0;
+    global_one.senseRight = 0;
+    global_one.minLevelLeft = 0;
+    global_one.minLevelRight = 0;
+    global_one.maxLevelLeft = 0;
+    global_one.maxLevelRight = 0;
+
+    global_one.programChange = false;
+    global_one.trigMode = 1;
+*/
+}
 
 void setup() {
 
@@ -1736,11 +1823,11 @@ void setup() {
    splashscreen();
  
    //Initialise Track Routing to Default output (1 & 2)  
-    for (uint8_t i = 0; i < 16; i++) {
-   MD.setTrackRouting(i,6);
- }
+ //   for (uint8_t i = 0; i < 16; i++) {
+ //  MD.setTrackRouting(i,6);
+// }
    
-   set_midinote_totrack_mapping();
+  //set_midinote_totrack_mapping();
  
    //Initalise the  Effects Ecnodres
   param3.handler = encoder_fx_handle;
@@ -1756,7 +1843,12 @@ void setup() {
   //Start the SD Card Initialisation.
   sd_load_init();
   
-  //For base channel 10
+  uint8_t global_page = 7;
+  uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
+  MD.sendSysex(data, countof(data));
+  MD.resetMidiMap();
+  
+  //For base channel 10. needed for mutes to work properly.
   MD.global.baseChannel = 9;
   TrigCaptureClass trigger;
 
@@ -1765,6 +1857,10 @@ void setup() {
   MidiClock.mode = MidiClock.EXTERNAL;
                                                 //      GUI.flash_strings_fill("MIDI CLOCK SRC", "MIDI PORT 2");
   MidiClock.start();
+  
+  MD.requestGlobal(7);
+
+  
 // patternswitch = 7;
   //     int curkit = MD.getCurrentKit(callback_timeout);
  //      MD.getBlockingKit(curkit);
@@ -1946,10 +2042,10 @@ void PatternLoadEncoder::displayAt(int encoder_offset) {
              if (curpage == 4) { 
              uint8_t x;
              if (patternload_param3.getValue() == 0) {  GUI.put_string_at(10,"--");  }
-             else if (patternload_param3.getValue() == 7) {  GUI.put_string_at(10,"CUE");  }
+             else if (patternload_param3.getValue() == 8) {  GUI.put_string_at(10,"CUE");  }
             else { x = 1 << patternload_param3.getValue(); 
              GUI.put_value_at(9,x); 
-             GUI.put_string_at(4,"Mute:");
+             GUI.put_string_at(3,"QMUTE:");
             }
          }
             
@@ -1996,9 +2092,9 @@ void TrackInfoEncoder::displayAt(int encoder_offset) {
                   uint8_t x;
              if (trackinfo_param3.getValue() == 0) {  GUI.put_string_at(10,"--");  }
             else { 
-             x = 1 << patternload_param3.getValue(); 
+             x = 1 << trackinfo_param3.getValue(); 
              GUI.put_value_at(9,x); 
-             GUI.put_string_at(4,"Quan:");
+             GUI.put_string_at(4,"QCUE:");
             }
                              draw_notes();
               }
@@ -2269,7 +2365,7 @@ void exploit_on() {
      //  ElektronDataToSysexEncoder encoder(&MidiUart);
     //   global_new.toSysex(encoder);
     //    MD.setTempo(MidiClock.tempo); 
-       global_page = 0;
+       global_page = 6;
     int flag = 0;
             	uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
     //     if ((MidiClock.state == 2) && (MidiClock.mode == MidiClock.EXTERNAL_UART2)) { 
@@ -2290,7 +2386,7 @@ void exploit_on() {
 
 void exploit_off() {
            collect_notes = false;
-         global_page = 1;
+         global_page = 7;
   uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
    //
    global_new.tempo = MidiClock.tempo;
@@ -2502,20 +2598,25 @@ bool handleEvent(gui_event_t *evt) {
                                                    }                                                  
                                                    }
                                                    }
-                                                   if (merge == 1) {
-                                                 //    Merger merger;
-                                                 //    merger.setMergeMask(MERGE_CHANPRESS_MASK);
-                                                       MidiClock.stop();
-                                                             MidiClock.transmit = true;
-
-                                                      MidiClock.mode = MidiClock.EXTERNAL_UART2;
-                                                //      GUI.flash_strings_fill("MIDI CLOCK SRC", "MIDI PORT 2");
-                                                  MidiClock.start();
-                                                   }   
-                                                if (merge == 0) {
                                                 MidiClock.stop();
-                                                }                    
-                                                  
+                                                if (merge == 0) {
+
+                                                MidiClock.mode = MidiClock.EXTERNAL;
+                                                MidiClock.transmit = false;
+                                                
+                                                }
+                                                else {
+                                                MidiClock.transmit = true;
+                                                MidiClock.mode = MidiClock.EXTERNAL_UART2;
+                                                } 
+                                                      MidiClock.start();
+                                                      send_globals();          
+                                                      delay(100);
+
+                                                      uint8_t global_page = 7;
+                                                      uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
+                                                      MD.sendSysex(data, countof(data));
+
                                                GUI.setPage(&page);
                                                curpage = 0;
                                                return true;
