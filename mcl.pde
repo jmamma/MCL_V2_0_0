@@ -836,9 +836,26 @@ class MDHandler2 : public MDCallback {
         MDSysexListener.addOnPatternMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onPatternMessage); 
         MDSysexListener.addOnKitMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onKitMessage); 
         MDSysexListener.addOnGlobalMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onGlobalMessage); 
+       // MDSysexListener.addOnStatusResponseCallback(this, (md_status_callback_ptr_t)&MDHandler2::onStatusResponseCallback);
     }
   
-  
+  void onStatusResponseCallback(uint8_t type, uint8_t value) {
+  switch (type) {
+  case MD_CURRENT_KIT_REQUEST:
+      MD.currentKit = value;
+
+  case MD_CURRENT_GLOBAL_SLOT_REQUEST:
+     MD.currentGlobal = value;
+
+    break;
+
+  case MD_CURRENT_PATTERN_REQUEST:
+      MD.currentPattern = value;
+    break;
+  }
+
+}
+
     void onGlobalMessage() {
               setLed2();
               if (!global_one.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) { GUI.flash_strings_fill("GLOBAL", "ERROR");  }
@@ -1315,12 +1332,15 @@ void splashscreen() {
                  delay(50);
 
         } 
-        
-        for (int x = 0; x < 4; x++) {
+       // while (rec_global == 0) {
+
+        for (int x = 0; x < 2; x++) {
         for (int y = 0; y < 16; y++) {
    	MD.setStatus(0x22, y);
         }
         }
+        
+    //    }
     MD.setStatus(0x22, 0);  
     GUI.setPage(&page);
 }
@@ -1877,7 +1897,7 @@ void setup() {
  MDTask.autoLoadKit = false;
  MDTask.reloadGlobal = false;
    
-  GUI.addTask(&MDTask);
+ //1 GUI.addTask(&MDTask);
 
  //Create a mdHandler object to handle callbacks. 
 
@@ -1912,7 +1932,7 @@ void setup() {
   TurboMidi.setup();
   //Start the SD Card Initialisation.
   sd_load_init();
-  
+  MidiClock.mode = MidiClock.EXTERNAL;
   uint8_t global_page = 7;
   uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
   MD.sendSysex(data, countof(data));
@@ -1924,11 +1944,11 @@ void setup() {
 
   trigger.setup();
 //  
-  MidiClock.mode = MidiClock.EXTERNAL;
+
                                                 //      GUI.flash_strings_fill("MIDI CLOCK SRC", "MIDI PORT 2");
   MidiClock.start();
   
-  MD.requestGlobal(7);
+
 
   
 // patternswitch = 7;
