@@ -59,8 +59,6 @@
   uint8_t curpage = 0;
   uint8_t turbo_state = 0;
 //ProjectName string
-uint8_t mixer_levels[16];
-uint8_t mixer_filter[16];
 
   char newprj[18];
 
@@ -744,7 +742,7 @@ void onNoteOffCallback(uint8_t *msg) {
      }
      //If we're on track read/write page then check to see
 
-     if ((curpage == 3) || (curpage == 4) || (curpage == 5) || (curpage == 10)) {
+     if ((curpage == 3) || (curpage == 4) || (curpage == 5)) {
           int i;
           draw_notes();
           uint8_t all_notes_off = 0;
@@ -761,7 +759,6 @@ void onNoteOffCallback(uint8_t *msg) {
           if (curpage == 3)  { exploit_off(); store_tracks_in_mem(param1.getValue(),param2.getValue(), 254);  GUI.setPage(&page);  curpage = 0; }
           if (curpage == 4) { exploit_off(); write_tracks_to_md(MD.currentPattern, param1.getValue(),param2.getValue()); GUI.setPage(&page); curpage = 0; } 
           if ((curpage == 5) && (trackinfo_param3.getValue() > 0)) { toggle_cues_batch(); send_globals(); exploit_off(); GUI.setPage(&page); curpage = 0; }
-          if ((curpage == 10) && (mixer_param3.getValue() > 0)) { auto_fade(); exploit_off(); GUI.setPage(&page); curpage = 0; }
         }
 
      }
@@ -1338,7 +1335,7 @@ TrackInfoEncoder *mdEnc = (TrackInfoEncoder *)enc;
         for (int i = 0; i < 4; i++) {
          kit_new.params[i][12] += mdEnc->getValue() - mdEnc->old;
         if ((kit_new.params[i][12] < 127) && (kit_new.params[i][12] > 0)) {
-          if (mixer_param3.getValue() == 0) { setTrackParam(i,  12, kit_new.params[i][12]) ; }
+          setTrackParam(i,  12, kit_new.params[i][12]) ; 
        }
      }
        }
@@ -1357,7 +1354,7 @@ TrackInfoEncoder *mdEnc = (TrackInfoEncoder *)enc;
         for (int i = 0; i < 4; i++) {
          kit_new.levels[i] += mdEnc->getValue() - mdEnc->old;
         if ((kit_new.levels[i] < 127) && (kit_new.levels[i] > 0)) {
-         if (mixer_param3.getValue() == 0) {   setLevel(i,kit_new.levels[i] ); }
+          setLevel(i,kit_new.levels[i] ); 
        }
      }
        }
@@ -1688,52 +1685,6 @@ if (mdEnc->fxparam == MD_ECHO_FB) {
 }
  MD.sendFXParam(mdEnc->fxparam, mdEnc->getValue(), mdEnc->effect); 
 
-}
-
-void auto_fade() {
-  
-    uint16_t quantize_fade;
-    quantize_fade = 1 << mixer_param3.getValue(); 
-    int i;
-  
-                    
-      while (((MidiClock.div32th_counter + 3) % (quantize_fade * 2))  != 0)
-       ;
-
-
-    uint16_t quantize_len;
-    quantize_len = 1 << mixer_param4.getValue(); 
-          //send the track to master before unmuting
-      uint8_t increments_level[16];
-            uint8_t increments_filter[16];
-      for (i = 0; i < 16; i++) {
-      increments_level[i] = (  kit_new.levels[i] - mixer_filter[i]) / (quantize_len * 12) ;
-      increments_filter[i] = (kit_new.levels[i] - mixer_filter[i]) / (quantize_len * 12) ;
-      }
-
-      uint32_t last_count96 = MidiClock.div96th_counter;
-      uint8_t count = 6;
-      while (1); {
-        clearLed2();
-        if  (MidiClock.div96th_counter > last_count96) {
-        count++;
-        setLed2();
-           for (i = 0; i < 16; i++) {
-                      if (notes[i] == 3) {
-                       if  (mixer_levels[i] != kit_new.levels[i]) {
-                         kit_new.levels[i] += increments_level[16];
-                          setLevel(i,kit_new.levels[i] );
-                       }
-                       if  (mixer_filter[i] != kit_new.levels[i]) {
-                          kit_new.params[i][12] += increments_filter[16];
-                         setTrackParam(i,  12, kit_new.params[i][12]) ;
-                       }
-                      }
-           }
-      }
-      last_count96 =  MidiClock.div96th_counter;
-      if ((count / 6) > quantize_len) { return; } 
-      }
 }
 
 /* 
@@ -2898,10 +2849,7 @@ bool handleEvent(gui_event_t *evt) {
                        curpage = 10;
                     MD.saveCurrentKit(currentkit_temp);
                     MD.getBlockingKit(currentkit_temp);
-                    for (uint8_t i = 0; i < 16; i++) {
-                     mixer_levels[i] = kit_new.levels[i];
-                     mixer_filter[i] = kit_new.params[i][12];
-                    }
+       
          exploit_on();
 
          GUI.setPage(&mixer_page);
