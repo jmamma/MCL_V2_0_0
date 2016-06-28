@@ -836,7 +836,7 @@ class MDHandler2 : public MDCallback {
         MDSysexListener.addOnPatternMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onPatternMessage); 
         MDSysexListener.addOnKitMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onKitMessage); 
         MDSysexListener.addOnGlobalMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onGlobalMessage); 
-       // MDSysexListener.addOnStatusResponseCallback(this, (md_status_callback_ptr_t)&MDHandler2::onStatusResponseCallback);
+      // MDSysexListener.addOnStatusResponseCallback(this, (md_status_callback_ptr_t)&MDHandler2::onStatusResponseCallback);
     }
   
   void onStatusResponseCallback(uint8_t type, uint8_t value) {
@@ -1893,8 +1893,8 @@ void setup() {
  
  
  MDTask.setup();
- MDTask.verbose = false;
- MDTask.autoLoadKit = false;
+MDTask.verbose = false;
+ /MDTask.autoLoadKit = false;
  MDTask.reloadGlobal = false;
    
  //1 GUI.addTask(&MDTask);
@@ -1948,7 +1948,7 @@ void setup() {
                                                 //      GUI.flash_strings_fill("MIDI CLOCK SRC", "MIDI PORT 2");
   MidiClock.start();
   
-
+  MD.requestGlobal(7);
 
   
 // patternswitch = 7;
