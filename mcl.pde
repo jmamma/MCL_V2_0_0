@@ -832,11 +832,11 @@ class MDHandler2 : public MDCallback {
        /*Tell the MIDI-CTRL framework to execute the following methods when callbacks for
        Pattern and Kit messages are received.*/
   void setup() {
- 
+        MDSysexListener.setup();
         MDSysexListener.addOnPatternMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onPatternMessage); 
         MDSysexListener.addOnKitMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onKitMessage); 
         MDSysexListener.addOnGlobalMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onGlobalMessage); 
-      // MDSysexListener.addOnStatusResponseCallback(this, (md_status_callback_ptr_t)&MDHandler2::onStatusResponseCallback);
+        MDSysexListener.addOnStatusResponseCallback(this, (md_status_callback_ptr_t)&MDHandler2::onStatusResponseCallback);
     }
   
   void onStatusResponseCallback(uint8_t type, uint8_t value) {
@@ -1892,10 +1892,10 @@ void setup() {
  //Enable callbacks, and disable some of the ones we don't want to use.
  
  
- MDTask.setup();
-MDTask.verbose = false;
- /MDTask.autoLoadKit = false;
- MDTask.reloadGlobal = false;
+// MDTask.setup();
+//MDTask.verbose = false;
+ //MDTask.autoLoadKit = false;
+ //MDTask.reloadGlobal = false;
    
  //1 GUI.addTask(&MDTask);
 
