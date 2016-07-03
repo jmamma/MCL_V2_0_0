@@ -350,7 +350,7 @@ void GridEncoderPage::displayScroll(uint8_t i) {
        
           if   (((encoders[0]->getValue() +i +1) % 4) == 0) {
                          char strn[2] = "I";
-                         strn[0] = (char) 000; 
+                         strn[0] = (char) 001; 
                           //           strn[0] = (char) 219; 
                          GUI.setLine(GUI.LINE1);
 
