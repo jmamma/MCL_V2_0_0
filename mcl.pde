@@ -28,7 +28,7 @@
  //#include <TrigCapture.h>
  //RELEASE 1 BYTE/STABLE-BETA 1 BYTE /REVISION 2 BYTES
  #define VERSION 2000
- #define LOCK_AMOUNT 64
+ #define LOCK_AMOUNT 512
  #define GRID_LENGTH 130
 
 /*MDKit and Pattern objects must be defined outside of Classes and Methods otherwise the Minicommand freezes.*/
@@ -72,7 +72,8 @@
 //ProjectName string
 
   char newprj[18];
-
+  char row_name[8] = "       ";
+  float row_name_offset = 0;
   uint8_t write_ready = 0;
 
 /*A toggle for sending tracks in their original pattern position or not*/
@@ -109,9 +110,7 @@
   
   TrackInfoEncoder mixer_param1(0, 127);
   TrackInfoEncoder mixer_param2(0, 127);
-  TrackInfoEncoder mixer_param3(0, 6);
-  TrackInfoEncoder mixer_param4(1, 6);
-  TrackInfoPage mixer_page(&mixer_param1,&mixer_param2,&mixer_param3,&mixer_param4);
+  TrackInfoPage mixer_page(&mixer_param1,&mixer_param2);
   
   PatternLoadEncoder patternload_param1(0, 8);
   PatternLoadEncoder patternload_param2(0, 8);
@@ -181,22 +180,22 @@ class KitExtra {
 class MDTrack {
   public:
   bool active;
-  char kitName[8];
-//  uint8_t origPosition;
- // uint8_t length;
+  char kitName[17];
+  uint8_t origPosition;
+  uint8_t length;
   uint64_t trigPattern;
   uint64_t accentPattern;
   uint64_t slidePattern;
   uint64_t swingPattern;
   //Machine object for Track Machine Type
   MDMachine machine;
-  //int8_t paramLocks[24]; 
+  int8_t paramLocks[24]; 
   //Array to hold parameter locks.
   int arraysize;
-//  KitExtra kitextra;
-  uint8_t param_number[256];
-  uint8_t value[256];
-  uint8_t step[256];
+  KitExtra kitextra;
+  uint8_t param_number[LOCK_AMOUNT];
+  int8_t value[LOCK_AMOUNT];
+  uint8_t step[LOCK_AMOUNT];
 
   /* 
   ================
@@ -216,30 +215,33 @@ class MDTrack {
   accentPattern = pattern_rec.accentPatterns[tracknumber];
   slidePattern = pattern_rec.slidePatterns[tracknumber];
   swingPattern = pattern_rec.swingPatterns[tracknumber];
-//  length = pattern_rec.patternLength;
-//  kitextra.swingAmount = pattern_rec.swingAmount;
-//  kitextra.accentAmount = pattern_rec.accentAmount;
-//  kitextra.patternLength = pattern_rec.patternLength;
-//  kitextra.doubleTempo = pattern_rec.doubleTempo;
-//  kitextra.scale = pattern_rec.scale;
+  length = pattern_rec.patternLength;
+  kitextra.swingAmount = pattern_rec.swingAmount;
+  kitextra.accentAmount = pattern_rec.accentAmount;
+  kitextra.patternLength = pattern_rec.patternLength;
+  kitextra.doubleTempo = pattern_rec.doubleTempo;
+  kitextra.scale = pattern_rec.scale;
 
    //Extract parameter lock data and store it in a useable data structure
    int n = 0;
+   arraysize = 0;
    for (int i = 0; i < 24; i++) {
                      if (IS_BIT_SET32(pattern_rec.lockPatterns[tracknumber], i)) {
                                  int8_t idx = pattern_rec.paramLocks[tracknumber][i];
-                                 
+                                 if (idx >= 0) {
                                  for (int s = 0; s < 64; s++) {
 
-                                   if ((pattern_rec.locks[idx][s] != 254) && (pattern_rec.locks[idx][s] >= 0)) {
+                                   if ((pattern_rec.locks[idx][s] <= 127) && (pattern_rec.locks[idx][s] >= 0)) {
+                                      if (IS_BIT_SET64(trigPattern, s)) {
+
                                       step[n] = s;
                                       param_number[n] = i;
                                       value[n] = pattern_rec.locks[idx][s];
                                       n++;
                                    }
-                                   
+                                   }
                                  }
-                                
+                                 }
            }
     }
 
@@ -252,10 +254,10 @@ class MDTrack {
   /*Don't forget to copy the Machine data as well
   Which is obtained from the received Kit object kit_new*/
   //  m_strncpy(kitName, kit_new.name, 17);
-  for (uint8_t c; c < 8; c++) {
+  for (uint8_t c; c < 17; c++) {
   kitName[c] = kit_new.name[c]; 
   }
- // kitName[7] = '\0';
+
   m_memcpy(machine.params, kit_new.params[tracknumber], 24);
   
   machine.track = tracknumber;
@@ -275,11 +277,11 @@ class MDTrack {
   machine.trigGroup = kit_new.trigGroups[tracknumber];
   machine.muteGroup = kit_new.muteGroups[tracknumber];
   
-//  m_memcpy(&kitextra.reverb, &kit_new.reverb[tracknumber],sizeof(kitextra.reverb));
- // m_memcpy(&kitextra.delay, &kit_new.delay[tracknumber],sizeof(kitextra.delay));
-////  m_memcpy(&kitextra.eq, &kit_new.eq[tracknumber],sizeof(kitextra.eq));
- // m_memcpy(&kitextra.dynamics, &kit_new.dynamics[tracknumber],sizeof(kitextra.dynamics));
-//  origPosition = kit_new.origPosition;
+ m_memcpy(&kitextra.reverb, &kit_new.reverb,sizeof(kitextra.reverb));
+  m_memcpy(&kitextra.delay, &kit_new.delay,sizeof(kitextra.delay));
+  m_memcpy(&kitextra.eq, &kit_new.eq,sizeof(kitextra.eq));
+  m_memcpy(&kitextra.dynamics, &kit_new.dynamics,sizeof(kitextra.dynamics));
+  origPosition = kit_new.origPosition;
  }
  
    /* 
@@ -377,14 +379,15 @@ class ParameterLock {
 
 class Config {
  public:
- char project[15];
+ char project[16];
  uint8_t turbomidi;
  uint8_t merge;
  uint8_t cue_output;
  uint32_t cues;
  uint8_t cur_row;
  uint8_t cur_col;
-  
+ uint8_t number_projects;
+ uint32_t version;
 };
 Config config;
 
@@ -485,8 +488,19 @@ void load_project_page() {
   */
 
 void new_project_page() {
+  if (config.version != 2000) {
+  config.version = 2000;
+  config.number_projects = 0;
+  }
 
-  m_strncpy(newprj,"/newproject.mcl",16);
+
+    char my_string[16] = "/project___.mcl";
+
+  my_string[8] = (config.number_projects % 1000) / 100 + '0';
+  my_string[8+1] = (config.number_projects % 100) / 10 + '0';
+  my_string[8+2] = (config.number_projects % 10) + '0';
+
+  m_strncpy(newprj,my_string,16);
     curpage = 7;
 
 
@@ -578,9 +592,9 @@ void new_project_page() {
                 clearLed2();
          file.close();
              file.open(true);
-   m_strncpy(config.project,projectname,15);
+   m_strncpy(config.project,projectname,16);
   
-
+ config.number_projects++;
  write_config();
  return true;
  }
@@ -600,6 +614,7 @@ bool sd_load_project(char *projectname) {
    file.setPath(projectname);
    file.open(true);
    if (!check_project_version()) {
+   file.close();
    return false;
    }
    
@@ -611,8 +626,8 @@ bool sd_load_project(char *projectname) {
 
 bool check_project_version() {
   file.seek(0,FAT_SEEK_SET);
-  file.read(( uint8_t*)&(project_header.version),sizeof(project_header.version));
-  file.read(( uint8_t*)&(project_header.config),sizeof(project_header.config));
+  file.read(( uint8_t*)&(project_header),sizeof(project_header));
+//  file.read(( uint8_t*)&(project_header.config),sizeof(project_header.config));
   if (project_header.version >= 2000) { return true; }
   else { return false; }
 }
@@ -652,24 +667,32 @@ void write_config() {
 
      int32_t offset = (int32_t) sizeof(Project) + (column + (row * (int32_t)16)) * (int32_t) sizeof(MDTrack);
 
+  int32_t len;
 
   //sd_buf_readwrite(offset, true);
       file.seek(&offset,FAT_SEEK_SET);
-  file.read(( uint8_t*)&(temptrack.active),sizeof(temptrack.active));
-  file.read(( uint8_t*)&(temptrack.kitName),  sizeof(temptrack.kitName));
-  file.read(( uint8_t*)&(temptrack.trigPattern),  sizeof(temptrack.trigPattern));
-  file.read(( uint8_t*)&(temptrack.accentPattern),  sizeof(temptrack.accentPattern));
-  file.read(( uint8_t*)&(temptrack.slidePattern),  sizeof(temptrack.slidePattern));
-  file.read(( uint8_t*)&(temptrack.swingPattern),  sizeof(temptrack.swingPattern));
+      len = (sizeof(MDTrack) - sizeof(temptrack.kitextra) - (LOCK_AMOUNT * 3));
+           //len = (sizeof(MDTrack)  - (LOCK_AMOUNT * 3));
+      file.read(( uint8_t*)&(temptrack),len);
+      if (m == 0) {
+      len =  sizeof(temptrack.kitextra) ; 
 
-  file.read(( uint8_t*)&(temptrack.machine),  sizeof(temptrack.machine));
-
-  file.read(( uint8_t*)&(temptrack.arraysize),  sizeof(temptrack.arraysize));
-          if (m == 0) {
-  file.read(( uint8_t*)&(temptrack.param_number),  8 * 64);
-  file.read(( uint8_t*)&(temptrack.value),  8 * 64);
-  file.read(( uint8_t*)&(temptrack.step),  8 * 64);
+      file.read(( uint8_t*)&(temptrack.kitextra),len);
+      file.read(( uint8_t*)&(temptrack.param_number[0]),temptrack.arraysize);
+      file.read(( uint8_t*)&(temptrack.value[0]),temptrack.arraysize);
+      file.read(( uint8_t*)&(temptrack.step[0]),temptrack.arraysize);
       }
+      //  if (m == 0) { 
+        //len = sizeof(MDTrack);
+     // }
+  //    else {
+    //  len = (sizeof(MDTrack) - sizeof(temptrack.kitextra) - (LOCK_AMOUNT * 3));
+    //  }
+
+
+
+ 
+      
       
 //  if (x != 9) { return FALSE; }
   return TRUE;
@@ -683,82 +706,6 @@ void write_config() {
   
 }
 
-bool load_track_new(int32_t column, int32_t row, int m = 0) {
-
-   // char projectfile[5 + m_strlen(projectdir) + 10];
-    //         get_trackfilename(projectfile, 0, 0);
-     uint32_t len;
-     int32_t offset = (int32_t) sizeof(Project) + (column + (row * (int32_t)16)) * (int32_t) sizeof(MDTrack);
-           file.seek(&offset,FAT_SEEK_SET);
-//     if (m > 0) {
-  //    len = (uint32_t) sizeof(MDTrack) - (3 * sizeof(uint8_t) * LOCK_AMOUNT) - sizeof(KitExtra);
- //     }
-//    else {
-      len = (uint32_t) sizeof(MDTrack);
-//      }      
-     // file.read(( uint8_t*)&(temptrack),len - (3 * sizeof(uint8_t) * LOCK_AMOUNT));
-    //        uint32_t len2 = file.read(( uint8_t*)&(temptrack),len);
-  //   if (len != len2) {
- ///     setLed();
-  //   setLed2();
-  //  delay(5000); 
-  //   }
-     // offset += len;
-     // file.seek(&offset,FAT_SEEK_SET);
-     // file.read(( uint8_t*)&(temptrack.param_number),(3 * sizeof(uint8_t) * LOCK_AMOUNT)); 
-/*
-  int32_t offset = (int32_t) sizeof(Project) + (column + (row * (int32_t)16)) * (int32_t) sizeof(MDTrack);
-
-  //sd_buf_readwrite(offset, true);
-      file.seek(&offset,FAT_SEEK_SET);
-      
-        uint32_t len = (uint32_t) sizeof(temptrack) - (3 * sizeof(uint8_t) * LOCK_AMOUNT) - sizeof(temptrack.kitextra);
-        file.read(( uint8_t*)&(temptrack),len); 
-
-        //Now that the arraysize is read in, we can read in only the required lock amounts.
-    
-        if (m == 0) { 
-        offset += len;
-        file.seek(&offset,FAT_SEEK_SET);
-        len = sizeof(temptrack.kitextra) + (temptrack.arraysize * sizeof(uint8_t)  * 3);
-       // 
-        file.read(( uint8_t*)&(temptrack.kitextra),len); 
-        
-        }
-  */    
- file.read(( uint8_t*)&(temptrack.active),sizeof(temptrack.active));
- // file.read(( uint8_t*)&(temptrack.kitName),  7);
- file.read(( uint8_t*)&(temptrack.kitName),  sizeof(temptrack.kitName));
-  //  file.read(( uint8_t*)&(temptrack.origPosition),  sizeof(temptrack.origPosition));
-   //     file.read(( uint8_t*)&(temptrack.length),  sizeof(temptrack.length));
-  file.read(( uint8_t*)&(temptrack.trigPattern),  sizeof(temptrack.trigPattern));
-  file.read(( uint8_t*)&(temptrack.accentPattern),  sizeof(temptrack.accentPattern));
-  file.read(( uint8_t*)&(temptrack.slidePattern),  sizeof(temptrack.slidePattern));
-  file.read(( uint8_t*)&(temptrack.swingPattern),  sizeof(temptrack.swingPattern));
-
-  file.read(( uint8_t*)&(temptrack.machine),  sizeof(temptrack.machine));
-
-  file.read(( uint8_t*)&(temptrack.arraysize),  sizeof(temptrack.arraysize));
-  //uint_16t len = (uint_16t) temptrack.arraysize * 8;
-  
-          if (m == 0) {
-         //    file.read(( uint8_t*)&(temptrack.kitextra),  sizeof(temptrack.kitextra));
-  file.read(( uint8_t*)&(temptrack.param_number),  8 * 64);
-  file.read(( uint8_t*)&(temptrack.value),  8 * 64);
-  file.read(( uint8_t*)&(temptrack.step),  8 * 64);
-      }
-
-//  if (x != 9) { return FALSE; }
-  return true;
-
-  
- // uint64_t temp;
-//  file.read(( uint8_t*)&(temp), sizeof(temp));
- // temptrack.trigPattern = temp;
-
- 
-  
-}
 
 /*
   ================
@@ -808,74 +755,22 @@ bool store_track_inGrid(int track, int32_t column, int32_t row) {
 
                // SDCard.deleteFile("/valertest.mcl");
               //  MDTrack temp;
- 
+
 
  // int32_t offset = (column + (row * (int32_t) 16)) *  (int32_t) sizeof(MDTrack);
-  
+  int32_t len;
     int32_t offset = (int32_t) sizeof(Project) + (column + (row * (int32_t) 16)) *  (int32_t) sizeof(MDTrack);
-
-  int x = 0;
- // sd_buf_readwrite(offset, false);
-  file.seek(&offset,FAT_SEEK_SET); 
-  file.write(( uint8_t*)&(temptrack2.active), sizeof(temptrack2.active));
-  file.write(( uint8_t*)&(temptrack2.kitName),  8);
-  file.write(( uint8_t*)&(temptrack2.trigPattern),  sizeof(temptrack2.trigPattern));
-  file.write(( uint8_t*)&(temptrack2.accentPattern),  sizeof(temptrack2.accentPattern));
-  file.write(( uint8_t*)&(temptrack2.slidePattern),  sizeof(temptrack2.slidePattern));
-  file.write(( uint8_t*)&(temptrack2.swingPattern),  sizeof(temptrack2.swingPattern));
-  file.write(( uint8_t*)&(temptrack2.machine),  sizeof(temptrack2.machine));
-  file.write(( uint8_t*)&(temptrack2.arraysize),  sizeof(temptrack2.arraysize));
-  file.write(( uint8_t*)&(temptrack2.param_number),  128);
-  file.write(( uint8_t*)&(temptrack2.value),  128);
-  file.write(( uint8_t*)&(temptrack2.step),  128);
-
+      file.seek(&offset,FAT_SEEK_SET); 
+  len = sizeof(MDTrack) - (LOCK_AMOUNT * 3);
+  
+    file.write(( uint8_t*)&(temptrack2), len);
+ 
+    file.write(( uint8_t*)&(temptrack2.param_number[0]),temptrack2.arraysize);
+    file.write(( uint8_t*)&(temptrack2.value[0]),temptrack2.arraysize);
+    file.write(( uint8_t*)&(temptrack2.step[0]),temptrack2.arraysize);
   return true;
 }
-bool store_track_inGrid2(int track, int32_t column, int32_t row) {
-  /*Assign a track to Grid i*/
-  /*Extraact track data from received pattern and kit and store in track object*/
-  
-  //load_track(column, row);
-  
-  temptrack2.storeTrack(track,column);
-  //  if (!SDCard.isInit) { setLed(); }
 
-               // SDCard.deleteFile("/valertest.mcl");
-              //  MDTrack temp;
- 
-
-  int32_t offset = (int32_t) sizeof(Project) + (column + (row * (int32_t) 16)) *  (int32_t) sizeof(MDTrack);
-  
-
-
-  int x = 0;
- // sd_buf_readwrite(offset, false);
-  file.seek(&offset,FAT_SEEK_SET); 
-  //len Total Size of MDTrack - (all the parameter lock data) + (the actual used amount of parameter lock data)
-//  uint32_t len = (uint32_t) sizeof(MDTrack);
- // - (3 * sizeof(uint8_t) * LOCK_AMOUNT) + (temptrack2.arraysize * 8 * 3);
-   
- // uint32_t len2 = file.write(( uint8_t*)&(temptrack2), len);
-
- 
-  file.write(( uint8_t*)&(temptrack2.active), sizeof(temptrack2.active));
-  file.write(( uint8_t*)&(temptrack2.kitName),  sizeof(temptrack2.kitName));
- //   file.write(( uint8_t*)&(temptrack2.origPosition),  sizeof(temptrack2.origPosition));
-   //   file.write(( uint8_t*)&(temptrack2.length),  sizeof(temptrack2.length));
-  file.write(( uint8_t*)&(temptrack2.trigPattern),  sizeof(temptrack2.trigPattern));
-  file.write(( uint8_t*)&(temptrack2.accentPattern),  sizeof(temptrack2.accentPattern));
-  file.write(( uint8_t*)&(temptrack2.slidePattern),  sizeof(temptrack2.slidePattern));
-  file.write(( uint8_t*)&(temptrack2.swingPattern),  sizeof(temptrack2.swingPattern));
-  file.write(( uint8_t*)&(temptrack2.machine),  sizeof(temptrack2.machine));
-  file.write(( uint8_t*)&(temptrack2.arraysize),  sizeof(temptrack2.arraysize));
-   
- // file.write(( uint8_t*)&(temptrack2.kitextra),  sizeof(temptrack2.kitextra));
-  file.write(( uint8_t*)&(temptrack2.param_number), 128);
-  file.write(( uint8_t*)&(temptrack2.value),  128);
-  file.write(( uint8_t*)&(temptrack2.step),  128);
-
-  return true;
-}
 
 void draw_levels() { 
      GUI.setLine(GUI.LINE2);
@@ -884,7 +779,7 @@ void draw_levels() {
      for (int i = 0; i < 16; i++) {
        if (kit_new.levels[i] > 125) { scaled_level = 7; }
        else if (kit_new.levels[i] < 4) { scaled_level = 0; }
-       else { scaled_level = (int) ((float) kit_new.levels[i] / (float) 127) * 7; }
+       else { scaled_level = (int) (((float) kit_new.levels[i] / (float) 127) * 7); }
        
        if (scaled_level == 0) { str[i] = ' '; }
        else { str[i] = (char) scaled_level; }
@@ -1054,8 +949,8 @@ class MDHandler2 : public MDCallback {
        /*Tell the MIDI-CTRL framework to execute the following methods when callbacks for
        Pattern and Kit messages are received.*/
   void setup() {
-       // MDSysexListener.setup();
-    //    MDSysexListener.addOnStatusResponseCallback(this, (md_status_callback_ptr_t)&MDHandler2::onStatusResponseCallback);
+        MDSysexListener.setup();
+        MDSysexListener.addOnStatusResponseCallback(this, (md_status_callback_ptr_t)&MDHandler2::onStatusResponseCallback);
         MDSysexListener.addOnPatternMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onPatternMessage); 
         MDSysexListener.addOnKitMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onKitMessage); 
         MDSysexListener.addOnGlobalMessageCallback(this,(md_callback_ptr_t)&MDHandler2::onGlobalMessage); 
@@ -1777,8 +1672,8 @@ void send_pattern_kit_to_md() {
 
                  /*Send a quick sysex message to get the current selected track of the MD*/       
                   int curtrack = MD.getCurrentTrack(callback_timeout);
-   
-                   pattern_rec.setPosition(writepattern); 
+                      pattern_rec.setPosition(writepattern); 
+
                    uint16_t quantize_mute;
                    if (patternload_param3.getValue() == 0) {  quantize_mute = 0;  }
                     else if (patternload_param3.getValue() != 7) { quantize_mute = 1 << patternload_param3.getValue(); }
@@ -1824,31 +1719,31 @@ void send_pattern_kit_to_md() {
                   */
                   //If write original, let's copy the master fx settings from the first track in row
                   //Let's also set the kit receive position to be the original.
-                 /*
+                                   kit_new.origPosition = currentkit_temp;
                   if (write_original == 1) {
                   load_track(0,cur_row,50);
-                  kit_new.origPosition = temptrack.origPosition;
+             //     kit_new.origPosition = temptrack.origPosition;
                    for (uint8_t c; c < 17; c++) {
                    kit_new.name[c] = temptrack.kitName[c]; 
                   }
                   m_memcpy(&kit_new.reverb[0],&temptrack.kitextra.reverb,sizeof(temptrack.kitextra.reverb));
-                 m_memcpy(&kit_new.delay[0],&temptrack.kitextra.delay,sizeof(temptrack.kitextra.delay));
+                  m_memcpy(&kit_new.delay[0],&temptrack.kitextra.delay,sizeof(temptrack.kitextra.delay));
                   m_memcpy(&kit_new.eq[0],&temptrack.kitextra.eq,sizeof(temptrack.kitextra.eq));
                   m_memcpy(&kit_new.dynamics[0],&temptrack.kitextra.dynamics,sizeof(temptrack.kitextra.dynamics));
                   pattern_rec.patternLength = temptrack.length;
                   pattern_rec.swingAmount = temptrack.kitextra.swingAmount;
                   pattern_rec.accentAmount = temptrack.kitextra.accentAmount;
                   pattern_rec.patternLength = temptrack.kitextra.patternLength;
-                 pattern_rec.doubleTempo = temptrack.kitextra.doubleTempo;
+                  pattern_rec.doubleTempo = temptrack.kitextra.doubleTempo;
                   pattern_rec.scale = temptrack.kitextra.scale;
                   }
                   else {
-                    */
-                  pattern_rec.toSysex(encoder);
+                    
+
                   kit_new.origPosition = currentkit_temp;
            //       }
-                  
-
+                  }
+                  pattern_rec.toSysex(encoder);
 
                   md_setsysex_recpos();
                   /*Send the encoded kit to the MD via sysex*/
@@ -2151,10 +2046,10 @@ void setup() {
  //Enable callbacks, and disable some of the ones we don't want to use.
  
  
-MDTask.setup();
-MDTask.verbose = false;
-MDTask.autoLoadKit = false;
-MDTask.reloadGlobal = false;
+//MDTask.setup();
+//MDTask.verbose = false;
+//MDTask.autoLoadKit = false;
+//MDTask.reloadGlobal = false;
    
 // GUI.addTask(&MDTask);
 
@@ -2287,14 +2182,19 @@ char *getTrackKit(int column, int row, bool load) {
   if (!load_track(column,row,50)) {
   return "    ";  
   }
-  }
+ 
   if (temptrack.active != TRUE) { return "    "; }
-  char my_string[7];
-   for (uint8_t c; c < 7; c++) {
-                   my_string[c] = temptrack.kitName[c]; 
-                  }
-   my_string[7] = '\0';
-  return my_string;
+  if (read_slowclock() % 10) { row_name_offset += .1; }
+  //if ((read_slowclock() % 50) == 0) { row_name_offset++; }
+   if (row_name_offset > 12) {
+    row_name_offset = 0;
+   }
+   for (uint8_t c = 0; c < 7; c++) {
+                   row_name[c] = temptrack.kitName[c + (int)row_name_offset]; 
+   }
+   row_name[7] = '\0';
+  return row_name;
+  }
 }
 
 
@@ -2415,26 +2315,27 @@ void TrackInfoEncoder::displayAt(int encoder_offset) {
                     uint8_t x;
               if (curpage == 8) {
 
-      GUI.setLine(GUI.LINE1);
+                 GUI.setLine(GUI.LINE1);
                  GUI.put_string_at(0,"Project:");
-      GUI.setLine(GUI.LINE2);
-      GUI.put_string_at_fill(0, entries[loadproj_param1.getValue()].name);
+                 GUI.setLine(GUI.LINE2);
+                 GUI.put_string_at_fill(0, entries[loadproj_param1.getValue()].name);
+                 return;
                 }
               
-              if (curpage == 10) {
-
-             uint8_t x;
-             if (mixer_param3.getValue() == 0) {  GUI.put_string_at(10,"--");  }
-            else { 
-             x = 1 << mixer_param3.getValue(); 
-             GUI.put_value_at(9,x); 
-             GUI.put_string_at(3,"Q: :");
-            }
-             x = 1 << mixer_param3.getValue(); 
-             GUI.put_value_at(4,x); 
-             GUI.put_string_at(12,"LEN: :");
+              else if (curpage == 10) {
+         draw_levels();
+              //   uint8_t x;
+              //   if (mixer_param3.getValue() == 0) {  GUI.put_string_at(10,"--");  }
+             //    else { 
+             //       x = 1 << mixer_param3.getValue(); 
+             //       GUI.put_value_at(9,x); 
+             ///       GUI.put_string_at(3,"Q: :");
+             //      }
+             //    x = 1 << mixer_param3.getValue(); 
+            //     GUI.put_value_at(4,x); 
+             //    GUI.put_string_at(12,"LEN: :");
             
-              
+              return;
             
               }
   
@@ -2820,7 +2721,9 @@ bool handleEvent(gui_event_t *evt) {
             GUI.setPage(&page);
             curpage = 0; 
             }
+            else {
             GUI.flash_strings_fill("PROJECT ERROR","NOT COMPATIBLE");
+            }
             }
                 
          }
@@ -3130,10 +3033,10 @@ bool handleEvent(gui_event_t *evt) {
           }
          if (EVENT_PRESSED(evt, Buttons.BUTTON2)) { 
               currentkit_temp = MD.getCurrentKit(callback_timeout);
-                       curpage = 10;
+
                     MD.saveCurrentKit(currentkit_temp);
                     MD.getBlockingKit(currentkit_temp);
-       
+                              curpage = 10;
          exploit_on();
 
          GUI.setPage(&mixer_page);
