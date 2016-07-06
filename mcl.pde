@@ -8,18 +8,21 @@
 */
 
 //This version:
-//Project offest
-//project_header
-//project_load
-//reduced parameter lock count
-//draw_levels
-//MDTask disabled and sysexlistener setup turned on -> check
+//readclock delay on notes
+//step counter
+//read and write display
+//kit name continues scroll
+//trackinfo on encoder press from main screen
+//we're going to add custom name to track name
+//orig kit write orig pattern write
+//-- -K -P KP
 
 //Pattern Read Modes:
 //Normal using MD as input.
 
 //1 to 1 if cur_col = 0
 //1 to col if cur_col > 0
+//disabled string cmp check
 
  #include <MD.h>
  #include "GridPage.h"
@@ -78,7 +81,7 @@
 //ProjectName string
 
   char newprj[18];
-  char row_name[8] = "       ";
+  char row_name[5] = "    ";
   float row_name_offset = 0;
   uint8_t write_ready = 0;
 
@@ -117,10 +120,11 @@
   TrackInfoEncoder mixer_param2(0, 127);
   TrackInfoPage mixer_page(&mixer_param1,&mixer_param2);
   
-  PatternLoadEncoder patternload_param1(0, 8);
-  PatternLoadEncoder patternload_param2(0, 8);
-  PatternLoadEncoder patternload_param3(0, 8);
-  PatternLoadPage patternload_page(&patternload_param1,&patternload_param2,&patternload_param3);
+  PatternLoadEncoder patternload_param1(0, 7);
+  PatternLoadEncoder patternload_param2(0, 15);
+  PatternLoadEncoder patternload_param3(0, 3);
+  PatternLoadEncoder patternload_param4(0, 7);
+  PatternLoadPage patternload_page(&patternload_param1,&patternload_param2,&patternload_param3,&patternload_param4);
 
   OptionsEncoder options_param1(0, 3);
   OptionsEncoder  options_param2(0, 1);
@@ -134,6 +138,7 @@
   TrackInfoEncoder loadproj_param1(1, 64);
   TrackInfoPage loadproj_page(&loadproj_param1);
   
+  uint16_t exploit_start_clock = 0;
 //  TrigCaptureClass test
 
 
@@ -186,7 +191,9 @@ class MDTrack {
   public:
   bool active;
   char kitName[17];
+  char trackName[17];
   uint8_t origPosition;
+  uint8_t patternOrigPosition;
   uint8_t length;
   uint64_t trigPattern;
   uint64_t accentPattern;
@@ -259,10 +266,23 @@ class MDTrack {
   /*Don't forget to copy the Machine data as well
   Which is obtained from the received Kit object kit_new*/
   //  m_strncpy(kitName, kit_new.name, 17);
+  uint8_t white_space = 0;
   for (uint8_t c; c < 17; c++) {
+    if (white_space == 0) {
   kitName[c] = kit_new.name[c]; 
+  trackName[c] = kit_new.name[c];
+    }
+    else {
+        kitName[c] = ' '; 
+  trackName[c] = ' ';
+    }
+  if (kit_new.name[c] == '\0') {
+      white_space = 1;
+   }
+   
+ 
   }
-
+//  trackName[0] = '\0'; 
   m_memcpy(machine.params, kit_new.params[tracknumber], 24);
   
   machine.track = tracknumber;
@@ -287,6 +307,7 @@ class MDTrack {
   m_memcpy(&kitextra.eq, &kit_new.eq,sizeof(kitextra.eq));
   m_memcpy(&kitextra.dynamics, &kit_new.dynamics,sizeof(kitextra.dynamics));
   origPosition = kit_new.origPosition;
+  patternOrigPosition = pattern_rec.origPosition;
  }
  
    /* 
@@ -561,7 +582,7 @@ void new_project_page() {
    uint8_t ledstatus = 0;
    //Initialise the project file by filling the grid with blank data.
       for (int32_t i = 0; i < GRID_LENGTH * 16; i++) {   
-        if (i % 50 == 0) {
+        if (i % 25 == 0) {
          if (ledstatus == 0) {
              setLed2();
              ledstatus = 1;
@@ -897,13 +918,18 @@ void onNoteOnCallback(uint8_t *msg) {
       if (msg[2] > 0) {
 
        int note_num;
+      
+      if (noteproceed == 0) {
+      uint16_t current_clock = read_slowclock();
     
-
-         if (MidiClock.div16th_counter >= (div16th_last + 4)) {
-          noteproceed = 1; 
-         }
-
-      if ((collect_notes) && (msg[0] == 153) && (noteproceed == 1)) {
+    //We need to wait 500ms for the exploit to take effect before collecting notes
+     if (clock_diff(exploit_start_clock, current_clock) > 300) { noteproceed = 1; }
+       }
+        // if (MidiClock.div16th_counter >= (div16th_last + 4)) {
+        //  noteproceed = 1; 
+        // }
+      else {
+      if ((collect_notes) && (msg[0] == 153)) {
       for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
             if (msg[1] == MD.global.drumMapping[i])
                 note_num = i;
@@ -921,7 +947,7 @@ void onNoteOnCallback(uint8_t *msg) {
      }
    
       }
-
+      }
 }
 
 };
@@ -1072,9 +1098,9 @@ void onPatternMessage() {
 if (patternswitch == 5) {
           /*Retrieve the pattern from the Sysex buffer and store it in the pattern_rec object. The MD header is 5 bytes long, hence the offset and length change*/
         
-
+/*
          if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {    
-                     /*
+                     
           //Get current track number from MD
                        int curtrack = MD.getCurrentTrack(callback_timeout);
                        int i = 0;
@@ -1186,8 +1212,9 @@ if (patternswitch == 5) {
                   pattern_rec.toSysex(encoder);
                   clearLed();
                   patternswitch = 254;
-                  */
+                  
          }
+         */
                    //         else { GUI.flash_strings_fill("SYSEX", "ERROR");  }
       } 
    
@@ -1628,8 +1655,8 @@ void send_pattern_kit_to_md() {
                       pattern_rec.setPosition(writepattern); 
 
                    uint16_t quantize_mute;
-                   if (patternload_param3.getValue() == 0) {  quantize_mute = 0;  }
-                    else if (patternload_param3.getValue() != 7) { quantize_mute = 1 << patternload_param3.getValue(); }
+                   if (patternload_param4.getValue() == 0) {  quantize_mute = 0;  }
+                    else if (patternload_param4.getValue() != 7) { quantize_mute = 1 << patternload_param4.getValue(); }
                    else { quantize_mute = 7; }
                   /*Define sysex encoder objects for the Pattern and Kit*/
                   ElektronDataToSysexEncoder encoder(&MidiUart);
@@ -1648,11 +1675,12 @@ void send_pattern_kit_to_md() {
                               first_note = i; 
                              }
                            //  if (cur_col > 0) {
-                             if (cur_col + (i - first_note) < 16) {
+                             if (behaviour == 0) { place_track_inpattern(i, i + cur_col, cur_row); }
+                             else if (cur_col + (i - first_note) < 16) {
                              place_track_inpattern(cur_col + (i - first_note),  i, cur_row);
                              }
                           //   }
-                          if (behaviour == 0) { place_track_inpattern(i, i + cur_col, cur_row); }
+
                                note_count++;
                                if (quantize_mute > 0) { MD.muteTrack(i,true); }
                            }
@@ -1676,7 +1704,7 @@ void send_pattern_kit_to_md() {
 
                   /*Tell the MD to receive the kit sysexdump in the current kit position*/
 
-
+                  uint8_t reload = 1;
                   /* Retrieve the position of the current kit loaded by the MD.
                   Use this position to store the modi
                   */
@@ -1700,16 +1728,27 @@ void send_pattern_kit_to_md() {
                   pattern_rec.patternLength = temptrack.kitextra.patternLength;
                   pattern_rec.doubleTempo = temptrack.kitextra.doubleTempo;
                   pattern_rec.scale = temptrack.kitextra.scale;
+                  
+                  if ((patternload_param3.getValue() == 1) || (patternload_param3.getValue() == 3)) {
+                  kit_new.origPosition = temptrack.origPosition;
+                  pattern_rec.kit = temptrack.origPosition;
+                  reload = 0;
+                  }
+                  if (patternload_param3.getValue() >= 2) {
+                  pattern_rec.origPosition = temptrack.patternOrigPosition;
+                  reload = 0;
+                  }
+                  
                   }
                   else {
                     
-
+                  md_setsysex_recpos();
                   kit_new.origPosition = currentkit_temp;
            //       }
                   }
                   pattern_rec.toSysex(encoder);
 
-                  md_setsysex_recpos();
+
                   /*Send the encoded kit to the MD via sysex*/
 
                       kit_new.toSysex(encoder2);
@@ -1720,9 +1759,9 @@ void send_pattern_kit_to_md() {
 
                   /*Instruct the MD to reload the kit, as the kit changes won't update until the kit is reloaded*/
            //           if ((writepattern == -1) || (writepattern == pattern_new.origPosition)) { MD.loadKit(currentkit_temp); }
-                   
+                   if (reload == 1) {
                   MD.loadKit(pattern_rec.kit);
-                  
+                   }
                   /*kit_sendmode != 1 therefore we are going to send the Machine via Sysex and Midi cc without sending the kit*/
                   
                   //I fthe sequencer is running then we will pause and wait for the next divison
@@ -1736,9 +1775,9 @@ void send_pattern_kit_to_md() {
                   if (MidiClock.state == 2) {
                     
                    if (quantize_mute != 7) {
-                 while (((MidiClock.div32th_counter + 3) % (quantize_mute * 2))  != 0)
-                 // while (1);
-                  ;
+                 while (((MidiClock.div32th_counter + 3) % (quantize_mute * 2))  != 0) {
+                GUI.display();
+                 }
                  
                   }
                   }
@@ -1784,8 +1823,9 @@ void toggle_cues_batch() {
                      
       }
                     
-      while (((MidiClock.div32th_counter + 3) % (quantize_mute * 2))  != 0)
-       ;
+      while (((MidiClock.div32th_counter + 3) % (quantize_mute * 2))  != 0) {
+        GUI.display();
+      }
                  
 
 
@@ -2107,9 +2147,24 @@ uint64_t getPatternMask(int column, int row, uint8_t j, bool load) {
       else if (j == 3) { return temptrack.accentPattern; }
       else { return temptrack.trigPattern; }
 }
-
-
-
+/*
+void my_block(uint8_t time) {
+    uint16_t start_clock = read_slowclock();
+    uint16_t current_clock = start_clock;
+    do {
+        current_clock = read_slowclock();
+    
+       //MCL Code, trying to replicate main loop
+    
+        if ((MidiClock.mode == MidiClock.EXTERNAL ||
+                                 MidiClock.mode == MidiClock.EXTERNAL_UART2)) {
+              MidiClock.updateClockInterval();
+         }   
+        handleIncomingMidi();
+        GUI.display();
+    } while ((clock_diff(start_clock, current_clock) < time);
+}
+*/
 /*
   ===================
   function: getGridModel(int column, int row, bool load)
@@ -2133,7 +2188,7 @@ uint32_t getGridModel(int column, int row, bool load) {
 
 /*
   ===================
-  function:  *getTrackKit(int column, int row, bool load)
+  function:  *getTrackKit(int column, int row, bool lo
   ===================
  
  Return a the name of kit associated with the track object located at grid Grid i
@@ -2146,17 +2201,35 @@ char *getTrackKit(int column, int row, bool load) {
   if (!load_track(column,row,50)) {
   return "    ";  
   }
- 
+  
   if (temptrack.active != TRUE) { return "    "; }
-  if (read_slowclock() % 10) { row_name_offset += .1; }
+  if (read_slowclock() % 10) { 
+       if (MidiClock.state == 2) { row_name_offset += .2; }
+        else { row_name_offset += .1; }
+
+  }
+ 
+  uint8_t char_position = 0;
   //if ((read_slowclock() % 50) == 0) { row_name_offset++; }
-   if (row_name_offset > 10) {
+   if (row_name_offset > 15) {
     row_name_offset = 0;
    }
-   for (uint8_t c = 0; c < 7; c++) {
-                   row_name[c] = temptrack.kitName[c + (int)row_name_offset]; 
+
+  
+   for (uint8_t c = 0; c < 4; c++) {
+                   
+                   if (c + (uint8_t)row_name_offset > 15) {
+                   char_position =  c + (uint8_t)row_name_offset - 16;
+                   }
+                   else {
+                   char_position =  c + (uint8_t)row_name_offset;
+                   }
+                 //  char some_string[] = "hello my baby";
+                   //row_name[c] = some_string[char_position];  
+                   if (char_position < 5) { row_name[c] = ' '; }
+                   else { row_name[c] = temptrack.kitName[char_position - 5]; } 
    }
-   row_name[7] = '\0';
+   row_name[4] = '\0';
   return row_name;
   }
 }
@@ -2246,8 +2319,8 @@ void OptionsPage::display() {
 void PatternLoadEncoder::displayAt(int encoder_offset) {
 
                GUI.setLine(GUI.LINE2);
-                 if (curpage == 3) { GUI.put_string_at(16,"R"); }
-              else if (curpage == 4) { GUI.put_string_at(16,"W"); }
+               if (curpage == 3) { GUI.put_string_at(0,"RE"); }
+               else if (curpage == 4) { GUI.put_string_at(0,"WR"); }
     
 
 
@@ -2256,19 +2329,35 @@ void PatternLoadEncoder::displayAt(int encoder_offset) {
            //                MD.getPatternName(encoder_offset,str);          
          //        GUI.put_string_at(0,str);
 
-                     //  patternload_param3.setValue(currentkit_temp + 1);
+                     //  patternload_param4.setValue(currentkit_temp + 1);
+             uint8_t step_count = MidiClock.div16th_counter - (64 * (MidiClock.div16th_counter / 64));
+             GUI.put_value_at2(14,step_count);
              if (curpage == 4) { 
              uint8_t x;
-             if (patternload_param3.getValue() == 0) {  GUI.put_string_at(10,"--");  }
-             else if (patternload_param3.getValue() == 7) {  GUI.put_string_at(10,"CUE");  }
-            else { x = 1 << patternload_param3.getValue(); 
-             GUI.put_value_at(9,x); 
-             GUI.put_string_at(3,"QMUTE:");
+             char str[5];
+             if( patternload_param3.getValue() < 2) { MD.getPatternName(patternload_param1.getValue() * 16 + patternload_param2.getValue() ,str);     GUI.put_string_at(3,str); }
+             else { GUI.put_string_at(3,"--"); }
+
+             GUI.put_string_at(9,"Q:");
+             if (patternload_param3.getValue() == 0) { GUI.put_string_at(6,"--"); }
+             if (patternload_param3.getValue() == 1) { GUI.put_string_at(6,"K-"); }
+             if (patternload_param3.getValue() == 2) { GUI.put_string_at(6,"-P"); }
+             if (patternload_param3.getValue() == 3) { GUI.put_string_at(6,"KP"); }
+             if (patternload_param4.getValue() == 0) {  GUI.put_string_at(11,"--");  }
+             else if (patternload_param4.getValue() == 7) {  GUI.put_string_at(11,"CU");  }
+             else { 
+             x = 1 << patternload_param4.getValue(); 
+             GUI.put_value_at2(11,x); 
             }
+
+          
          }
             
-}
+} 
+//WR  F10 XX CU 64
+//0123456789012345
 
+//WRITE -- Q:CU 64
 /* Overriding display method for the TrackInfoEncoder
 This method is responsible for the display of the TrackInfo page.
 The selected track information is displayed in this screen (Line 1).
@@ -2324,15 +2413,19 @@ void TrackInfoEncoder::displayAt(int encoder_offset) {
                GUI.setLine(GUI.LINE2);
 
               // GUI.put_string_at(12,"Cue");
-
+             GUI.put_string_at(0,"CUES");
                
-
-             if (trackinfo_param3.getValue() == 0) {  GUI.put_string_at(10,"--");  }
+             GUI.put_string_at(9,"Q:");
+             if (trackinfo_param3.getValue() == 0) {  GUI.put_string_at(11,"--");  }
             else { 
              x = 1 << trackinfo_param3.getValue(); 
-             GUI.put_value_at(9,x); 
-             GUI.put_string_at(4,"QCUE:");
+
+
+             GUI.put_value_at2(11,x); 
             }
+                uint8_t step_count = MidiClock.div16th_counter - (64 * (MidiClock.div16th_counter / 64));
+             GUI.put_value_at2(14,step_count);
+
                              draw_notes();
               }
               
@@ -2499,8 +2592,8 @@ void GridEncoderPage::display() {
 
      GUI.setLine(GUI.LINE2);
      /*Displays the value of the current Row on the screen.*/
-      GUI.put_valuex_at(12,(encoders[2]->getValue()) );
-      GUI.put_valuex_at(14,(encoders[3]->getValue()) );
+      GUI.put_value_at2(12,(encoders[2]->getValue()) );
+      GUI.put_value_at2(14,(encoders[3]->getValue()) );
      // mdEnc1->dispnow = 0;
     //  mdEnc2->dispnow = 0;
 
@@ -2514,9 +2607,9 @@ void GridEncoderPage::display() {
      GUI.setLine(GUI.LINE2);
      
      /*Displays the value of the current Row on the screen.*/
-      GUI.put_value_at(12,(encoders[0]->getValue()) * 10);
+      GUI.put_value_at2(12,(encoders[0]->getValue()) );
      /*Displays the value of the current Column on the screen.*/
-      GUI.put_value_at(14,(encoders[1]->getValue()) * 10);
+      GUI.put_value_at2(14,(encoders[1]->getValue()));
      }
 }
 
@@ -2594,15 +2687,18 @@ void init_notes() {
 void exploit_on() {
       // MD.getBlockingGlobal(0);
        init_notes();
-    
-       if (MidiClock.state == 2) {
+       exploit_start_clock = read_slowclock();
+              noteproceed = 0;
+              
+       /*if (MidiClock.state == 2) {
+
        div16th_last = MidiClock.div16th_counter;
        noteproceed = 0;
        }
        else {
        noteproceed = 1; 
        }
-
+*/
        notecount = 0;
    //   global_new.baseChannel = 9;
      //  ElektronDataToSysexEncoder encoder(&MidiUart);
@@ -2674,7 +2770,7 @@ bool handleEvent(gui_event_t *evt) {
 
           if (EVENT_RELEASED(evt, Buttons.ENCODER1) || EVENT_RELEASED(evt, Buttons.ENCODER2) || EVENT_RELEASED(evt, Buttons.ENCODER3) || EVENT_RELEASED(evt, Buttons.ENCODER4)) {
             uint8_t size = m_strlen(entries[loadproj_param1.getValue()].name);        
-            if (strcmp(&entries[loadproj_param1.getValue()].name[size - 4],"mcl") == 0)  {
+         //   if (strcmp(&entries[loadproj_param1.getValue()].name[size - 4],"mcl") == 0)  {
               
 
             
@@ -2690,7 +2786,7 @@ bool handleEvent(gui_event_t *evt) {
             else {
             GUI.flash_strings_fill("PROJECT ERROR","NOT COMPATIBLE");
             }
-            }
+        //    }
                 
          }
               return true;
@@ -2994,7 +3090,8 @@ bool handleEvent(gui_event_t *evt) {
          
 
                     MD.getCurrentPattern(callback_timeout);
-
+                    patternload_param1.cur = (int) MD.currentPattern / (int) 16;
+                    patternload_param2.cur = MD.currentPattern - 16 * ((int) MD.currentPattern / (int) 16);
           
                                      patternswitch = 1;
                      currentkit_temp = MD.getCurrentKit(callback_timeout);
@@ -3057,7 +3154,7 @@ bool handleEvent(gui_event_t *evt) {
         //          }
         //           setLevel(8,100);
     //  }
-      if (BUTTON_DOWN(Buttons.ENCODER1) && BUTTON_DOWN(Buttons.BUTTON3))  {
+      if (BUTTON_DOWN(Buttons.ENCODER1))  {
 
            loadtrackinfo_page(0);
            
@@ -3065,14 +3162,14 @@ bool handleEvent(gui_event_t *evt) {
     
             return true;
          }
-  if (BUTTON_DOWN(Buttons.ENCODER2) && (BUTTON_DOWN(Buttons.BUTTON3)))  {
+  if (BUTTON_DOWN(Buttons.ENCODER2))  {
 
 
                 loadtrackinfo_page(1);
 
      return true;
  }
-  if (BUTTON_DOWN(Buttons.ENCODER3) && (BUTTON_DOWN(Buttons.BUTTON3)))  {
+  if (BUTTON_DOWN(Buttons.ENCODER3))  {
 
                loadtrackinfo_page(2);
      
@@ -3080,7 +3177,7 @@ bool handleEvent(gui_event_t *evt) {
 
      return true;
  }
-  if (BUTTON_DOWN(Buttons.ENCODER4) && (BUTTON_DOWN(Buttons.BUTTON3)))  {
+  if (BUTTON_DOWN(Buttons.ENCODER4))  {
 
                loadtrackinfo_page(3);
 
