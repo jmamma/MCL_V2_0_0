@@ -103,7 +103,7 @@
   uint32_t pattern_start_clock32th = 0;
 /* encodervalue */
 /*Temporary register for storeing the value of the encoder position or grid/Grid position for a callback*/
-  int load_the_damn_kit = 0;
+  uint8_t load_the_damn_kit = 255;
   int encodervalue = NULL;
   int cur_col = 0;
   int cur_row = 0;
@@ -856,10 +856,13 @@ extern void midi_start() {
        noteproceed = 0;
  }
 }
-void load_the_damnkit() {
-  if (load_the_damn_kit == 1) {
-                    MD.loadKit(pattern_rec.kit);
-                    load_the_damn_kit = 0;
+void load_the_damnkit(uint8_t pattern) {
+  if (load_the_damn_kit != 255) {
+    if (writepattern == pattern) {
+                    MD.loadKit(load_the_damn_kit);
+    }
+                    load_the_damn_kit = 255;
+     
   }
 
     
@@ -886,7 +889,7 @@ public:
     }
   }
 void onProgramChangeCallback(uint8_t *msg) {
-  load_the_damnkit();
+  load_the_damnkit(msg[1]);
   pattern_start_clock32th = MidiClock.div32th_counter;
  //
  //((int) (MidiClock.div32th_counter / 32) * 32);
@@ -1483,13 +1486,13 @@ void splashscreen() {
   LCD.goLine(1);
   LCD.puts(str2);  
       
-         
+                       delay(50);
        // while (rec_global == 0) {
 
        for (uint8_t x = 0; x < 2; x++) {
        for (uint8_t y = 0; y < 16; y++) {
         	MD.setStatus(0x22, y);
-                delay(50);
+
        }
       }
     MD.setStatus(0x22, 0);  
@@ -1504,7 +1507,7 @@ int track_newlevel;
    for (int i = 0; i < 16; i++) {
        if (notes[i] == 1) {
            //        setLevel(i,mdEnc->getValue() + kit_new.levels[i] );
-        for (int a = 0; a < 2; a++) {
+       //  for (int a = 0; a < 2; a++) {
           if ((mdEnc->getValue() - mdEnc->old) < 0) { track_newlevel = kit_new.levels[i] - 1; }
               //      if ((mdEnc->getValue() - mdEnc->old) > 0) { track_newlevel = kit_new.levels[i] + 1; }
           else { track_newlevel = kit_new.levels[i] + 1; }
@@ -1513,7 +1516,7 @@ int track_newlevel;
         //if ((kit_new.levels[i] < 127) && (kit_new.levels[i] > 0)) {
           setLevel(i,kit_new.levels[i] ); 
        //}
-          }
+         // }
      }
        }
    if (mdEnc->getValue() == 127) { mdEnc->cur = 1; mdEnc->old = 0; }
@@ -1686,7 +1689,9 @@ void send_pattern_kit_to_md() {
                   uint8_t reload = 1;
                    uint16_t quantize_mute = 0;
                    uint8_t q_pattern_change = 0;
-           
+                   if (writepattern != MD.currentPattern) {
+                   reload = 0; 
+                   }
                    if (patternload_param4.getValue() == 0)  {  quantize_mute = 0;  }
                    else if (patternload_param4.getValue() < 7) { quantize_mute = 1 << patternload_param4.getValue(); }
                    if (patternload_param4.getValue() == 7) { quantize_mute = 254; }
@@ -1729,8 +1734,9 @@ void send_pattern_kit_to_md() {
                              if (behaviour == 0) { place_track_inpattern(i, i + cur_col, cur_row); }
                              else if (cur_col + (i - first_note) < 16) {
                              place_track_inpattern(cur_col + (i - first_note),  i, cur_row);
-                             if (patternload_param4.getValue() == 8) { kit_new.levels[i] = 0; }
+
                              }
+                                if (patternload_param4.getValue() == 8) { kit_new.levels[i] = 0; }
                           //   }
 
                                note_count++;
@@ -1820,7 +1826,7 @@ void send_pattern_kit_to_md() {
                   MD.loadKit(pattern_rec.kit);
                    }
                   else if (q_pattern_change == 1) {
-                   load_the_damn_kit = 1;
+                   load_the_damn_kit = pattern_rec.kit;
                   MD.loadPattern(writepattern);
 
                   }

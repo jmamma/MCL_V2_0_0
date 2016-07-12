@@ -136,6 +136,10 @@ void TrackInfoPage ::clear() {
 
 
 void TrackInfoPage::finalize() {
+    for (uint8_t i = 0; i < GUI_NUM_ENCODERS; i++) {
+    if (encoders[i] != NULL) 
+      encoders[i]->checkHandle();
+  }
 }
 
 void TrackInfoPage::displayNames() {
