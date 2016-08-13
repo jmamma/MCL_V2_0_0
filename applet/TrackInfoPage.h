@@ -48,7 +48,7 @@ public:
 	 * fastmode, and limit the resulting value using limit_value().
 	 **/
 	virtual int update(encoder_t *enc);
-        virtual void displayAt(int i);
+      //  virtual void displayAt(int i);
 
 	/* @} */
 };
@@ -144,7 +144,7 @@ void TrackInfoPage::finalize() {
 
 void TrackInfoPage::displayNames() {
 }
-
+/*
 void TrackInfoPage::display() {
   
 
@@ -153,7 +153,7 @@ void TrackInfoPage::display() {
        
 
 }
-
+*/
 
 int TrackInfoEncoder::update(encoder_t *enc) {
 	//int inc = 8;

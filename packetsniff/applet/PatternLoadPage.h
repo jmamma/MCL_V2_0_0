@@ -1,5 +1,5 @@
 
-class TrackInfoEncoder : public Encoder {
+class PatternLoadEncoder : public Encoder {
 	/**
 	 * \addtogroup gui_rangeencoder_class
 	 * @{
@@ -16,8 +16,8 @@ public:
 	 * name, initial value, and handling function. The initRangeEncoder
 	 * will be called with the constructor arguments.
 	 **/
-	TrackInfoEncoder(int _max = 127, int _min = 0, const char *_name = NULL, int init = 0, encoder_handle_t _handler = NULL) : Encoder(_name, _handler) {
-		initTrackInfoEncoder(_max, _min, _name, init, _handler);
+	PatternLoadEncoder(int _max = 127, int _min = 0, const char *_name = NULL, int init = 0, encoder_handle_t _handler = NULL) : Encoder(_name, _handler) {
+		initPatternLoadEncoder(_max, _min, _name, init, _handler);
 	}
 	
 	/**
@@ -29,7 +29,7 @@ public:
 	 *
 	 * The initial value is called without calling the handling function.
 	 **/
-	void initTrackInfoEncoder(int _max = 128, int _min = 0, const char *_name = NULL, int init = 0,
+	void initPatternLoadEncoder(int _max = 128, int _min = 0, const char *_name = NULL, int init = 0,
 						  encoder_handle_t _handler = NULL) {
 		setName(_name);
 		handler = _handler;
@@ -48,14 +48,14 @@ public:
 	 * fastmode, and limit the resulting value using limit_value().
 	 **/
 	virtual int update(encoder_t *enc);
-      //  virtual void displayAt(int i);
+        virtual void displayAt(int encoder_offset);
 
 	/* @} */
 };
 
 
 
-class TrackInfoPage : public Page {
+class PatternLoadPage : public Page {
   /**
    * \addtogroup gui_encoder_page
    * @{
@@ -68,7 +68,7 @@ public:
    * order determines which encoder will be used. Unused encoders can
    * be passed as NULL pointers.
    **/
-  TrackInfoPage(Encoder *e1 = NULL, Encoder *e2 = NULL, Encoder *e3 = NULL, Encoder *e4 = NULL) {
+  PatternLoadPage(Encoder *e1 = NULL, Encoder *e2 = NULL, Encoder *e3 = NULL, Encoder *e4 = NULL) {
     setEncoders(e1, e2, e3, e4);
   }
 
@@ -111,7 +111,7 @@ public:
 };
 
 
-void TrackInfoPage::update() {
+void PatternLoadPage::update() {
   encoder_t _encoders[GUI_NUM_ENCODERS];
 
   USE_LOCK();
@@ -123,11 +123,11 @@ void TrackInfoPage::update() {
   for (uint8_t i = 0; i < GUI_NUM_ENCODERS; i++) {
     if (encoders[i] != NULL) 
       encoders[i]->update(_encoders + i);
-  } 
+  }
 }
 
-void TrackInfoPage ::clear() {
-     for (uint8_t i = 0; i < GUI_NUM_ENCODERS; i++) {
+void PatternLoadPage ::clear() {
+  for (uint8_t i = 0; i < GUI_NUM_ENCODERS; i++) {
     if (encoders[i] != NULL)
       encoders[i]->clear();
   }
@@ -135,33 +135,33 @@ void TrackInfoPage ::clear() {
 
 
 
-void TrackInfoPage::finalize() {
-    for (uint8_t i = 0; i < GUI_NUM_ENCODERS; i++) {
+void PatternLoadPage::finalize() {
+  for (uint8_t i = 0; i < GUI_NUM_ENCODERS; i++) {
     if (encoders[i] != NULL) 
       encoders[i]->checkHandle();
   }
 }
 
-void TrackInfoPage::displayNames() {
+void PatternLoadPage::displayNames() {
 }
-/*
-void TrackInfoPage::display() {
+
+void PatternLoadPage::display() {
   
 
-             encoders[0]->displayAt(encoders[0]->getValue());                    
+             encoders[0]->displayAt((encoders[0]->getValue() * 16) + encoders[1]->getValue());                    
         
        
 
 }
-*/
 
-int TrackInfoEncoder::update(encoder_t *enc) {
+
+int PatternLoadEncoder::update(encoder_t *enc) {
 	//int inc = 8;
 
 	//cur = limit_value(cur, inc, min, max);
 
         
-	int inc = enc->normal;
+	int inc = enc->normal + (fastmode ? 0 : (fastmode ? 16 * enc->button : enc->button));
         //int inc = 4 + (pressmode ? 0 : (fastmode ? 5 * enc->button : enc->button));
 	cur = limit_value(cur, inc, min, max);
 

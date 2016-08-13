@@ -6,28 +6,6 @@
   Author: Justin Valer
   Date: July/2016
 */
-//Read/write gui changes
-//Scroll no scroll
-//Read works completely different with explicit pattern.
-//Write explicit pattern in  write_original mode
-
-
-//This version:
-//readclock delay on notes
-//step counter
-//read and write display
-//kit name continues scroll
-//trackinfo on encoder press from main screen
-//we're going to add custom name to track name
-//orig kit write orig pattern write
-//-- -K -P KP
-
-//Pattern Read Modes:
-//Normal using MD as input.
-
-//1 to 1 if cur_col = 0
-//1 to col if cur_col > 0
-//disabled string cmp check
 
  #include <MD.h>
  #include "GridPage.h"
@@ -35,10 +13,11 @@
  #include "PatternLoadPage.h"
  #include "OptionPage.h"
  #include <MidiClockPage.h>
- #include <TurboMidi.hh>
+ //#include <TurboMidi.hh>
  #include <SDCard.h>
  #include <string.h>
  #include <midi-common.hh>
+ //#include <SimpleFS.hh>
  //#include <TrigCapture.h>
  //RELEASE 1 BYTE/STABLE-BETA 1 BYTE /REVISION 2 BYTES
  #define VERSION 2000
@@ -63,7 +42,7 @@ extern void midi_start();
 void load_the_damnkit(uint8_t pattern);
 void place_track_inpattern(int curtrack, int column, int row);
 void switchGlobal (uint8_t global_page);
-void md_setsysex_recpos();
+void md_setsysex_recpos(uint8_t rec_type, uint8_t position);
 void setLevel(int curtrack, int value);
 void setTrackParam(uint8_t track, uint8_t param, uint8_t value);
 void splashscreen();
@@ -93,6 +72,8 @@ void set_midinote_totrack_mapping();
 void init_notes();
 void exploit_on();
 void exploit_off();
+void sendTurbomidiHeader(uint8_t cmd);
+void turboSetSpeed(uint8_t speed);
 bool handleEvent(gui_event_t *evt);
 MDPattern pattern_rec;
   MDKit kit_new;
@@ -126,6 +107,7 @@ MDPattern pattern_rec;
   uint8_t fx_lv = 0;
   uint8_t fx_tm = 0;
   int8_t level_last = 0;
+  uint8_t level_pressmode = 0;
 //GUI switch, used to identify what level of the GUI we are currently in.  
   uint8_t curpage = 0;
   uint8_t turbo_state = 0;
@@ -166,6 +148,11 @@ MDPattern pattern_rec;
 
   GridEncoderPage page(&param1, &param2, &param3, &param4);
 
+  //TrackInfoEncoder trackinfo_param1(0, 3);
+ // TrackInfoEncoder trackinfo_param2(0, 3);
+ // TrackInfoEncoder trackinfo_param3(0, 7);
+ // TrackInfoEncoder trackinfo_param4(0, 7);
+  
   TrackInfoEncoder trackinfo_param1(0, 3);
   TrackInfoEncoder trackinfo_param2(0, 3);
   TrackInfoEncoder trackinfo_param3(0, 7);
@@ -173,32 +160,49 @@ MDPattern pattern_rec;
 
   TrackInfoPage trackinfo_page(&trackinfo_param1,&trackinfo_param2,&trackinfo_param3, &trackinfo_param4);
   
+ //   TrackInfoEncoder mixer_param1(0, 127);
+ // TrackInfoEncoder mixer_param2(0, 127);
+ // TrackInfoEncoder mixer_param3(0, 8);
+  
   TrackInfoEncoder mixer_param1(0, 127);
   TrackInfoEncoder mixer_param2(0, 127);
   TrackInfoEncoder mixer_param3(0, 8);
   TrackInfoPage mixer_page(&mixer_param1,&mixer_param2,&mixer_param3);
   
-  PatternLoadEncoder patternload_param1(0, 7);
-  PatternLoadEncoder patternload_param2(0, 15);
-  PatternLoadEncoder patternload_param3(0, 3);
-  PatternLoadEncoder patternload_param4(0, 11);
+  
+  // PatternLoadEncoder patternload_param1(0, 8);
+ // PatternLoadEncoder patternload_param2(0, 15);
+  //PatternLoadEncoder patternload_param3(0, 64);
+ // PatternLoadEncoder patternload_param4(0, 11);
+  
+  TrackInfoEncoder patternload_param1(0, 8);
+  TrackInfoEncoder patternload_param2(0, 15);
+  TrackInfoEncoder patternload_param3(0, 64);
+  TrackInfoEncoder patternload_param4(0, 11);
   PatternLoadPage patternload_page(&patternload_param1,&patternload_param2,&patternload_param3,&patternload_param4);
 
-  OptionsEncoder options_param1(0, 3);
-  OptionsEncoder  options_param2(0, 1);
+//OptionsEncoder options_param1(0, 3);
+  //OptionsEncoder  options_param2(0, 2);
+
+  TrackInfoEncoder options_param1(0, 3);
+  TrackInfoEncoder  options_param2(0, 2);
   OptionsPage options_page(&options_param1,&options_param2);
 
+ // TrackInfoEncoder proj_param1(1, 10);
+//  TrackInfoEncoder proj_param2(0, 36);
+ // TrackInfoEncoder proj_param4(0, 127);
+  
   TrackInfoEncoder proj_param1(1, 10);
   TrackInfoEncoder proj_param2(0, 36);
   TrackInfoEncoder proj_param4(0, 127);
   TrackInfoPage proj_page(&proj_param1,&proj_param2);
 
+//  TrackInfoEncoder loadproj_param1(1, 64);
   TrackInfoEncoder loadproj_param1(1, 64);
   TrackInfoPage loadproj_page(&loadproj_param1);
   
   uint16_t exploit_start_clock = 0;
 //  TrigCaptureClass test
-
 
 
 /*A toggle for handling incoming pattern and kit data.*/
@@ -903,6 +907,7 @@ extern void midi_start() {
        exploit_start_clock = read_slowclock();
        noteproceed = 0;
  }
+pattern_start_clock32th = 0;
 }
 void load_the_damnkit(uint8_t pattern) {
   if (load_the_damn_kit != 255) {
@@ -989,8 +994,8 @@ void onNoteOffCallback(uint8_t *msg) {
           if ((a == 0) && (b > 0)) { all_notes_off = 1; }
           
         if (all_notes_off == 1) {
-          if (curpage == 3)  { exploit_off(); store_tracks_in_mem( 0,param2.getValue(), 0);  GUI.setPage(&page);  curpage = 0; }
-          if (curpage == 4) { exploit_off(); write_tracks_to_md( 0, param2.getValue(), 0); GUI.setPage(&page); curpage = 0; } 
+          if (curpage == 3)  { exploit_off();  store_tracks_in_mem( 0,param2.getValue(), 0);  GUI.setPage(&page);  curpage = 0; }
+          if (curpage == 4) { exploit_off(); write_tracks_to_md( 0, param2.getValue(), 0);  GUI.setPage(&page); curpage = 0; } 
           if ((curpage == 5) && (trackinfo_param4.getValue() > 0) && (b > 1)) { toggle_cues_batch(); send_globals(); exploit_off(); GUI.setPage(&page); curpage = 0; }
         }
 
@@ -1108,13 +1113,23 @@ class MDHandler2 : public MDCallback {
 }
 
     void onGlobalMessage() {
-              setLed2();
+
               if (!global_one.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) { GUI.flash_strings_fill("GLOBAL", "ERROR");  }
+              if (rec_global != 1) {
+               
               rec_global = 1;
-                send_globals();
+              send_globals();
 
               switchGlobal(7);
-              clearLed2();
+                      for (uint8_t x = 0; x < 2; x++) {
+                        for (uint8_t y = 0; y < 16; y++) {
+                    	MD.setStatus(0x22, y);
+
+                        }
+                        }
+              MD.setStatus(0x22, 0);  
+              }
+
     }
 /*A kit has been received by the Minicommand in the form of a Sysex message which is residing 
 in memory*/
@@ -1154,7 +1169,7 @@ in memory*/
         /*Stores kit from sysex into a Kit object: kit_rec.
         The actual kit data is located after the Sysex header. The header is 5 bytes long.*/
         
-        if (!kit_new.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) { GUI.flash_strings_fill("SYSEX-KIT", "ERROR");  }
+        kit_new.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5);
     }
     /*Patternswitch == 6, store pattern in memory*/
     /*load up tracks and kit from a pattern that is different from the one currently loaded*/
@@ -1352,8 +1367,7 @@ if (patternswitch == 5) {
 /*
                        int curtrack = MD.getCurrentTrack(callback_timeout);
                        int i = encodervalue;
-                      
-                                                                   
+                    
                        if (pattern_rec.patternLength < encodervalue) { encodervalue = pattern_rec.patternLength; }
                        
                            while (i < pattern_rec.patternLength) {
@@ -1452,10 +1466,22 @@ if (patternswitch == 5) {
  Note: Does not work. Machinedrum does not respond as defined in Sysex outline.
  
 ............... */
+// (SYSEX init)|
+ //$6b | Receive position ID
+ //%000aaaab | receive pos on type 0001=global 0010=kit
+ //          | 0100=pattern 1000=song
+// %0ccccccc | to b=0 => pos ccccccc, b=1 original position
+// %0ddddddd | for ddddddd sys
+
+//4 for kit, 8 for pattern, pos
+  void md_setsysex_recpos(uint8_t rec_type, uint8_t position) {
+    
+    
+    uint8_t data[] = { 0x6b, (uint8_t)rec_type & 0x7F, position, (uint8_t) 1 & 0x7f };
+   MD.sendSysex(data, countof(data));
 
 
-  void md_setsysex_recpos() {
-     MD.sendRequest(0x6b,00000011);
+   //  MD.sendRequest(0x6b,00000011);
 /*
     uint8_t param = 00000011;
     
@@ -1470,7 +1496,7 @@ if (patternswitch == 5) {
   
   
   /* 
- ================
+ ================ 
  function: setLevel(int curtrack, int value));
  ================
   Set the Level Parameter of a track on the MD
@@ -1501,7 +1527,7 @@ void setTrackParam(uint8_t track, uint8_t param, uint8_t value) {
     uint8_t cc = 0;
     if (param == 32) { // MUTE
         cc = 12 + b;
-    } else if (param == 33) { // LEV
+    } else if (param == 33) { // 
         cc = 8 + b;
     } else {
         cc = param;
@@ -1534,16 +1560,10 @@ void splashscreen() {
   LCD.goLine(1);
   LCD.puts(str2);  
       
-                       delay(50);
+                       delay(100);
        // while (rec_global == 0) {
 
-       for (uint8_t x = 0; x < 2; x++) {
-       for (uint8_t y = 0; y < 16; y++) {
-        	MD.setStatus(0x22, y);
 
-       }
-      }
-    MD.setStatus(0x22, 0);  
     GUI.setPage(&page);
 }
 
@@ -1551,11 +1571,18 @@ void splashscreen() {
 
 void encoder_level_handle(Encoder *enc) {
 TrackInfoEncoder *mdEnc = (TrackInfoEncoder *)enc;
+uint8_t increase = 0;
+if (enc->pressmode == false) {
+  increase = 1;
+}
+if (enc->pressmode == true) {
+  increase = 4;
+}
 int track_newlevel;
    for (int i = 0; i < 16; i++) {
        if (notes[i] == 1) {
            //        setLevel(i,mdEnc->getValue() + kit_new.levels[i] );
-       //  for (int a = 0; a < 2; a++) {
+       for (int a = 0; a < increase; a++) {
           if ((mdEnc->getValue() - mdEnc->old) < 0) { track_newlevel = kit_new.levels[i] - 1; }
               //      if ((mdEnc->getValue() - mdEnc->old) > 0) { track_newlevel = kit_new.levels[i] + 1; }
           else { track_newlevel = kit_new.levels[i] + 1; }
@@ -1564,13 +1591,14 @@ int track_newlevel;
         //if ((kit_new.levels[i] < 127) && (kit_new.levels[i] > 0)) {
           setLevel(i,kit_new.levels[i] ); 
        //}
-         // }
+          }
      }
        }
-   if (mdEnc->getValue() == 127) { mdEnc->cur = 1; mdEnc->old = 0; }
-   else if (mdEnc->getValue() == 0) { mdEnc->cur = 126; mdEnc->old = 127; }
+   }
+   if (mdEnc->getValue() >= 127) { mdEnc->cur = 1; mdEnc->old = 0; }
+   else if (mdEnc->getValue() <= 0) { mdEnc->cur = 126; mdEnc->old = 127; }
    
-}
+
 //draw_levels();
 }
 
@@ -1604,7 +1632,7 @@ void toggle_fx1() {
  ================
  function: toggle_fx2();
  ================
- Toggles FX Encoder 2 between Delay FB and Reverb Level Settings
+ Toggles FX  ! 2 between Delay FB and Reverb Level Settings
 */
 void toggle_fx2() {
   
@@ -1690,8 +1718,12 @@ void write_tracks_to_md( int column, int row, int b) {
 
         behaviour = b;
         writepattern = MD.currentPattern;
-        if (((patternload_param1.getValue() * 16 + patternload_param2.getValue()) != MD.currentPattern) && (write_original == 1)) {
+        if (((patternload_param1.getValue() * 16 + patternload_param2.getValue()) != MD.currentPattern)) {
         writepattern = (patternload_param1.getValue() * 16 + patternload_param2.getValue());
+        }
+        
+        if (patternload_param3.getValue() != MD.currentKit) {
+        currentkit_temp = patternload_param3.getValue();
         }
       
         cur_col = column;
@@ -1728,7 +1760,7 @@ void write_tracks_to_md( int column, int row, int b) {
 
 void send_pattern_kit_to_md() {
                  MD.getBlockingKit(currentkit_temp);
-
+                 load_track(0,cur_row,0);
                  
 
                  /*Send a quick sysex message to get the current selected track of the MD*/       
@@ -1738,7 +1770,7 @@ void send_pattern_kit_to_md() {
                    uint16_t quantize_mute = 0;
                    uint8_t q_pattern_change = 0;
                    if (writepattern != MD.currentPattern) {
-                   reload = 0; 
+                    reload = 0; 
                    }
                    if (patternload_param4.getValue() == 0)  {  quantize_mute = 0;  }
                    else if (patternload_param4.getValue() < 7) { quantize_mute = 1 << patternload_param4.getValue(); }
@@ -1752,16 +1784,30 @@ void send_pattern_kit_to_md() {
                    reload = 1; 
                    }
                    if (patternload_param4.getValue() == 10) {
+                     if (writepattern == 127) {
+                      writepattern = 0; 
+                     }
+                     else {
                    writepattern = writepattern + 1;
+                     }
                    patternload_param4.cur = 11;
                    }
                    else if (patternload_param4.getValue() == 11) {
+                     if (writepattern == 0) {
+                      writepattern = 127; 
+                     }
+                     else {
                    writepattern = writepattern - 1;
+                     }
                     patternload_param4.cur = 10;
                  
                    }
                    }
-                   pattern_rec.setPosition(writepattern); 
+                  
+               
+                  
+                   
+
                   /*Define sysex encoder objects for the Pattern and Kit*/
                   ElektronDataToSysexEncoder encoder(&MidiUart);
                   ElektronDataToSysexEncoder encoder2(&MidiUart);
@@ -1770,6 +1816,7 @@ void send_pattern_kit_to_md() {
                   */
 
                     int i = 0; 
+                    int track = 0;
                     uint8_t note_count = 0;
                     uint8_t first_note = 254;
                     while ((i < 16)) {
@@ -1779,16 +1826,22 @@ void send_pattern_kit_to_md() {
                               first_note = i; 
                              }
                            //  if (cur_col > 0) {
-                             if (behaviour == 0) { place_track_inpattern(i, i + cur_col, cur_row); }
+                             if (behaviour == 0) { 
+                             track = i;
+                             place_track_inpattern(track, i + cur_col, cur_row); 
+                             
+                             }
                              else if (cur_col + (i - first_note) < 16) {
-                             place_track_inpattern(cur_col + (i - first_note),  i, cur_row);
+                             track = cur_col + (i - first_note);
+                             place_track_inpattern(track,  i, cur_row);
 
                              }
-                                if (patternload_param4.getValue() == 8) { kit_new.levels[i] = 0; }
+                            
+                           if (patternload_param4.getValue() == 8) { kit_new.levels[track] = 0; }
                           //   }
 
                                note_count++;
-                               if ((quantize_mute > 0) && (patternload_param4.getValue() < 8)) { MD.muteTrack(i,true); }
+                               if ((quantize_mute > 0) && (patternload_param4.getValue() < 8)) { MD.muteTrack(track,true); }
                            }
                       i++;
                     
@@ -1816,9 +1869,10 @@ void send_pattern_kit_to_md() {
                   */
                   //If write original, let's copy the master fx settings from the first track in row
                   //Let's also set the kit receive position to be the original.
-                                   kit_new.origPosition = currentkit_temp;
+
+                  
                   if (write_original == 1) {
-                  load_track(0,cur_row,0);
+
              //     kit_new.origPosition = temptrack.origPosition;
                    for (uint8_t c = 0; c < 17; c++) {
                    kit_new.name[c] = temptrack.kitName[c]; 
@@ -1835,31 +1889,46 @@ void send_pattern_kit_to_md() {
                   pattern_rec.doubleTempo = temptrack.kitextra.doubleTempo;
                   pattern_rec.scale = temptrack.kitextra.scale;
                   
-                  if ((patternload_param3.getValue() == 1) || (patternload_param3.getValue() == 3)) {
-                  kit_new.origPosition = temptrack.origPosition;
-                  pattern_rec.kit = temptrack.origPosition;
-                  reload = 0;
-                  }
-                  if (patternload_param3.getValue() >= 2) {
-                  pattern_rec.origPosition = temptrack.patternOrigPosition;
-                  reload = 0;
-                  }
+                
                   
                   }
-                  else {
+                    // kit_new.origPosition = currentkit_temp;
+                   
+                   //Kit
+                   //If Kit is OG.
+                  if (patternload_param3.getValue() == 64) {
+                    kit_new.origPosition = temptrack.origPosition;
+                    pattern_rec.kit = temptrack.origPosition;
+                  }
+                   else {
                     
-                  md_setsysex_recpos();
-                  kit_new.origPosition = currentkit_temp;
+
+                     pattern_rec.kit = currentkit_temp;
+                    kit_new.origPosition = currentkit_temp;
            //       }
                   }
+                  //If Pattern is OG
+                  if (patternload_param1.getValue() == 8) {
+                    pattern_rec.origPosition = temptrack.patternOrigPosition;
+                    reload = 0;
+                  }
+                 else {
+                    pattern_rec.setPosition(writepattern); 
+
+                 }
+
+                 // MidiUart.setActiveSenseTimer(0);
+                                      md_setsysex_recpos(8,pattern_rec.origPosition);
+                                    
                   pattern_rec.toSysex(encoder);
             //    if (turbo_state == 1) {
                  // delay(50);
                 //  }
 
                   /*Send the encoded kit to the MD via sysex*/
-
+                    md_setsysex_recpos(4,kit_new.origPosition);
                       kit_new.toSysex(encoder2);
+                         //        MidiUart.sendActiveSenseTimer = 290;
                 //    if (turbo_state == 1) {
                //   delay(25);
                //   }
@@ -1869,13 +1938,15 @@ void send_pattern_kit_to_md() {
 
                   /*Instruct the MD to reload the kit, as the kit changes won't update until the kit is reloaded*/
            //
-    
+                  //    MidiUart.setActiveSenseTimer(290);
                    if (reload == 1) {
                   MD.loadKit(pattern_rec.kit);
                    }
-                  else if (q_pattern_change == 1) {
+                  else if ((q_pattern_change == 1) || (writepattern != MD.currentPattern)) {
                    load_the_damn_kit = pattern_rec.kit;
+                  if (q_pattern_change == 1) { 
                   MD.loadPattern(writepattern);
+               }
 
                   }
                   /*kit_sendmode != 1 therefore we are going to send the Machine via Sysex and Midi cc without sending the kit*/
@@ -1898,7 +1969,9 @@ void send_pattern_kit_to_md() {
 
     
               if ((q_pattern_change != 1) && (quantize_mute <= 64)) {
-                   while (((MidiClock.div32th_counter + 3) % (quantize_mute * 2))  != 0) {
+               // (MidiClock.div32th_counter - pattern_start_clock32th) 
+               //                   while (((MidiClock.div32th_counter + 3) % (quantize_mute * 2))  != 0) {
+                   while ((((MidiClock.div32th_counter - pattern_start_clock32th) + 3) % (quantize_mute * 2))  != 0) {
                 GUI.display();
                  }
               }
@@ -1950,7 +2023,7 @@ void toggle_cues_batch() {
                      
       }
       if (trackinfo_param4.getValue() < 7) {
-      while (((MidiClock.div32th_counter + 3) % (quantize_mute * 2))  != 0) {
+      while ((((MidiClock.div32th_counter - pattern_start_clock32th)  + 3) % (quantize_mute * 2))  != 0) {
         GUI.display();
       }
       }         
@@ -2080,7 +2153,7 @@ Utility Functions
  Defines the pixels of one glyph and is used to create the custom || character
 */
 
- uint8_t charmap[7] = { 10, 10, 10, 10, 10, 10, 10 };
+ uint8_t charmap[8] = { 10, 10, 10, 10, 10, 10, 10, 00 };
 
 
 /*
@@ -2179,6 +2252,7 @@ void setup() {
    }
    
  } 
+
  //Enable callbacks, and disable some of the ones we don't want to use.
  
  
@@ -2222,7 +2296,7 @@ void setup() {
   //mixer_param2.handler = encoder_filter_handle;
   //Setup Turbo Midi
   frames_startclock = read_slowclock();
-  TurboMidi.setup();
+ //TurboMidi.setup();
   //Start the SD Card Initialisation.
   sd_load_init();
   MidiClock.mode = MidiClock.EXTERNAL;
@@ -2239,7 +2313,7 @@ void setup() {
 
                                                 //      GUI.flash_strings_fill("MIDI CLOCK SRC", "MIDI PORT 2");
   MidiClock.start();
-  
+                      //   MidiUart.setActiveSenseTimer(290);
   MD.requestGlobal(7);
 
   
@@ -2413,10 +2487,11 @@ void OptionsPage::display() {
                                  if (options_param2.getValue() == 0) {
                                      GUI.put_string_at_fill(10,"OFF");
                                  }
-                                 if (options_param2.getValue() == 1) {
+                                 if (options_param2.getValue() >= 1) {
                                      GUI.put_string_at_fill(10,"ON");
                                  }
                             if (options_param2.hasChanged()) {
+                              if (options_param2.getValue() > 1) { options_param2.cur = 1; }
                                                      merge = options_param2.getValue();
                            }
              }
@@ -2427,10 +2502,13 @@ void OptionsPage::display() {
              
                                  if (options_param2.getValue() == 0) {
 
-                                     GUI.put_string_at_fill(10,"OFF");
+                                     GUI.put_string_at_fill(10,"1x");
                                  }
-                                 else if (options_param2.getValue() == 1) {
-                                     GUI.put_string_at_fill(10,"ON");
+                                 if (options_param2.getValue() == 1) {
+                                     GUI.put_string_at_fill(10,"4x");
+                                 }
+                                  if (options_param2.getValue() == 2) {
+                                     GUI.put_string_at_fill(10,"8x");
                                  }
                               if (options_param2.hasChanged()) {
                                                 
@@ -2450,15 +2528,24 @@ void OptionsPage::display() {
 }
 
 
-void PatternLoadEncoder::displayAt(int encoder_offset) {
+void PatternLoadPage::display() {
  draw_notes();
                GUI.setLine(GUI.LINE2);
-               if (curpage == 3) { GUI.put_string_at(0,"RE"); }
-               else if (curpage == 4) { GUI.put_string_at(0,"WR"); }
+               if (curpage == 3) { GUI.put_string_at(0,"R"); }
+               else if (curpage == 4) { GUI.put_string_at(0,"W"); }
                
                char str[5];
-               if (( patternload_param3.getValue() < 2) || (curpage == 3)) { MD.getPatternName(patternload_param1.getValue() * 16 + patternload_param2.getValue() ,str);     GUI.put_string_at(3,str); }
-               else { GUI.put_string_at(3,"--"); }
+               
+
+                  if (patternload_param1.getValue() < 8) {
+                     MD.getPatternName(patternload_param1.getValue() * 16 + patternload_param2.getValue() ,str);     
+                     GUI.put_string_at(2,str);
+                  }
+                  else { GUI.put_string_at(2,"OG"); }
+               
+            
+              
+
 
                /*Initialise the string with blank steps*/
              //  char str[5];
@@ -2475,10 +2562,11 @@ void PatternLoadEncoder::displayAt(int encoder_offset) {
 
 
              GUI.put_string_at(9,"Q:");
-             if (patternload_param3.getValue() == 0) { GUI.put_string_at(6,"--"); }
-             if (patternload_param3.getValue() == 1) { GUI.put_string_at(6,"K-"); }
-             if (patternload_param3.getValue() == 2) { GUI.put_string_at(6,"-P"); }
-             if (patternload_param3.getValue() == 3) { GUI.put_string_at(6,"KP"); }
+             
+             //0-63 OG
+             if (patternload_param3.getValue() == 64) { GUI.put_string_at(6,"OG"); }
+             else { GUI.put_value_at2(6,patternload_param3.getValue() + 1); }
+
              
              if (patternload_param4.getValue() == 0) {  GUI.put_string_at(11,"--");  }
              if (patternload_param4.getValue() == 7) {  GUI.put_string_at(11,"CU");  }
@@ -2507,7 +2595,7 @@ The selected track information is displayed in this screen (Line 1).
 This includes the kit name and a graphical representation of the Step Sequencer Locks for the track (Line 2).
 */
 
-void TrackInfoEncoder::displayAt(int encoder_offset) {
+void TrackInfoPage::display()  {
                     uint8_t x;
               if (curpage == 8) {
 
@@ -2584,12 +2672,12 @@ void TrackInfoEncoder::displayAt(int encoder_offset) {
                
                /*Display the Kit name associated with selected track on line 1*/
                GUI.put_string_at(0,getTrackKit(cur_col,cur_row,true,false));
-               GUI.put_value_at2(8,(1 + trackinfo_param1.getValue()) * 160);
+               GUI.put_value_at2(11,(1 + trackinfo_param1.getValue()) * 16);
 
-               if (trackinfo_param2.getValue() == 1) { GUI.put_string_at(10," Swing"); }
-               else if (trackinfo_param2.getValue() == 2) { GUI.put_string_at(10," Slide"); }
-               else if (trackinfo_param2.getValue() == 3) { GUI.put_string_at(10," Accen"); }
-               else { GUI.put_string_at(10," Trigs"); }
+               if (trackinfo_param2.getValue() == 1) { GUI.put_string_at(14,"SW"); }
+               else if (trackinfo_param2.getValue() == 2) { GUI.put_string_at(14,"SL"); }
+               else if (trackinfo_param2.getValue() == 3) { GUI.put_string_at(14,"AC"); }
+               else { GUI.put_string_at(14,"TR"); }
       
                GUI.setLine(GUI.LINE2);
                /*str is a string used to display 16 steps of the patternmask at a time*/
@@ -2607,7 +2695,7 @@ void TrackInfoEncoder::displayAt(int encoder_offset) {
                 /*For 16 steps check to see if there is a trigger at pattern position i + (encoder_offset * 16) */
                 for (int i = 0; i < 16; i++) {
                                            
-                       if  (IS_BIT_SET64(patternmask,i + (encoder_offset * 16)) ) {
+                       if  (IS_BIT_SET64(patternmask,i + (trackinfo_param1.getValue() * 16)) ) {
                 /*If the bit is set, there is a trigger at this position. We'd like to display it as [] on screen*/
                 /*Char 219 on the minicommand LCD is a []*/
                                               str[i] = (char) 219;
@@ -2960,7 +3048,38 @@ void exploit_off() {
 
                                
 }
+static uint8_t turbomidi_sysex_header[] = {
+    0xF0, 0x00, 0x20, 0x3c, 0x00, 0x00
+};
+uint32_t tmSpeeds[12] = { 
+    31250,
+    31250,
+    62500,
+    //104063,
+    104062,
+    125000,
+    156250,
+    208125,
+    250000,
+    312500,
+    415625,
+    500000,
+    625000
+};
+ void sendTurbomidiHeader(uint8_t cmd) {
+    MidiUart.puts(turbomidi_sysex_header, sizeof(turbomidi_sysex_header));
+    MidiUart.putc(cmd);
+}
 
+ void turboSetSpeed(uint8_t speed) {
+   turbo_state = speed;
+  sendTurbomidiHeader(0x20);
+  MidiUart.putc(speed );
+  MidiUart.putc(0xF7);
+  delay(10);
+                    MidiUart.setSpeed(tmSpeeds[speed ]); 
+                             MidiUart.setActiveSenseTimer(290); 
+ }
 
 /*
  ================
@@ -2987,7 +3106,7 @@ bool handleEvent(gui_event_t *evt) {
 
           if (EVENT_RELEASED(evt, Buttons.ENCODER1) || EVENT_RELEASED(evt, Buttons.ENCODER2) || EVENT_RELEASED(evt, Buttons.ENCODER3) || EVENT_RELEASED(evt, Buttons.ENCODER4)) {
             uint8_t size = m_strlen(entries[loadproj_param1.getValue()].name);        
-         //   if (strcmp(&entries[loadproj_param1.getValue()].name[size - 4],"mcl") == 0)  {
+            if (strcmp(&entries[loadproj_param1.getValue()].name[size - 4],"mcl") == 0)  {
               
 
             
@@ -3003,7 +3122,7 @@ bool handleEvent(gui_event_t *evt) {
             else {
             GUI.flash_strings_fill("PROJECT ERROR","NOT COMPATIBLE");
             }
-        //    }
+           }
                 
          }
               return true;
@@ -3160,26 +3279,17 @@ bool handleEvent(gui_event_t *evt) {
         return true;
         }         
       
-        else if (turbo == 0) {
-                                                   TurboMidi.stopTurboMidi();
-                                                   }
-                                                   if (turbo == 1) { 
-                                                   if (turbo_state != 1) { 
-                                                     bool exitcode = TurboMidi.startTurboMidi();
-                                                   if (exitcode) {
-                                                   turbo_state = 1;
-                                                   }                                                  
-                                                   }
-                                                   }
+                                             
                                                 MidiClock.stop();
                                                 if (merge == 0) {
 
                                                 MidiClock.mode = MidiClock.EXTERNAL;
                                                 MidiClock.transmit = false;
                                                 
-                                                }
+                                               }
                                                 else {
                                                 MidiClock.transmit = true;
+
                                                 MidiClock.mode = MidiClock.EXTERNAL_UART2;
                                                 }
                                                       MidiClock.start();
@@ -3187,7 +3297,28 @@ bool handleEvent(gui_event_t *evt) {
                                                       delay(100);
              
                                                       switchGlobal(7);
+                                                 if (turbo == 0) {
+                                                //   if (turbo_state != 1) { 
+                                                   turboSetSpeed(1); 
+                                               //  }
+                                                   }
+                                                   if (turbo == 1) { 
+                                                  
 
+                                                      if (turbo_state != 4)  {
+                                                  //  TurboMidi.startTurboMidi();
+                                                      turboSetSpeed(4); 
+                                                //     }
+                                                    turbo_state = 4;
+                                                   }
+                                                     //turboSetSpeed(4);
+                                                   
+                                                   }
+                                                   if (turbo == 2) {
+                                        //       if (turbo_state != 7) { 
+                                                 turboSetSpeed(7); 
+                                         //    }
+                                                   }
                                                GUI.setPage(&page);
                                                curpage = 0;
                                                return true;
@@ -3232,6 +3363,14 @@ bool handleEvent(gui_event_t *evt) {
             
           }
           */
+          if (curpage == 10) {
+           if (EVENT_PRESSED(evt, Buttons.ENCODER1)) {
+            level_pressmode = 1;
+           }
+            if (EVENT_RELEASED(evt, Buttons.ENCODER1)) {
+            level_pressmode = 0;
+           }
+          }
         if ((EVENT_PRESSED(evt, Buttons.BUTTON2)) || (EVENT_PRESSED(evt, Buttons.BUTTON3))) {
                     exploit_off();
            GUI.setPage(&page);
@@ -3295,6 +3434,7 @@ bool handleEvent(gui_event_t *evt) {
           
                                      patternswitch = 1;
                      currentkit_temp = MD.getCurrentKit(callback_timeout);
+                     patternload_param3.cur = currentkit_temp;
                     MD.saveCurrentKit(currentkit_temp);
                    
                     //MD.requestKit(currentkit_temp);
@@ -3338,6 +3478,7 @@ bool handleEvent(gui_event_t *evt) {
                               curpage = 10;
                     MD.saveCurrentKit(currentkit_temp);
                     MD.getBlockingKit(currentkit_temp);
+                     level_pressmode = 0;
         mixer_param1.cur = 60;
          exploit_on();
 
@@ -3378,7 +3519,7 @@ bool handleEvent(gui_event_t *evt) {
 
                loadtrackinfo_page(2);
      
-     
+
 
      return true;
  }
@@ -3471,9 +3612,9 @@ ISR(TIMER1_OVF_vect) {
 
   clock++;
 #ifdef MIDIDUINO_MIDI_CLOCK
-  if (MidiClock.state == MidiClock.STARTED) {
-    MidiClock.handleTimerInt();
-  }
+//  if (MidiClock.state == MidiClock.STARTED) {
+ //   MidiClock.handleTimerInt();
+ // }
 #endif
 
   //  clearLed2();
@@ -3517,7 +3658,7 @@ ISR(TIMER2_OVF_vect) {
   }
 
 	MidiUart.tickActiveSense();
-	MidiUart2.tickActiveSense();
+	//MidiUart2.tickActiveSense();
   
   //  SET_BIT(OUTPUTPORT, OUTPUTPIN);
 
@@ -3536,7 +3677,7 @@ void handleIncomingMidi() {
   while (MidiUart.avail()) {
     Midi.handleByte(MidiUart.getc());
   }
-  
+ //Disable non realtime midi 
   while (MidiUart2.avail()) {
     Midi2.handleByte(MidiUart2.getc());
   }
@@ -3560,7 +3701,7 @@ void __mainInnerLoop(bool callLoop) {
 
 void setupEventHandlers();
 void setupMidiCallbacks();
-void setupClockCallbacks();
+//void setupClockCallbacks();
 
 int main(void) {
   delay(100);
@@ -3580,7 +3721,7 @@ int main(void) {
   setup();
 	setupEventHandlers();
 	setupMidiCallbacks();
-	setupClockCallbacks();
+//	setupClockCallbacks();
   sei();
 
   for (;;) {

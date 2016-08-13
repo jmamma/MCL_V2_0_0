@@ -144,7 +144,7 @@ void PatternLoadPage::finalize() {
 
 void PatternLoadPage::displayNames() {
 }
-
+/*
 void PatternLoadPage::display() {
   
 
@@ -154,7 +154,7 @@ void PatternLoadPage::display() {
 
 }
 
-
+*/
 int PatternLoadEncoder::update(encoder_t *enc) {
 	//int inc = 8;
 
