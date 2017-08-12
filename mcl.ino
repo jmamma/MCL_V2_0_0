@@ -7,6 +7,7 @@
 */
 
 #include <MD.h>
+#include <Scales.h>
 #include "GridPage.h"
 #include "TrackInfoPage.h"
 #include "PatternLoadPage.h"
@@ -22,11 +23,25 @@
 #define VERSION 2003
 #define LOCK_AMOUNT 256
 #define GRID_LENGTH 130
+#define CALLBACK_TIMEOUT 500
 
+#define CUE_PAGE 5
+#define MIXER_PAGE 10
+#define S_PAGE 3
+#define W_PAGE 4
+#define SEQ_STEP_PAGE 1
+#define SEQ_EUC_PAGE 17
+#define SEQ_RLCK_PAGE 13
+#define SEQ_RTRK_PAGE 11
+#define SEQ_RPTC_PAGE 14
+#define SEQ_PARAM_A_PAGE 12
+#define SEQ_PARAM_B_PAGE 15
+#define SEQ_PTC_PAGE 16
+
+#define EXPLOIT_DELAY_TIME 300
 /*MDKit and Pattern objects must be defined outside of Classes and Methods otherwise the Minicommand freezes.*/
 MDPattern pattern_rec;
 //MDKit MD.kit;
-MDGlobal global_new;
 
 MDGlobal global_one;
 MDGlobal global_two;
@@ -47,7 +62,6 @@ uint32_t cue1 = 0;
 uint8_t notes[16];
 uint8_t notecount = 0;
 uint8_t firstnote = 0;
-uint8_t notecheck = 0;
 uint8_t noteproceed = 0;
 uint32_t div16th_last;
 //Effects encoder values.
@@ -55,7 +69,7 @@ uint8_t fx_dc = 0;
 uint8_t fx_fb = 0;
 uint8_t fx_lv = 0;
 uint8_t fx_tm = 0;
-int8_t level_last = 0;
+
 uint8_t level_pressmode = 0;
 //GUI switch, used to identify what level of the GUI we are currently in.
 uint8_t curpage = 0;
@@ -74,13 +88,14 @@ uint8_t exploit = 0;
 bool trackposition = false;
 
 /*Counter for number of tracks to store*/
-uint8_t behaviour;
+uint8_t store_behaviour;
 /*500ms callback timeout for getcurrent track, kit etc... */
-const int callback_timeout = 500;
 float frames_fps = 10;
 uint16_t frames = 0;
 uint16_t frames_startclock;
+
 uint32_t pattern_start_clock32th = 0;
+
 uint32_t note_hold = 0;
 
 /* encodervalue */
@@ -162,17 +177,21 @@ uint8_t PatternLengths[16];
 uint8_t PatternLocks[16][4][64];
 uint8_t PatternLocksParams[16][4];
 uint64_t PatternMasks[16];
-
 uint64_t LockMasks[16];
-
 uint8_t conditional_timing[16][64];
+
+uint8_t euclid_root[16];
 uint16_t exploit_start_clock = 0;
 //  TrigCaptureClass test
 
 void clear_step_locks(int curtrack, int i) ;
 /*A toggle for handling incoming pattern and kit data.*/
 
-uint8_t patternswitch = 254;
+#define PATTERN_STORE 0
+#define PATTERN_UDEF 254
+#define STORE_IN_PLACE 0
+#define STORE_AT_SPECIFIC 254
+uint8_t patternswitch = PATTERN_UDEF;
 
 /* Gui CallBack flag for writing a complete pattern */
 int writepattern;
@@ -183,6 +202,44 @@ int writepattern;
 const char allowedchar[38] = "0123456789abcdefghijklmnopqrstuvwxyz_";
 
 uint8_t last_md_track = 0;
+
+const scale_t *scales[36] { 
+ &ionianScale,
+&dorianScale,
+&phrygianScale,
+&lydianScale,
+&mixolydianScale,
+&aeolianScale,
+&locrianScale,
+&harmonicMinorScale,
+&melodicMinorScale,
+&lydianDominantScale,
+&wholeToneScale,
+&wholeHalfStepScale,
+&halfWholeStepScale,
+&majorPentatonicScale,
+&minorPentatonicScale,
+&suspendedPentatonicScale,
+&inSenScale,
+&bluesScale,
+&majorBebopScale,
+&dominantBebopScale,
+&minorBebopScale,
+&majorArp,
+&minorArp,
+&majorMaj7Arp,
+&majorMin7Arp,
+&minorMin7Arp,
+&minorMaj7Arp,
+&majorMaj7Arp9,
+&majorMaj7ArpMin9,
+&majorMin7Arp9,
+&majorMin7ArpMin9,
+&minorMin7Arp9,
+&minorMin7ArpMin9,
+&minorMaj7Arp9,
+&minorMaj7ArpMin9
+};
 
 /*
    ==============
@@ -229,12 +286,12 @@ class MDTrack {
     uint64_t swingPattern;
     //Machine object for Track Machine Type
     MDMachine machine;
-    uint8_t MidiPatternLocks[4][64];
-    uint8_t MidiPatternLocksParams[4];
-    uint64_t MidiPatternMask;
-    uint64_t MidiLockMask;
-    uint8_t Midiconditional_timing[64];
-    int8_t MidiparamLocks[24];
+    uint8_t SeqPatternLocks[4][64];
+    uint8_t SeqPatternLocksParams[4];
+    uint64_t SeqPatternMask;
+    uint64_t SeqLockMask;
+    uint8_t SeqConditional_timing[64];
+    int8_t SeqParamLocks[24];
     //Array to hold parameter locks.
     int arraysize;
     KitExtra kitextra;
@@ -314,12 +371,11 @@ class MDTrack {
         }
 
       }
-      m_memcpy(MidiPatternLocks, PatternLocks[tracknumber], sizeof(MidiPatternLocks));
-      m_memcpy(MidiPatternLocksParams, PatternLocksParams[tracknumber], sizeof(MidiPatternLocksParams));
-      MidiPatternMask = PatternMasks[tracknumber];
-      MidiLockMask = LockMasks[tracknumber];
-      m_memcpy(Midiconditional_timing, conditional_timing[tracknumber], sizeof(Midiconditional_timing));
-      m_memcpy(MidiparamLocks, MidiparamLocks[tracknumber], sizeof(MidiparamLocks));
+      m_memcpy(SeqPatternLocks, PatternLocks[tracknumber], sizeof(SeqPatternLocks));
+      m_memcpy(SeqPatternLocksParams, PatternLocksParams[tracknumber], sizeof(SeqPatternLocksParams));
+      SeqPatternMask = PatternMasks[tracknumber];
+      SeqLockMask = LockMasks[tracknumber];
+      m_memcpy(SeqConditional_timing, conditional_timing[tracknumber], sizeof(SeqConditional_timing));
 
       //  trackName[0] = '\0';
       m_memcpy(machine.params, MD.kit.params[tracknumber], 24);
@@ -405,12 +461,11 @@ class MDTrack {
         MD.kit.trigGroups[tracknumber] = machine.trigGroup;
         MD.kit.muteGroups[tracknumber] = machine.muteGroup;
 
-        m_memcpy(&PatternLocks[tracknumber], MidiPatternLocks , sizeof(MidiPatternLocks));
-        m_memcpy(&PatternLocksParams[tracknumber], MidiPatternLocksParams, sizeof(MidiPatternLocksParams));
-        PatternMasks[tracknumber] = MidiPatternMask;
-        LockMasks[tracknumber] = MidiLockMask;
-        m_memcpy(&conditional_timing[tracknumber], Midiconditional_timing, sizeof(Midiconditional_timing));
-        m_memcpy(&MidiparamLocks[tracknumber], MidiparamLocks, sizeof(MidiparamLocks));
+        m_memcpy(&PatternLocks[tracknumber], SeqPatternLocks , sizeof(SeqPatternLocks));
+        m_memcpy(&PatternLocksParams[tracknumber], SeqPatternLocksParams, sizeof(SeqPatternLocksParams));
+        PatternMasks[tracknumber] = SeqPatternMask;
+        LockMasks[tracknumber] = SeqLockMask;
+        m_memcpy(&conditional_timing[tracknumber], SeqConditional_timing, sizeof(SeqConditional_timing));
 
 
       }
@@ -494,12 +549,9 @@ Project project_header;
 
 */
 void sd_load_init() {
-  uint8_t testcard;
-  testcard = SDCard.init();
-  if (testcard != 0) {
-    GUI.put_value_at(0, testcard);
-    delay(1000);
-    //GUI.flash_strings_fill("SD CARD ERROR", testcard);
+ 
+  if (SDCard.init() != 0) {
+    GUI.flash_strings_fill("SD CARD ERROR", "");
   }
 
   else {
@@ -762,27 +814,6 @@ bool load_track(int32_t column, int32_t row, int m = 0) {
     file.read(( uint8_t*) & (temptrack.value[0]), temptrack.arraysize);
     file.read(( uint8_t*) & (temptrack.step[0]), temptrack.arraysize);
   }
-  //  if (m == 0) {
-  //len = sizeof(MDTrack);
-  // }
-  //    else {
-  //  len = (sizeof(MDTrack) - sizeof(temptrack.kitextra) - (LOCK_AMOUNT * 3));
-  //  }
-
-
-
-
-
-
-  //  if (x != 9) { return FALSE; }
-  return TRUE;
-
-
-  // uint64_t temp;
-  //  file.read(( uint8_t*)&(temp), sizeof(temp));
-  // temptrack.trigPattern = temp;
-
-
 
 }
 
@@ -889,7 +920,7 @@ void draw_notes(uint8_t line_number) {
   /*Display 16 track cues on screen,
     /*For 16 tracks check to see if there is a cue*/
   for (int i = 0; i < 16; i++) {
-    if (curpage == 5) {
+    if (curpage == CUE_PAGE) {
 
       if  (IS_BIT_SET32(cue1, i)) {
         str[i] = 'X';
@@ -909,7 +940,7 @@ void draw_notes(uint8_t line_number) {
 
 }
 extern void midi_start() {
-  if ((curpage == 3) || (curpage == 4) || (curpage == 5) || (curpage == 10)) {
+  if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
     exploit_start_clock = read_slowclock();
     noteproceed = 0;
   }
@@ -928,7 +959,12 @@ void load_the_damnkit(uint8_t pattern) {
 
 }
 
-void clear_midi_locks(uint8_t i) {
+void clear_seq_conditional(uint8_t i) {
+  for (uint8_t c = 0; c < 64; c++) {
+conditional_timing[i][c] = 0; 
+  }
+}
+void clear_seq_locks(uint8_t i) {
   for (uint8_t c = 0; c < 4; c++) {
     for (uint8_t x = 0; x < 64; x++) {
       PatternLocks[i][c][x] = 0;
@@ -936,17 +972,74 @@ void clear_midi_locks(uint8_t i) {
     PatternLocksParams[i][c] = 0;
   }
 }
-void clear_midi_track(uint8_t i) {
+void clear_seq_track(uint8_t i) {
   uint8_t c;
 
   //for (c=0; c < 4; c++) {
   //uint8_t PatternLengths[i] = 16;
   //}
-  clear_midi_locks(i);
+  clear_seq_locks(i);
+  clear_seq_conditional(i);
+
   LockMasks[i] = 0;
   PatternMasks[i] = 0;
 
 
+}
+
+uint8_t euclid_randomScalePitch(const scale_t *scale, uint8_t octaves, uint8_t offset) {
+    uint8_t pitch = scale->pitches[random(scale->size)];
+  if (octaves == 0) {
+    return pitch + offset;
+  } else {
+    return pitch + offset;
+  }
+}
+
+
+void setEuclid( uint8_t track, uint8_t pulses, uint8_t len, uint8_t offset, uint8_t scale, uint8_t root) {
+  clear_seq_locks(track);
+  uint8_t octave = 4;
+  PatternMasks[track] = 0;
+  if (pulses == 0)
+    return;
+
+  uint8_t cnt = len;
+  for (uint8_t i = 0; i < len; i++) {
+    if (i < (len - 1)) {
+            PatternMasks[track] <<= 1;
+        }   
+    
+    if (cnt >= len) {
+      SET_BIT64(PatternMasks[track], 0); 
+      cnt -= len;
+    }   
+    cnt += pulses;
+  }
+  PatternMasks[track] <<= offset;
+
+  if (scale > 0) {
+
+  PatternLocksParams[track][0] = 1;
+      for (uint8_t x=0; x < PatternLengths[track]; x++) {
+      if (IS_BIT_SET64(PatternMasks[track], x )) {
+        
+      
+      SET_BIT64(LockMasks[track], x );
+      PatternLocks[track][0][x] = euclid_randomScalePitch(scales[scale], octave, root); ;
+      }
+      }
+  }
+}
+void random_pattern(uint8_t pulses, uint8_t len, uint8_t offset, uint8_t scale, uint8_t root) {
+
+  for (uint8_t i=0; i< 16; i++) {
+      setEuclid(i, random(0,random(0,pulses)), len, random(0,offset),scale,root);
+       
+      }
+
+  
+  
 }
 void parameter_locks(uint8_t i, uint8_t step_count) {
   uint8_t c;
@@ -955,20 +1048,6 @@ void parameter_locks(uint8_t i, uint8_t step_count) {
             if (PatternLocks[i][c][step_count] > 0) {setTrackParam(i, PatternLocksParams[i][c] - 1, PatternLocks[i][c][step_count] - 1); }
 
     }
-   /*
-    if (PatternLocks[i][0][step_count] > 0) {
-      setTrackParam(i, PatternLocksParams[i][0] - 1, PatternLocks[i][0][step_count] - 1);
-    }
-    if (PatternLocks[i][1][step_count] > 0) {
-      setTrackParam(i, PatternLocksParams[i][1] - 1, PatternLocks[i][1][step_count] - 1);
-    }
-    if (PatternLocks[i][2][step_count] > 0) {
-      setTrackParam(i, PatternLocksParams[i][2] - 1, PatternLocks[i][2][step_count] - 1);
-    }
-    if (PatternLocks[i][3][step_count] > 0) {
-      setTrackParam(i, PatternLocksParams[i][3] - 1, PatternLocks[i][3][step_count] - 1);
-    }
-*/
   }
   else if (IS_BIT_SET64(PatternMasks[i], step_count )) {
 
@@ -977,12 +1056,7 @@ void parameter_locks(uint8_t i, uint8_t step_count) {
           setTrackParam(i, PatternLocksParams[i][c] - 1, MD.kit.params[i][PatternLocksParams[i][c] - 1]);
 
     }
-    /*
-    setTrackParam(i, PatternLocksParams[i][0] - 1, MD.kit.params[i][PatternLocksParams[i][0] - 1]);
-    setTrackParam(i, PatternLocksParams[i][1] - 1, MD.kit.params[i][PatternLocksParams[i][1] - 1]);
-    setTrackParam(i, PatternLocksParams[i][2] - 1, MD.kit.params[i][PatternLocksParams[i][2] - 1]);
-    setTrackParam(i, PatternLocksParams[i][3] - 1, MD.kit.params[i][PatternLocksParams[i][3] - 1]);
-    */
+  
   }
 }
 void trig_conditional(uint8_t condition, uint8_t i) {
@@ -1011,13 +1085,16 @@ void trig_conditional(uint8_t condition, uint8_t i) {
     MD.triggerTrack(i, 127);
   }
 }
-class TrigMe : public ClockCallback {
+class MDSequencer : public ClockCallback {
   public:
 
     void setup() {
-      MidiClock.addOn96Callback(this, (midi_clock_callback_ptr_t)&TrigMe::TrigMeCallback);
+      for (uint8_t i = 0; i < 16; i++) {
+          PatternLengths[i] = 16;
+       }
+      MidiClock.addOn96Callback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSequencerCallback);
     };
-    void TrigMeCallback() {
+    void MDSequencerCallback() {
       //   setTrackParam(1,0,random(127));
       if (in_sysex == 1) {
         return;
@@ -1118,13 +1195,13 @@ class TrigCaptureClass : public MidiCallback {
         MD.kit.params[track][track_param] = value;
       }
 
-      if ((curpage == 3) || (curpage == 4) || (curpage == 5) || (curpage == 10)) {
+      if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
         exploit_off();
         GUI.setPage(&page);
         curpage = 0;
 
       }
-      if ((curpage == 12) || (curpage == 15)) {
+      if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
         exploit_off();
         GUI.setPage(&page);
         curpage = 0;
@@ -1141,7 +1218,7 @@ class TrigCaptureClass : public MidiCallback {
         //     trackinfo_param4.cur = PatternLocks[last_md_track][1][(note_num + (0 * 16))];
 
       }
-      if ((curpage == 13) && (param_true == 1)) {
+      if ((curpage == SEQ_RLCK_PAGE) && (param_true == 1)) {
 
         //  uint8_t timing = MidiClock.mod6_counter + 6 << 4;
         //  uint8_t condition = 0 & 0x0F;
@@ -1216,10 +1293,10 @@ class TrigCaptureClass : public MidiCallback {
         if (note_num < 16) {
 
           if (notes[note_num] == 1)  {
-            if ((curpage == 5) && (trackinfo_param4.getValue() == 0)) {
+            if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() == 0)) {
               notes[note_num] = 0;
             }
-            else if (curpage == 1) {
+            else if (curpage == SEQ_STEP_PAGE) {
               notes[note_num] = 0;
               uint8_t timing = (trackinfo_param2.cur + 0) << 4;
               uint8_t condition = trackinfo_param1.cur & 0x0F;
@@ -1244,16 +1321,10 @@ class TrigCaptureClass : public MidiCallback {
               //draw_notes(1);
               return;
             }
-            else if ((curpage == 12) || (curpage == 15)) {
+            else if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
 
               int8_t timing = conditional_timing[cur_col][(note_num + (page_select * 16))] >> 4; //upper
               uint8_t condition = conditional_timing[cur_col][(note_num + (page_select * 16))] & 0x0F; //lower
-
-
-
-              //  timing = 3;
-              //
-              //condition = 3;
 
               //Fudge timing info if it's not there
               if ( timing == 0 ) {
@@ -1271,7 +1342,7 @@ class TrigCaptureClass : public MidiCallback {
 
               notes[note_num] = 0;
               uint8_t param_offset;
-              if (curpage == 12) {
+              if (curpage == SEQ_PARAM_A_PAGE) {
                 param_offset = 0;
               }
               else {
@@ -1284,7 +1355,7 @@ class TrigCaptureClass : public MidiCallback {
               PatternLocksParams[last_md_track][param_offset] = trackinfo_param1.cur;
               PatternLocksParams[last_md_track][param_offset + 1] = trackinfo_param3.cur;
             }
-            else if ((curpage == 10) || (curpage == 14)) {
+            else if ((curpage == MIXER_PAGE) || (curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE)) {
               notes[note_num] = 0;
               draw_notes(0);
               return;
@@ -1296,7 +1367,7 @@ class TrigCaptureClass : public MidiCallback {
         }
         //If we're on track read/write page then check to see
 
-        if ((curpage == 3) || (curpage == 4) || (curpage == 5)) {
+        if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE)) {
           int i;
           draw_notes(0);
           uint8_t all_notes_off = 0;
@@ -1316,19 +1387,19 @@ class TrigCaptureClass : public MidiCallback {
           }
 
           if (all_notes_off == 1) {
-            if (curpage == 3)  {
+            if (curpage == S_PAGE)  {
               exploit_off();
-              store_tracks_in_mem( 0, param2.getValue(), 0);
+              store_tracks_in_mem( 0, param2.getValue(), STORE_IN_PLACE);
               GUI.setPage(&page);
               curpage = 0;
             }
-            if (curpage == 4) {
+            if (curpage == W_PAGE) {
               exploit_off();
               write_tracks_to_md( 0, param2.getValue(), 0);
               GUI.setPage(&page);
               curpage = 0;
             }
-            if ((curpage == 5) && (trackinfo_param4.getValue() > 0) && (b > 1)) {
+            if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() > 0) && (b > 1)) {
               toggle_cues_batch();
               send_globals();
               exploit_off();
@@ -1352,9 +1423,9 @@ class TrigCaptureClass : public MidiCallback {
 
       int note_num;
 
-      if ((curpage == 11) && (msg[0] == 153)) {
+      if ((curpage == SEQ_RTRK_PAGE) && (msg[0] == 153)) {
 
-        if (clock_diff(exploit_start_clock, current_clock) > 300) {
+        if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
           noteproceed = 1;
         }
 
@@ -1381,9 +1452,9 @@ class TrigCaptureClass : public MidiCallback {
           conditional_timing[note_num][step_count] = timing | condition;
         }
       }
-      else if ((curpage == 14)) {
+      else if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) ) {
 
-        if (clock_diff(exploit_start_clock, current_clock) > 300) {
+        if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
           noteproceed = 1;
         }
         if ((noteproceed = 1) && (msg[0] == 153)) {
@@ -1397,7 +1468,21 @@ class TrigCaptureClass : public MidiCallback {
           }
 
           tuning_t const *tuning = MD.getModelTuning(MD.kit.models[last_md_track]);
-          uint8_t pitch = trackinfo_param2.getValue() * 12 + note_num;
+                    
+          uint8_t pitch = trackinfo_param1.getValue() * 12 + note_num + trackinfo_param2.getValue();
+          
+          if (trackinfo_param4.cur > 0) {
+          uint8_t size = scales[trackinfo_param4.cur]->size;
+         // if (note_num >= size) { 
+            uint8_t m = note_num / size;
+            
+            note_num = note_num - (scales[trackinfo_param4.cur]->size * m); 
+         //   }
+          note_num = scales[trackinfo_param4.cur]->pitches[note_num];
+       //   pitch = (trackinfo_param1.getValue() * 12) + trackinfo_param2.getValue() + note_num;
+          pitch = (trackinfo_param1.getValue() * 12) + trackinfo_param2.getValue() + (m * 12) + note_num;
+
+          }
           if (tuning == NULL) {
             return;
           }
@@ -1408,12 +1493,16 @@ class TrigCaptureClass : public MidiCallback {
           }
 
           realPitch = pgm_read_byte(&tuning->tuning[pitch]);
-          setTrackParam(last_md_track, 0, realPitch);
+        //            setTrackParam(last_md_track, 1, 0);
 
+          setTrackParam(last_md_track, 0, realPitch);
+//delay(25);
+
+      //              setTrackParam(last_md_track, 1, MD.kit.params[last_md_track][1]);
           MD.triggerTrack(last_md_track, 127);
 
 
-          if (MidiClock.state != 2) {
+          if ((MidiClock.state != 2) || (curpage == SEQ_PTC_PAGE)) {
             return;
           }
 
@@ -1443,7 +1532,7 @@ class TrigCaptureClass : public MidiCallback {
               match = c;
             }
           }
-          if (match != 254) {
+          if (match != 255) {
             PatternLocks[last_md_track][match][step_count] = realPitch + 1;
             SET_BIT64(LockMasks[last_md_track], step_count);
           }
@@ -1452,11 +1541,11 @@ class TrigCaptureClass : public MidiCallback {
         }
       }
       else {
-        if (noteproceed == 0) {
+        if ((noteproceed == 0) && (curpage > 0)) {
           uint16_t current_clock = read_slowclock();
 
           //We need to wait 500ms for the exploit to take effect before collecting notes
-          if (clock_diff(exploit_start_clock, current_clock) > 300) {
+          if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
             noteproceed = 1;
           }
         }
@@ -1477,10 +1566,10 @@ class TrigCaptureClass : public MidiCallback {
                 notes[note_num] = 1;
               }
 
-              if ((curpage == 5) && (trackinfo_param4.getValue() == 0)) {
+              if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() == 0)) {
                 toggle_cue(note_num); send_globals();
               }
-              if (curpage == 1) {
+              if (curpage == SEQ_STEP_PAGE) {
                 note_hold = current_clock;
                 int8_t timing = conditional_timing[cur_col][(note_num + (page_select * 16))] >> 4; //upper
                 uint8_t condition = conditional_timing[cur_col][(note_num + (page_select * 16))] & 0x0F; //lower
@@ -1495,10 +1584,10 @@ class TrigCaptureClass : public MidiCallback {
                 trackinfo_param2.cur = timing;
               }
 
-              else if ((curpage == 12) || (curpage == 15)) {
+              else if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
                 note_hold = current_clock;
                 uint8_t param_offset;
-                if (curpage == 12) {
+                if (curpage == SEQ_PARAM_A_PAGE) {
                   param_offset = 0;
                 }
                 else {
@@ -1581,10 +1670,7 @@ class MDHandler2 : public MDCallback {
         case MD_CURRENT_PATTERN_REQUEST:
           MD.currentPattern = value;
           break;
-
-          //case 0x22:
-          //      MD.currentTrack = value;
-          //  break;
+         
       }
     }
 
@@ -1600,15 +1686,17 @@ class MDHandler2 : public MDCallback {
         send_globals();
 
         switchGlobal(7);
+        uint8_t curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
         for (uint8_t x = 0; x < 2; x++) {
           for (uint8_t y = 0; y < 16; y++) {
             MD.setStatus(0x22, y);
 
           }
-        }
-        MD.setStatus(0x22, 0);
+        }          
+
+        MD.setStatus(0x22, curtrack);
         delay(500);
-        turboSetSpeed(7);
+        turboSetSpeed(4);
 
       }
 
@@ -1618,12 +1706,12 @@ class MDHandler2 : public MDCallback {
 
     void onKitMessage() {
       setLed2();
-      /*If patternswitch == 0 then the Kit request is for the purpose of obtaining track data*/
+      /*If patternswitch == PATTERN_STORE then the Kit request is for the purpose of obtaining track data*/
       if (!MD.kit.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
         return;
       }
 
-      if (patternswitch == 0) {
+      if (patternswitch == PATTERN_STORE) {
         int i;
         bool n;
         /*Send a quick sysex message to get the current selected track of the MD*/
@@ -1632,18 +1720,19 @@ class MDHandler2 : public MDCallback {
         uint8_t first_note = 254;
 
         int curtrack = 0;
-        if (behaviour == 254) {
-          curtrack = MD.getCurrentTrack(callback_timeout);
+        if (store_behaviour == STORE_AT_SPECIFIC) {
+          curtrack = last_md_track;
+          //MD.getCurrentTrack(CALLBACK_TIMEOUT);
         }
         for (i = 0; i < 16; i++) {
           if (notes[i] == 3) {
             if (first_note == 254) {
               first_note = i;
             }
-            if (behaviour == 0) {
+            if (store_behaviour == STORE_IN_PLACE) {
               n = store_track_inGrid(i, i, cur_row);
             }
-            if (behaviour == 254) {
+            if (store_behaviour == STORE_AT_SPECIFIC) {
               n = store_track_inGrid(curtrack + (i - first_note), i, cur_row);
             }
             //CLEAR_BIT32(notes, i);
@@ -1674,7 +1763,7 @@ class MDHandler2 : public MDCallback {
         /*If the pattern can't be retrieved from the sysex data then there's been a problem*/
 
 
-        patternswitch = 254;
+        patternswitch = PATTERN_UDEF;
 
         //  }
       }
@@ -1694,7 +1783,7 @@ class MDHandler2 : public MDCallback {
           param4.setValue(MD.kit.reverb[param4.fxparam]);
         }
         //   }
-        patternswitch = 254;
+        patternswitch = PATTERN_UDEF;
       }
       clearLed2();
     }
@@ -1730,7 +1819,7 @@ class MDHandler2 : public MDCallback {
                  if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
 
                   //Get current track number from MD
-                               int curtrack = MD.getCurrentTrack(callback_timeout);
+                               int curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
                                int i = 0;
 
                   //Data structure for holding the parameter locks of a single step
@@ -1839,7 +1928,7 @@ class MDHandler2 : public MDCallback {
                           //Send the encoded pattern to the MD via sysex
                           pattern_rec.toSysex(encoder);
                           clearLed();
-                          patternswitch = 254;
+                          patternswitch = PATTERN_UDEF;
 
                  }
         */
@@ -1854,7 +1943,7 @@ class MDHandler2 : public MDCallback {
         if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
 
           /*
-                                 int curtrack = MD.getCurrentTrack(callback_timeout);
+                                 int curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
                                  int i = encodervalue;
 
                                  if (pattern_rec.patternLength < encodervalue) { encodervalue = pattern_rec.patternLength; }
@@ -1909,19 +1998,19 @@ class MDHandler2 : public MDCallback {
                             pattern_rec.toSysex(encoder);
                             clearLed();
           */
-          patternswitch = 254;
+          patternswitch = PATTERN_UDEF;
         }
         //   else { GUI.flash_strings_fill("SYSEX", "ERROR");  }
       }
 
-      /*If patternswitch == 0, the pattern receiveed is for storing track data*/
-      else if (patternswitch == 0) {
+      /*If patternswitch == PATTERN_STORE, the pattern receiveed is for storing track data*/
+      else if (patternswitch == PATTERN_STORE) {
 
         /*Retrieve the pattern from the Sysex buffer and store it in the pattern_rec object. The MD header is 5 bytes long, hence the offset and length change*/
         if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
 
 
-          //patternswitch = 254;
+          //patternswitch = PATTERN_UDEF;
         }
         /*If the pattern can't be retrieved from the sysex data then there's been a problem*/
         //  else { GUI.flash_strings_fill("SYSEX", "ERROR");  }
@@ -1935,7 +2024,7 @@ class MDHandler2 : public MDCallback {
 
 
           send_pattern_kit_to_md();
-          patternswitch = 254;
+          patternswitch = PATTERN_UDEF;
         }
         // else { GUI.flash_strings_fill("SYSEX", "ERROR"); }
 
@@ -2165,7 +2254,7 @@ void toggle_fx2() {
   // patternswitch = 7;
 
   // setLed();
-  //  int curkit = MD.getCurrentKit(callback_timeout);
+  //  int curkit = MD.getCurrentKit(CALLBACK_TIMEOUT);
   //MD.getBlockingKit(MD.currentKit);
   //  clearLed();
 
@@ -2182,7 +2271,7 @@ void toggle_fx2() {
 
 */
 
-void store_tracks_in_mem( int column, int row, int num) {
+void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   uint8_t readpattern = MD.currentPattern;
   if ((patternload_param1.getValue() * 16 + patternload_param2.getValue()) != MD.currentPattern) {
     readpattern = (patternload_param1.getValue() * 16 + patternload_param2.getValue());
@@ -2191,23 +2280,24 @@ void store_tracks_in_mem( int column, int row, int num) {
   cur_col = column;
   cur_row = row;
 
-  behaviour = num;
+  store_behaviour = store_behaviour_;
   setLed();
-  patternswitch = 0;
+  patternswitch = PATTERN_STORE;
   MD.getBlockingPattern(readpattern);
   int curkit;
   if (readpattern != MD.currentPattern) {
     curkit = pattern_rec.kit;
   }
   else {
-    curkit = MD.getCurrentKit(callback_timeout);
+    curkit = last_md_track;
+    //MD.getCurrentKit(CALLBACK_TIMEOUT);
     MD.saveCurrentKit(curkit);
 
   }
 
   MD.getBlockingKit(curkit);
 
-  //  int curkit = MD.getBlockingStatus(MD_CURRENT_KIT_REQUEST, callback_timeout);
+  //  int curkit = MD.getBlockingStatus(MD_CURRENT_KIT_REQUEST, CALLBACK_TIMEOUT);
 
 
 
@@ -2227,7 +2317,7 @@ void write_tracks_to_md( int column, int row, int b) {
 
 
 
-  behaviour = b;
+  store_behaviour = b;
   writepattern = MD.currentPattern;
   if (((patternload_param1.getValue() * 16 + patternload_param2.getValue()) != MD.currentPattern)) {
     writepattern = (patternload_param1.getValue() * 16 + patternload_param2.getValue());
@@ -2258,7 +2348,7 @@ void write_tracks_to_md( int column, int row, int b) {
   //    MD.getBlockingKit(currentkit_temp);
   // }
   //else {
-  // currentkit_temp = MD.getCurrentKit(callback_timeout);
+  // currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
   //    MD.saveCurrentKit(currentkit_temp);
   //   MD.getBlockingKit(currentkit_temp);
   MD.getBlockingPattern(MD.currentPattern);
@@ -2275,7 +2365,8 @@ void send_pattern_kit_to_md() {
 
 
   /*Send a quick sysex message to get the current selected track of the MD*/
-  int curtrack = MD.getCurrentTrack(callback_timeout);
+  int curtrack = last_md_track;
+ // MD.getCurrentTrack(CALLBACK_TIMEOUT);
 
   uint8_t reload = 1;
   uint16_t quantize_mute = 0;
@@ -2345,7 +2436,7 @@ void send_pattern_kit_to_md() {
         first_note = i;
       }
       //  if (cur_col > 0) {
-      if (behaviour == 0) {
+      if (store_behaviour == STORE_IN_PLACE) {
         track = i;
         place_track_inpattern(track, i + cur_col, cur_row);
 
@@ -2380,7 +2471,7 @@ void send_pattern_kit_to_md() {
   /*Send the encoded pattern to the MD via sysex*/
 
 
-  //int temp = MD.getCurrentKit(callback_timeout);
+  //int temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
 
   /*If kit_sendmode == 1 then we'll be sending the Machine via sysex kit dump. */
 
@@ -2586,8 +2677,16 @@ void toggle_cues_batch() {
   }
 }
 
-//          setLevel(i,MD.kit.levels[i] );
+//          setLevel(i,MD.kit.levels[i] )
+void ptc_root_handler(Encoder *enc) {
+}
+void octave_handler(Encoder *enc) {
+  if (BUTTON_DOWN(Buttons.BUTTON2)) {
+    euclid_root[last_md_track] = trackinfo_param4.getValue() - (trackinfo_param4.getValue() / 12) * 12;
+  }
+}
 void pattern_len_handler(Encoder *enc) {
+  
   if (BUTTON_DOWN(Buttons.BUTTON3)) {
     for (uint8_t c = 0; c < 16; c++) {
       PatternLengths[c] = trackinfo_param3.getValue();
@@ -2595,10 +2694,10 @@ void pattern_len_handler(Encoder *enc) {
 
   }
   else {
-    if ((curpage == 11) || (curpage == 13) || (curpage == 1)) {
+    if ((curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_STEP_PAGE)) {
       PatternLengths[cur_col] = trackinfo_param3.getValue();
     }
-    if (curpage == 14) {
+    if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) {
       PatternLengths[last_md_track] = trackinfo_param3.getValue();
 
     }
@@ -2615,8 +2714,10 @@ void encoder_fx_handle(Encoder *enc) {
     }
 
   }
+  USE_LOCK();
+  SET_LOCK();
   MD.sendFXParam(mdEnc->fxparam, mdEnc->getValue(), mdEnc->effect);
-
+  CLEAR_LOCK();
 }
 
 /*
@@ -2644,27 +2745,30 @@ void modify_track(int looptrack_) {
     patternswitch = 5;
   }
   setLed();
-  int curkit = MD.getCurrentKit(callback_timeout);
+  int curkit = MD.getCurrentKit(CALLBACK_TIMEOUT);
   MD.saveCurrentKit(curkit);
   MD.getBlockingPattern(MD.currentPattern);
   clearLed();
 
 }
 void loadtrackinfo_page(uint8_t i) {
+  // if (MidiClock.state == 2) {
+  // while (MidiClock.mod6_counter != 0);
+    
+  // }
   trackinfo_param2.min = 0;
-  if (i == 0) { curpage = 1; }
-  else if (i == 1) { curpage = 11; }
-  else if (i == 2) { curpage = 12; }
-  else if (i == 3) { curpage = 14; }
+
  
-    currentkit_temp = MD.getCurrentKit(callback_timeout);
+    currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
+    MD.getCurrentTrack(CALLBACK_TIMEOUT);
+
     if (MidiClock.state != 2) {
       MD.saveCurrentKit(currentkit_temp);
     }
     MD.getBlockingKit(currentkit_temp);
      
   if (i == 0) {
-    curpage = 1;
+    curpage = SEQ_STEP_PAGE;
 
     exploit_on();
 
@@ -2708,16 +2812,22 @@ void loadtrackinfo_page(uint8_t i) {
     exploit_on();
     collect_notes = false;
 
-    trackinfo_param1.max = 4;
-    trackinfo_param2.max = 8;
+    trackinfo_param1.max = 8;
+    trackinfo_param2.max = 12;
     trackinfo_param3.max = 64;
-    trackinfo_param4.max = 11;
-    trackinfo_param2.cur = 1;
+    trackinfo_param4.max = 35;
+    trackinfo_param2.cur = 0;
+    trackinfo_param1.cur = 1;
+
     trackinfo_param3.cur = PatternLengths[cur_col];
 
   }
 
   GUI.setPage(&trackinfo_page);
+    if (i == 0) { curpage = SEQ_STEP_PAGE; }
+  else if (i == 1) { curpage = SEQ_RTRK_PAGE; }
+  else if (i == 2) { curpage = SEQ_PARAM_A_PAGE; }
+  else if (i == 3) { curpage = SEQ_PTC_PAGE; }
   //Len
   cur_col = last_md_track;
   cur_row = param2.getValue();
@@ -2876,7 +2986,7 @@ void setup_global(int global_num) {
   */
 }
 
-TrigMe mytrig;
+MDSequencer md_seq;
 void setup() {
 
 
@@ -2900,7 +3010,7 @@ void setup() {
   //MDTask.autoLoadKit = false;
   //MDTask.reloadGlobal = false;
 
-  // GUI.addTask(&MDTask);
+  //GUI.addTask(&MDTask);
 
   //Create a mdHandler object to handle callbacks.
 
@@ -2922,6 +3032,7 @@ void setup() {
   //set_midinote_totrack_mapping();
 
   //Initalise the  Effects Ecnodres
+  
   param2.handler = encoder_param2_handle;
   param3.handler = encoder_fx_handle;
   param3.effect = MD_FX_ECHO;
@@ -2930,10 +3041,11 @@ void setup() {
   param4.effect = MD_FX_ECHO;
   param4.fxparam = MD_ECHO_FB;
 
+trackinfo_param4.handler = octave_handler;
   mixer_param1.handler = encoder_level_handle;
   mixer_param2.handler = encoder_level_handle;
   trackinfo_param3.handler = pattern_len_handler;
-
+trackinfo_param2.handler = ptc_root_handler;
   //mixer_param2.handler = encoder_filter_handle;
   //Setup Turbo Midi
   frames_startclock = read_slowclock();
@@ -2957,14 +3069,12 @@ void setup() {
   //   MidiUart.setActiveSenseTimer(290);
   MD.requestGlobal(7);
 
-  for (uint8_t i = 0; i < 16; i++) {
-    PatternLengths[i] = 16;
-  }
+
   // patternswitch = 7;
-  //     int curkit = MD.getCurrentKit(callback_timeout);
+  //     int curkit = MD.getCurrentKit(CALLBACK_TIMEOUT);
   //      MD.getBlockingKit(curkit);
 
-  mytrig.setup();
+  md_seq.setup();
 }
 
 
@@ -3203,10 +3313,10 @@ void OptionsPage::display() {
 void PatternLoadPage::display() {
   draw_notes(0);
   GUI.setLine(GUI.LINE2);
-  if (curpage == 3) {
+  if (curpage == S_PAGE) {
     GUI.put_string_at(0, "S");
   }
-  else if (curpage == 4) {
+  else if (curpage == W_PAGE) {
     GUI.put_string_at(0, "W");
   }
 
@@ -3233,7 +3343,7 @@ void PatternLoadPage::display() {
   //  patternload_param4.setValue(currentkit_temp + 1);
   uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (64 * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / 64));
   GUI.put_value_at2(14, step_count);
-  if (curpage == 4) {
+  if (curpage == W_PAGE) {
     uint8_t x;
 
 
@@ -3300,7 +3410,7 @@ void TrackInfoPage::display()  {
     return;
   }
 
-  else if (curpage == 10) {
+  else if (curpage == MIXER_PAGE) {
     draw_notes(0);
     draw_levels();
     //   uint8_t x;
@@ -3332,7 +3442,7 @@ void TrackInfoPage::display()  {
     GUI.setLine(GUI.LINE2);
     GUI.put_string_at(0, &newprj[1]);
   }
-  else if (curpage == 5) {
+  else if (curpage == CUE_PAGE) {
 
 
     GUI.setLine(GUI.LINE2);
@@ -3360,18 +3470,18 @@ void TrackInfoPage::display()  {
     draw_notes(0);
   }
 
-  else if (curpage == 10) {
+  else if (curpage == MIXER_PAGE) {
 
     draw_notes(0);
 
   }
 
-  else if ((curpage == 11) || (curpage == 13)) {
+  else if ((curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_RLCK_PAGE)) {
     GUI.setLine(GUI.LINE1);
-    if (curpage == 13) {
+    if (curpage == SEQ_RLCK_PAGE) {
       GUI.put_string_at(0, "RLCK");
 
-    } if (curpage == 11) {
+    } if (curpage == SEQ_RTRK_PAGE) {
       GUI.put_string_at(0, "RTRK");
 
     }
@@ -3384,11 +3494,11 @@ void TrackInfoPage::display()  {
 
 
     GUI.put_value_at2(8, trackinfo_param3.getValue());
-    if (curpage == 13) {
+    if (curpage == SEQ_RLCK_PAGE) {
 
       draw_lockmask(page_select * 16);
 
-    } if (curpage == 11) {
+    } if (curpage == SEQ_RTRK_PAGE) {
 
       draw_patternmask(page_select * 16);
 
@@ -3398,29 +3508,41 @@ void TrackInfoPage::display()  {
 
 
   }
-  else if ((curpage == 14)) {
+  else if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE)) {
 
     const char *str1 = getMachineNameShort(MD.kit.models[last_md_track], 1);
     const char *str2 = getMachineNameShort(MD.kit.models[last_md_track], 2);
     GUI.setLine(GUI.LINE1);
-
+if ((curpage == SEQ_RPTC_PAGE)) {
     GUI.put_string_at(0, "RPTC");
+}
+else {
+     GUI.put_string_at(0, "PTC");
+
+}
     GUI.put_value_at2(8, trackinfo_param3.getValue());
 
     GUI.put_p_string_at(11, str1);
     GUI.put_p_string_at(14, str2);
 
     GUI.setLine(GUI.LINE2);
-    GUI.put_string_at(0, "OCT:");
-    GUI.put_value_at2(4, trackinfo_param2.getValue());
+    GUI.put_string_at(0, "OC:");
+    GUI.put_value_at2(3, trackinfo_param1.getValue());
+    GUI.put_string_at(6, "RT:");
 
+    GUI.put_value_at2(9, trackinfo_param2.getValue());
+
+    GUI.put_string_at(12, "S:");
+
+
+    GUI.put_value_at2(14, trackinfo_param4.getValue());
 
 
     //  draw_patternmask((trackinfo_param1.getValue() * 16));
 
     //draw_notes(0);
   }
-  else if ((curpage == 12) || (curpage == 15))  {
+  else if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE))  {
     GUI.setLine(GUI.LINE1);
     char myName[4];
     if (trackinfo_param1.getValue() == 0) {
@@ -3442,10 +3564,10 @@ void TrackInfoPage::display()  {
     GUI.put_value_at2(11, trackinfo_param4.getValue());
 
 
-    if (curpage == 12) {
+    if (curpage == SEQ_PARAM_A_PAGE) {
       GUI.put_string_at(14, "A");
     }
-    if (curpage == 15) {
+    if (curpage == SEQ_PARAM_B_PAGE) {
       GUI.put_string_at(14, "B");
     }
     GUI.put_value_at2(15, (page_select + 1) * 10);
@@ -3454,12 +3576,30 @@ void TrackInfoPage::display()  {
   }
   else {
     GUI.setLine(GUI.LINE1);
+      GUI.put_value_at2(14, page_select + 1);
 
-    if (curpage == 1) {
+    if (curpage == SEQ_EUC_PAGE) {
+            GUI.put_string_at(0, "E     ");
+
+      GUI.put_value_at2(2, trackinfo_param1.getValue());
+
+            GUI.put_value_at2(5, trackinfo_param2.getValue());
+
+          GUI.put_value_at2(8, trackinfo_param3.getValue());
+
+          if (BUTTON_DOWN(Buttons.BUTTON2)) {
+          GUI.put_value_at2(11, euclid_root[last_md_track]);
+          }
+          else {
+          GUI.put_value_at2(11, trackinfo_param4.getValue());
+          }
+      draw_patternmask((page_select * 16));
+
+    }
+    else if (curpage == SEQ_STEP_PAGE) {
 
       /*Display the Kit name associated with selected track on line 1*/
       //GUI.put_string_at(0, getTrackKit(cur_col, cur_row, true, false));
-      GUI.put_value_at2(14, page_select + 1);
       //Len
       GUI.put_value_at2(8, trackinfo_param3.getValue());
       char c[3] = "--";
@@ -3474,22 +3614,8 @@ void TrackInfoPage::display()  {
       }
       else {
         GUI.put_string_at(0, "P");
-
-        if (trackinfo_param1.getValue() == 9) {
-          GUI.put_value_at2(1, 10);
-        }
-        if (trackinfo_param1.getValue() == 10) {
-          GUI.put_value_at2(1, 25);
-        }
-        if (trackinfo_param1.getValue() == 11) {
-          GUI.put_value_at2(1, 50);
-        }
-        if (trackinfo_param1.getValue() == 12) {
-          GUI.put_value_at2(1, 75);
-        }
-        if (trackinfo_param1.getValue() == 13) {
-          GUI.put_value_at2(1, 90);
-        }
+        uint8_t prob[5] = { 10, 25, 50, 75, 90  };
+        GUI.put_value_at2(1, prob[trackinfo_param1.getValue() - 9]);
       }
 
 
@@ -3532,7 +3658,7 @@ void TrackInfoPage::display()  {
       }
     */
 
-    // cur_col = MD.getCurrentTrack(callback_timeout);;
+    // cur_col = MD.getCurrentTrack(CALLBACK_TIMEOUT);;
 
   }
 }
@@ -3894,8 +4020,10 @@ void init_notes() {
   }
 */
 void exploit_on() {
+ // in_sysex = 1;
   exploit = 1;
-  last_md_track = MD.getCurrentTrack(callback_timeout);
+  //last_md_track = MD.getCurrentTrack(CALLBACK_TIMEOUT);
+  last_md_track = MD.currentTrack;
   MD.setStatus(0x22, 15);
   // MD.getBlockingGlobal(0);
   init_notes();
@@ -3938,16 +4066,17 @@ void exploit_on() {
   //    }
   //  MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,200);
   collect_notes = true;
-
+//in_sysex = 0;
 }
 
 
 void exploit_off() {
+ // in_sysex = 1;
   exploit = 0;
   collect_notes = false;
 
   //
-  global_new.tempo = MidiClock.tempo;
+//  global_new.tempo = MidiClock.tempo;
   //   global_new.baseChannel = 3;
   //    ElektronDataToSysexEncoder encoder(&MidiUart);
   //   global_new.toSysex(encoder);
@@ -3969,7 +4098,7 @@ void exploit_off() {
   //   }
 
   MD.setStatus(0x22, last_md_track);
-
+//in_sysex = 0;
 }
 static uint8_t turbomidi_sysex_header[] = {
   0xF0, 0x00, 0x20, 0x3c, 0x00, 0x00
@@ -3978,7 +4107,6 @@ uint32_t tmSpeeds[12] = {
   31250,
   31250,
   62500,
-  //104063,
   104062,
   125000,
   156250,
@@ -3995,10 +4123,14 @@ void sendTurbomidiHeader(uint8_t cmd) {
 }
 
 void turboSetSpeed(uint8_t speed) {
+  USE_LOCK();
+  SET_LOCK();
   turbo_state = speed;
   sendTurbomidiHeader(0x20);
   MidiUart.m_putc(speed );
   MidiUart.m_putc(0xF7);
+      CLEAR_LOCK();
+
   delay(10);
   MidiUart.setSpeed(tmSpeeds[speed ]);
   MidiUart.setActiveSenseTimer(290);
@@ -4021,7 +4153,6 @@ bool handleEvent(gui_event_t *evt) {
 
   // MD.sendRequest(0x55,(uint8_t)global_page);
   // MD.loadGlobal(global_page);
-
 
 
   if (curpage == 8) {
@@ -4071,61 +4202,92 @@ bool handleEvent(gui_event_t *evt) {
       return true;
     }
   }
-  if ((curpage > 10) || (curpage == 1)) {
+  if ((curpage > 10) || (curpage == SEQ_STEP_PAGE)) {
     if ((EVENT_PRESSED(evt, Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON4)) || (EVENT_PRESSED(evt, Buttons.BUTTON4) && BUTTON_DOWN(Buttons.BUTTON3) )) {
       for (uint8_t n = 0; n < 16; n++) {
-        clear_midi_track(n);
+        clear_seq_track(n);
       }
 
 
     }
 
   }
-  if ((curpage == 12) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
+
+  if ((curpage == SEQ_PARAM_A_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
     trackinfo_param1.cur = PatternLocksParams[last_md_track][2];
     trackinfo_param3.cur = PatternLocksParams[last_md_track][3];
     trackinfo_param2.cur = MD.kit.params[last_md_track][PatternLocksParams[last_md_track][2]];
     trackinfo_param4.cur = MD.kit.params[last_md_track][PatternLocksParams[last_md_track][3]];
-    curpage = 15;
+    curpage = SEQ_PARAM_B_PAGE;
     return true;
 
   }
-  if ((curpage == 15) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
+  if ((curpage == SEQ_PARAM_B_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
     trackinfo_param1.cur = PatternLocksParams[last_md_track][0];
     trackinfo_param3.cur = PatternLocksParams[last_md_track][1];
     trackinfo_param2.cur = MD.kit.params[last_md_track][PatternLocksParams[last_md_track][0]];
     trackinfo_param4.cur = MD.kit.params[last_md_track][PatternLocksParams[last_md_track][1]];
-    curpage = 12;
+    curpage = SEQ_PARAM_A_PAGE;
     return true;
 
   }
 
-  if (((curpage == 12) || (curpage == 15) || (curpage == 11)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
-    clear_midi_locks(cur_col);
+  if (((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE) || (curpage == SEQ_RTRK_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
+    clear_seq_locks(cur_col);
     return true;
 
   }
-  if (((curpage == 14) || (curpage == 1)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
-    clear_midi_track(last_md_track);
+  if (((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_STEP_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
+    clear_seq_track(last_md_track);
     return true;
 
   }
+    if ((curpage == SEQ_STEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
+    trackinfo_param1.max = 64;
+    trackinfo_param2.max = 64;
+    trackinfo_param2.min = 0;
+    trackinfo_param2.cur = 0;
+    trackinfo_param3.max = 96;
+    trackinfo_param4.max = 36;
+    curpage = SEQ_EUC_PAGE;
+    return true;
+ 
+    }
+    if ((curpage == SEQ_EUC_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
+    trackinfo_param1.max = 13;
+    trackinfo_param2.max = 11;
+    trackinfo_param2.min = 1;
+    trackinfo_param2.cur = 6;
+    trackinfo_param3.max = 64;
+    trackinfo_param4.max = 16;
+    curpage = SEQ_STEP_PAGE;
+    return true;
+ 
+    }
+  if ((curpage == SEQ_PTC_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
+    curpage = SEQ_RPTC_PAGE;
+    return true;
 
+  }
+    if ((curpage == SEQ_RPTC_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
+    curpage = SEQ_PTC_PAGE;
+    return true;
 
-  if ((curpage == 11) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
+  }
+  if ((curpage == SEQ_RTRK_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
     exploit_off();
-    curpage = 13;
+    curpage = SEQ_RLCK_PAGE;
     return true;
 
   }
-  if ((curpage == 13) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
+  if ((curpage == SEQ_RLCK_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
     exploit_on();
     collect_notes = false;
-    curpage = 11;
+    curpage = SEQ_RTRK_PAGE;
     return true;
 
-  }
-  if ((curpage == 11) && EVENT_RELEASED(evt, Buttons.ENCODER1))  {
+  } 
+  if ((curpage == SEQ_RTRK_PAGE) && EVENT_RELEASED(evt, Buttons.ENCODER1))  {
     exploit_off();
 
     GUI.setPage(&page);
@@ -4134,15 +4296,27 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
-  if (( (curpage == 1)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
-    clear_midi_track(last_md_track);
+       if (( (curpage == SEQ_EUC_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) && BUTTON_DOWN(Buttons.BUTTON3) ) {
+            random_pattern( trackinfo_param1.cur, PatternLengths[last_md_track], trackinfo_param2.cur,trackinfo_param4.cur,trackinfo_param3.cur);
+
+  
     return true;
   }
-  if (((curpage == 12) || (curpage == 15)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
-    clear_midi_track(cur_col);
+ if (( (curpage == SEQ_EUC_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
+  
+    setEuclid(last_md_track, trackinfo_param1.cur, PatternLengths[last_md_track], trackinfo_param2.cur,trackinfo_param4.cur,trackinfo_param3.cur);
     return true;
   }
-  if (( (curpage == 11) || (curpage == 12) || (curpage == 13) || (curpage == 14) || (curpage == 1) || (curpage == 15)) && EVENT_PRESSED(evt, Buttons.BUTTON2) ) {
+  if (( (curpage == SEQ_STEP_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
+    clear_seq_track(last_md_track);
+    return true;
+  }
+  if (((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
+    clear_seq_track(cur_col);
+    return true;
+  }
+
+  if (( (curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_STEP_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON2) ) {
     page_select = page_select + 1;
     if (page_select >= 4) {
       page_select = 0;
@@ -4151,9 +4325,10 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
-  else if ((curpage == 1) || (curpage > 10)) {
 
-    if (EVENT_RELEASED(evt, Buttons.ENCODER1) || EVENT_RELEASED(evt, Buttons.ENCODER2) || EVENT_RELEASED(evt, Buttons.ENCODER3) || EVENT_RELEASED(evt, Buttons.ENCODER4)) {
+  else if ((curpage == SEQ_STEP_PAGE) || (curpage > 10)) {
+
+    if (EVENT_PRESSED(evt, Buttons.ENCODER1) || EVENT_PRESSED(evt, Buttons.ENCODER2) || EVENT_PRESSED(evt, Buttons.ENCODER3) || EVENT_PRESSED(evt, Buttons.ENCODER4)) {
       //  PatternMasks[i] = getPatternMask(i, enc->getValue(), 3, true);
       //  PatternLengths[i] = temptrack.length;
       exploit_off();
@@ -4164,10 +4339,11 @@ bool handleEvent(gui_event_t *evt) {
     }
     return true;
   }
+
   /*end if page == 1*/
 
   //PATTENRN LOAD
-  else if ((curpage == 3) || (curpage == 4))   {
+  else if ((curpage == S_PAGE) || (curpage == W_PAGE))   {
 
     //PRECISION READ
 
@@ -4202,7 +4378,7 @@ bool handleEvent(gui_event_t *evt) {
       return true;
     }
 
-    if (curpage == 3) {
+    if (curpage == S_PAGE) {
 
 
 
@@ -4213,7 +4389,7 @@ bool handleEvent(gui_event_t *evt) {
           notes[i] = 3;
         }
         exploit_off();
-        store_tracks_in_mem(param1.getValue(), param2.getValue(), 0);
+        store_tracks_in_mem(param1.getValue(), param2.getValue(), STORE_IN_PLACE);
         GUI.setPage(&page);
         curpage = 0;
         return true;
@@ -4221,18 +4397,16 @@ bool handleEvent(gui_event_t *evt) {
 
     }
 
-    //PRECISION WRITE
 
 
-    if
-
-
-    ((EVENT_RELEASED(evt, Buttons.ENCODER1) || EVENT_RELEASED(evt, Buttons.ENCODER2) || EVENT_RELEASED(evt, Buttons.ENCODER3) || EVENT_RELEASED(evt, Buttons.ENCODER4))
+    if  ((EVENT_RELEASED(evt, Buttons.ENCODER1) || EVENT_RELEASED(evt, Buttons.ENCODER2) || EVENT_RELEASED(evt, Buttons.ENCODER3) || EVENT_RELEASED(evt, Buttons.ENCODER4))
         && ( BUTTON_UP(Buttons.ENCODER1) && BUTTON_UP(Buttons.ENCODER2) && BUTTON_UP(Buttons.ENCODER3) && BUTTON_UP(Buttons.ENCODER4) ))
     {
-      if (curpage == 4) {
-        // MD.getCurrentTrack(callback_timeout);
-        int curtrack = MD.getCurrentTrack(callback_timeout);
+      if (curpage == W_PAGE) {
+        // MD.getCurrentTrack(CALLBACK_TIMEOUT);
+        int curtrack = last_md_track;
+        //        int curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
+
         exploit_off();
         write_original = 0;
         write_tracks_to_md( MD.currentTrack, param2.getValue(), 254);
@@ -4240,10 +4414,10 @@ bool handleEvent(gui_event_t *evt) {
         curpage = 0;
         return true;
       }
-      if (curpage == 3) {
-        // MD.getCurrentPattern(callback_timeout);
+      if (curpage == S_PAGE) {
+        // MD.getCurrentPattern(CALLBACK_TIMEOUT);
         exploit_off();
-        store_tracks_in_mem(param1.getValue(), param2.getValue(), 254);
+        store_tracks_in_mem(param1.getValue(), param2.getValue(), STORE_AT_SPECIFIC);
         GUI.setPage(&page);
         curpage = 0;
         return true;
@@ -4252,7 +4426,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
     }
-    if (curpage == 4) {
+    if (curpage == W_PAGE) {
 
       if (EVENT_PRESSED(evt, Buttons.BUTTON3)) {
         for (int i = 0; i < 16; i++) {
@@ -4336,9 +4510,9 @@ bool handleEvent(gui_event_t *evt) {
 
   }
 
-  else  if ((curpage == 5) || (curpage == 10)) {
+  else  if ((curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
     /*
-          if (curpage == 10) {
+          if (curpage == MIXER_PAGE) {
                         if  (EVENT_PRESSED(evt, Buttons.ENCODER2)) {
               MD.sendFXParam(3, 0, MD_SET_RHYTHM_ECHO_PARAM_ID);
                         uint16_t quantize = 0;
@@ -4371,7 +4545,7 @@ bool handleEvent(gui_event_t *evt) {
 
           }
     */
-    if (curpage == 10) {
+    if (curpage == MIXER_PAGE) {
       if (EVENT_PRESSED(evt, Buttons.ENCODER1)) {
         level_pressmode = 1;
       }
@@ -4413,17 +4587,14 @@ bool handleEvent(gui_event_t *evt) {
     //TRACK READ PAGE
     if (EVENT_RELEASED(evt, Buttons.BUTTON1) )
     {
-
-
-
-
-      MD.getCurrentPattern(callback_timeout);
+      MD.getCurrentTrack(CALLBACK_TIMEOUT);
+      MD.getCurrentPattern(CALLBACK_TIMEOUT);
       patternload_param1.cur = (int) MD.currentPattern / (int) 16;
       patternload_param2.cur = MD.currentPattern - 16 * ((int) MD.currentPattern / (int) 16);
       exploit_on();
 
 
-      curpage = 3;
+      curpage = S_PAGE;
 
       GUI.setPage(&patternload_page);
 
@@ -4435,13 +4606,13 @@ bool handleEvent(gui_event_t *evt) {
 
     if (EVENT_RELEASED(evt, Buttons.BUTTON4)) {
 
-
-      MD.getCurrentPattern(callback_timeout);
+      MD.getCurrentTrack(CALLBACK_TIMEOUT);
+      MD.getCurrentPattern(CALLBACK_TIMEOUT);
       patternload_param1.cur = (int) MD.currentPattern / (int) 16;
       patternload_param2.cur = MD.currentPattern - 16 * ((int) MD.currentPattern / (int) 16);
 
       patternswitch = 1;
-      currentkit_temp = MD.getCurrentKit(callback_timeout);
+      currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
       patternload_param3.cur = currentkit_temp;
       MD.saveCurrentKit(currentkit_temp);
 
@@ -4449,12 +4620,7 @@ bool handleEvent(gui_event_t *evt) {
       exploit_on();
       GUI.setPage(&patternload_page);
       // GUI.display();
-      curpage = 4;
-
-
-
-
-
+      curpage = W_PAGE;
       return true;
     }
     if (BUTTON_DOWN(Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON3)) {
@@ -4462,11 +4628,9 @@ bool handleEvent(gui_event_t *evt) {
       return true;
     }
 
-
-
     if (BUTTON_DOWN(Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON4)) {
       setLed();
-      int curtrack = MD.getCurrentTrack(callback_timeout);
+      int curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
 
       param1.cur = curtrack;
 
@@ -4478,12 +4642,12 @@ bool handleEvent(gui_event_t *evt) {
 
     if (EVENT_PRESSED(evt, Buttons.BUTTON3)) {
       exploit_on();
-      curpage = 5;
+      curpage = CUE_PAGE;
       GUI.setPage(&trackinfo_page);
     }
     if (EVENT_PRESSED(evt, Buttons.BUTTON2)) {
-      currentkit_temp = MD.getCurrentKit(callback_timeout);
-      curpage = 10;
+      currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
+      curpage = MIXER_PAGE;
       MD.saveCurrentKit(currentkit_temp);
       MD.getBlockingKit(currentkit_temp);
       level_pressmode = 0;
@@ -4505,7 +4669,7 @@ bool handleEvent(gui_event_t *evt) {
     //           setLevel(8,100);
     //  }
 
-    if (BUTTON_RELEASED(Buttons.ENCODER1))  {
+    if (BUTTON_PRESSED(Buttons.ENCODER1))  {
 
       loadtrackinfo_page(0);
 
@@ -4513,7 +4677,7 @@ bool handleEvent(gui_event_t *evt) {
 
       return true;
     }
-    if (BUTTON_RELEASED(Buttons.ENCODER2))  {
+    if (BUTTON_PRESSED(Buttons.ENCODER2))  {
 
 
       loadtrackinfo_page(1);
@@ -4523,7 +4687,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
     }
-    if (BUTTON_RELEASED(Buttons.ENCODER3))  {
+    if (BUTTON_PRESSED(Buttons.ENCODER3))  {
 
       loadtrackinfo_page(2);
 
@@ -4531,7 +4695,7 @@ bool handleEvent(gui_event_t *evt) {
 
       return true;
     }
-    if (BUTTON_RELEASED(Buttons.ENCODER4))  {
+    if (BUTTON_PRESSED(Buttons.ENCODER4))  {
 
       loadtrackinfo_page(3);
 
