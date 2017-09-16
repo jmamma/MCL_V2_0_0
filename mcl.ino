@@ -5,8 +5,11 @@
   Author: Justin Valer
   Date: July/2016
 */
+///#include <Wire.h>
+//#include <SPI.h>
 
 #include <MD.h>
+#include <A4.h>
 #include <Scales.h>
 #include "GridPage.h"
 #include "TrackInfoPage.h"
@@ -39,6 +42,23 @@
 #define SEQ_PTC_PAGE 16
 
 #define EXPLOIT_DELAY_TIME 300
+
+#define OLED_CLK 52
+#define OLED_MOSI 51
+
+// Used for software or hardware SPI
+#define OLED_CS 42
+#define OLED_DC 44
+
+// Used for I2C or SPI
+#define OLED_RESET 38 
+
+#define A4_TRACK_TYPE 2
+#define MD_TRACK_TYPE 1
+#define EMPTY_TRACK_TYPE 0
+//Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
+
+
 /*MDKit and Pattern objects must be defined outside of Classes and Methods otherwise the Minicommand freezes.*/
 MDPattern pattern_rec;
 //MDKit MD.kit;
@@ -59,7 +79,7 @@ uint8_t notes_off_counter = 0;
 
 uint8_t currentkit_temp = 0;
 uint32_t cue1 = 0;
-uint8_t notes[16];
+uint8_t notes[28];
 uint8_t notecount = 0;
 uint8_t firstnote = 0;
 uint8_t noteproceed = 0;
@@ -156,7 +176,7 @@ PatternLoadPage patternload_page(&patternload_param1, &patternload_param2, &patt
 //OptionsEncoder options_param1(0, 3);
 //OptionsEncoder  options_param2(0, 2);
 
-TrackInfoEncoder options_param1(0, 3);
+TrackInfoEncoder options_param1(0, 4);
 TrackInfoEncoder  options_param2(0, 2);
 OptionsPage options_page(&options_param1, &options_param2);
 
@@ -179,6 +199,14 @@ uint8_t PatternLocksParams[16][4];
 uint64_t PatternMasks[16];
 uint64_t LockMasks[16];
 uint8_t conditional_timing[16][64];
+
+uint8_t ExtPatternLengths[6];
+uint8_t ExtPatternLocks[6][4][64];
+uint8_t ExtPatternLocksParams[6][4];
+uint64_t ExtPatternMasksOn[6][4];
+uint64_t ExtPatternMasksOff[6][4];
+uint64_t ExtLockMasks[6];
+uint8_t Extconditional_timing[6][64];
 
 uint8_t euclid_root[16];
 uint16_t exploit_start_clock = 0;
@@ -203,42 +231,43 @@ const char allowedchar[38] = "0123456789abcdefghijklmnopqrstuvwxyz_";
 
 uint8_t last_md_track = 0;
 
-const scale_t *scales[36] { 
- &ionianScale,
-&dorianScale,
+const scale_t *scales[16] {
+&chromaticScale,
+&ionianScale,          
+//&dorianScale,
 &phrygianScale,
-&lydianScale,
-&mixolydianScale,
-&aeolianScale,
-&locrianScale,
+//&lydianScale,
+//&mixolydianScale,
+//&aeolianScale,
+//&locrianScale,
 &harmonicMinorScale,
 &melodicMinorScale,
-&lydianDominantScale,
-&wholeToneScale,
-&wholeHalfStepScale,
-&halfWholeStepScale,
+//&lydianDominantScale,
+//&wholeToneScale,
+//&wholeHalfStepScale,
+//&halfWholeStepScale,
 &majorPentatonicScale,
 &minorPentatonicScale,
 &suspendedPentatonicScale,
 &inSenScale,
 &bluesScale,
-&majorBebopScale,
-&dominantBebopScale,
-&minorBebopScale,
+//&majorBebopScale,
+//&dominantBebopScale,
+//&minorBebopScale,
 &majorArp,
 &minorArp,
 &majorMaj7Arp,
 &majorMin7Arp,
 &minorMin7Arp,
-&minorMaj7Arp,
+//&minorMaj7Arp,
 &majorMaj7Arp9,
-&majorMaj7ArpMin9,
-&majorMin7Arp9,
-&majorMin7ArpMin9,
-&minorMin7Arp9,
-&minorMin7ArpMin9,
-&minorMaj7Arp9,
-&minorMaj7ArpMin9
+//&majorMaj7ArpMin9,
+//&majorMin7Arp9,
+//&majorMin7ArpMin9,
+//&minorMin7Arp9,
+//&minorMin7ArpMin9,
+//&minorMaj7Arp9,
+//&minorMaj7ArpMin9
 };
 
 /*
@@ -253,6 +282,13 @@ const scale_t *scales[36] {
   Machine Settings, Step Sequencer Triggers (trig, accent, slide, swing), Parameter Locks,
 
 */
+class A4Track {
+  public:
+    uint8_t active = A4_TRACK_TYPE;
+    A4Sound sound;
+    uint8_t kit_payload_start[38];
+    uint8_t kit_payload_end[1034];
+};
 
 class KitExtra {
   public:
@@ -274,7 +310,7 @@ class KitExtra {
 
 class MDTrack {
   public:
-    bool active;
+    uint8_t active = MD_TRACK_TYPE;
     char kitName[17];
     char trackName[17];
     uint8_t origPosition;
@@ -591,7 +627,7 @@ void sd_load_init() {
 
 */
 
-SDCardEntry entries[64];
+SDCardEntry entries[16];
 void load_project_page() {
 
   int numEntries = SDCard.listDirectory("/", entries, countof(entries));
@@ -669,7 +705,7 @@ bool sd_new_project(char *projectname) {
 
 
 
-  temptrack.active = FALSE;
+  temptrack.active = EMPTY_TRACK_TYPE;
 
   file.open(true);
 
@@ -1092,6 +1128,9 @@ class MDSequencer : public ClockCallback {
       for (uint8_t i = 0; i < 16; i++) {
           PatternLengths[i] = 16;
        }
+        for (uint8_t i = 0; i < 5; i++) {
+          ExtPatternLengths[i] = 16;
+       }
       MidiClock.addOn96Callback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSequencerCallback);
     };
     void MDSequencerCallback() {
@@ -1134,11 +1173,40 @@ class MDSequencer : public ClockCallback {
 
         }
       }
-      // for (uint8_t i = 0; i < 16; i++) {
 
-      //  }
+            for (uint8_t i = 0; i < 5; i++) {
+        uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (ExtPatternLengths[i] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / ExtPatternLengths[i]));
 
+        int8_t timing = Extconditional_timing[i][step_count] >> 4; //upper
+        uint8_t condition = Extconditional_timing[i][step_count] & 0x0F; //lower
+
+        int8_t timing_next = Extconditional_timing[i][step_count + 1] >> 4; //upper
+        uint8_t condition_next = Extconditional_timing[i][step_count + 1] & 0x0F; //lower
+                 
+        if ((timing >= 6) && (timing - 6 == (int8_t)MidiClock.mod6_counter)) {
+
+        for (uint8_t c = 0; c < 4; c++) {
+           if (IS_BIT_SET64(ExtPatternMasksOff[i][c], step_count )) { MidiUart2.sendNoteOff(i,  ExtPatternLocks[i][c][step_count] - 1, 0); }
+           else if (IS_BIT_SET64(ExtPatternMasksOn[i][c], step_count )) { MidiUart2.sendNoteOn(i, ExtPatternLocks[i][c][step_count] - 1, 100); }
+           }
+
+        }
+
+        if ((timing_next < 6) && ((timing_next) == (int8_t) MidiClock.mod6_counter)) {
+
+             for (uint8_t c = 0; c < 4; c++) {
+
+         if (IS_BIT_SET64(ExtPatternMasksOff[i][c], step_count + 1 )) { MidiUart2.sendNoteOff(i, ExtPatternLocks[i][c][step_count + 1] - 1, 0); }
+         else if (IS_BIT_SET64(ExtPatternMasksOn[i][c], step_count + 1 )) { MidiUart2.sendNoteOn(i, ExtPatternLocks[i][c][step_count + 1] - 1, 100); }
+
+          }
+        }
+            
     }
+
+      
+    }
+    
 };
 uint8_t globalbasechannel_to_channel(uint8_t b) {
   // -- 0
@@ -1166,8 +1234,169 @@ class TrigCaptureClass : public MidiCallback {
       Midi.addOnProgramChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onProgramChangeCallback);
       Midi.addOnNoteOnCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOnCallback);
       Midi.addOnNoteOffCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOffCallback);
+      
+      Midi2.addOnNoteOnCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOnCallback_Midi2);
+      Midi2.addOnNoteOffCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOffCallback_Midi2);
+
       Midi.addOnControlChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onControlChangeCallback);
 
+    };
+
+    void onNoteOnCallback_Midi2(uint8_t *msg) {
+      uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
+      
+    //  if ((curpage == SEQ_RTRK_EXTERN_PAGE) && 
+   //   if ((channel <= 4)) {
+    //  MidiUart2.m_putc(0xF8);
+
+
+//  if ((curpage == SEQ_EXT_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) ) {
+
+       
+     
+          uint8_t realPitch;
+          uint8_t note_num = msg[1];
+          uint8_t pitch = msg[1];
+                            
+        /*  uint8_t pitch = trackinfo_param1.getValue() * 12 + note_num + trackinfo_param2.getValue();
+          
+          if (trackinfo_param4.cur > 0) {
+          uint8_t size = scales[trackinfo_param4.cur]->size;
+            uint8_t m = note_num / size;
+            note_num = note_num - (scales[trackinfo_param4.cur]->size * m); 
+         //   }
+          note_num = scales[trackinfo_param4.cur]->pitches[note_num];
+          pitch = (trackinfo_param1.getValue() * 12) + trackinfo_param2.getValue() + (m * 12) + note_num;
+
+          }*/
+        
+          trackinfo_param3.cur = ExtPatternLengths[cur_col];
+
+          MidiUart2.sendNoteOn(channel, pitch, msg[2]);
+
+         if (MidiClock.state != 2) {
+  //   (curpage == SEQ_EXT_PTC_PAGE)) {
+           return;
+          }
+
+          uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (ExtPatternLengths[channel] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / ExtPatternLengths[channel]));
+
+
+          uint8_t timing = MidiClock.mod6_counter + 6 << 4;
+          uint8_t condition = 0 & 0x0F;
+          //  cur_col = note_num;
+          //  timing = 3;
+          //condition = 3;
+
+          uint8_t match = 255;
+          uint8_t c = 0;
+          //Let's try and find an existing param
+        for (c = 0; c < 4 && match == 255; c++)  {
+           if (ExtPatternLocks[channel][c][step_count] == pitch + 1) {
+             match = c;
+            }
+    }     
+          
+
+          for (c = 0; c < 4 && match == 255; c++)  {
+            if (ExtPatternLocks[channel][c][step_count] == 0) {
+              match = c;
+            }
+          }
+         
+          if (match != 255) {
+            ExtPatternLocks[channel][match][step_count] = pitch + 1;
+           // SET_BIT64(ExtLockMasks[channel], step_count);
+            SET_BIT64(ExtPatternMasksOn[channel][match], step_count);
+
+          }
+          Extconditional_timing[channel][step_count] = timing | condition;
+
+
+ //       }
+      
+   //   }
+
+    };
+
+    void onNoteOffCallback_Midi2(uint8_t *msg) {
+           uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
+      
+    //  if ((curpage == SEQ_RTRK_EXTERN_PAGE) && 
+   //   if ((channel <= 4)) {
+    //  MidiUart2.m_putc(0xF8);
+
+
+//  if ((curpage == SEQ_EXT_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) ) {
+
+       
+     
+          uint8_t realPitch;
+          uint8_t note_num = msg[1];
+          uint8_t pitch = msg[1];
+                            
+        /*  uint8_t pitch = trackinfo_param1.getValue() * 12 + note_num + trackinfo_param2.getValue();
+          
+          if (trackinfo_param4.cur > 0) {
+          uint8_t size = scales[trackinfo_param4.cur]->size;
+            uint8_t m = note_num / size;
+            note_num = note_num - (scales[trackinfo_param4.cur]->size * m); 
+         //   }
+          note_num = scales[trackinfo_param4.cur]->pitches[note_num];
+          pitch = (trackinfo_param1.getValue() * 12) + trackinfo_param2.getValue() + (m * 12) + note_num;
+
+          }*/
+        
+          trackinfo_param3.cur = ExtPatternLengths[cur_col];
+
+          MidiUart2.sendNoteOff(channel, pitch, msg[2]);
+
+         if (MidiClock.state != 2)  {
+          //| (curpage == SEQ_EXT_PTC_PAGE))
+           return;
+         }
+
+          uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (ExtPatternLengths[channel] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / ExtPatternLengths[channel]));
+
+
+          uint8_t timing = MidiClock.mod6_counter + 6 << 4;
+          uint8_t condition = 0 & 0x0F;
+          //  cur_col = note_num;
+          //  timing = 3;
+          //condition = 3;
+
+          uint8_t match = 255;
+          uint8_t c = 0;
+       
+    for (c = 0; c < 4 && match == 255; c++)  {
+           if (ExtPatternLocks[channel][c][step_count] == pitch + 1) {
+             match = c;
+              if (IS_BIT_SET64(ExtPatternMasksOn[channel][match], step_count)) {
+              step_count = step_count + 1;
+              if (step_count > ExtPatternLengths[channel]) { step_count = 0; } 
+              timing = MidiClock.mod6_counter << 4;
+              //timing = 0;
+              }
+            }
+    }
+     for (c = 0; c < 4 && match == 255; c++)  {
+            if (ExtPatternLocks[channel][c][step_count] == 0) {
+              match = c;
+            }
+          }
+         
+          if (match != 255) {
+            ExtPatternLocks[channel][match][step_count] = pitch + 1;
+           // SET_BIT64(ExtLockMasks[channel], step_count);
+            SET_BIT64(ExtPatternMasksOff[channel][match], step_count);
+
+          }
+          Extconditional_timing[channel][step_count] = timing | condition;
+
+
+ //       }
+      
+   //   }
     };
     void onControlChangeCallback(uint8_t *msg) {
       uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
@@ -1267,13 +1496,13 @@ class TrigCaptureClass : public MidiCallback {
           SET_BIT64(LockMasks[track], step_count);
         }
       }
-    }
+    };
     void onProgramChangeCallback(uint8_t *msg) {
       load_the_damnkit(msg[1]);
       pattern_start_clock32th = MidiClock.div32th_counter;
       //
       //((int) (MidiClock.div32th_counter / 32) * 32);
-    }
+    };
     void onNoteOffCallback(uint8_t *msg) {
       uint16_t current_clock = read_slowclock();
 
@@ -1415,14 +1644,16 @@ class TrigCaptureClass : public MidiCallback {
       //   clearLed();
       //  }
 
-    }
+    };
 
     void onNoteOnCallback(uint8_t *msg) {
       //   if (msg[2] > 0) {
       uint16_t current_clock = read_slowclock();
 
       int note_num;
-
+      uint8_t channel = MIDI_NOTE_ON & msg[0];
+      
+  
       if ((curpage == SEQ_RTRK_PAGE) && (msg[0] == 153)) {
 
         if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
@@ -1717,6 +1948,7 @@ class MDHandler2 : public MDCallback {
         /*Send a quick sysex message to get the current selected track of the MD*/
 
         //       int curtrack = 0;
+        
         uint8_t first_note = 254;
 
         int curtrack = 0;
@@ -1724,7 +1956,7 @@ class MDHandler2 : public MDCallback {
           curtrack = last_md_track;
           //MD.getCurrentTrack(CALLBACK_TIMEOUT);
         }
-        for (i = 0; i < 16; i++) {
+        for (i = 0; i < 22; i++) {
           if (notes[i] == 3) {
             if (first_note == 254) {
               first_note = i;
@@ -2283,7 +2515,9 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   store_behaviour = store_behaviour_;
   setLed();
   patternswitch = PATTERN_STORE;
-  MD.getBlockingPattern(readpattern);
+  
+  if (!MD.getBlockingPattern(readpattern)) { return; }
+  
   int curkit;
   if (readpattern != MD.currentPattern) {
     curkit = pattern_rec.kit;
@@ -2295,7 +2529,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
 
   }
 
-  MD.getBlockingKit(curkit);
+  if (!MD.getBlockingKit(curkit)) { return; }
 
   //  int curkit = MD.getBlockingStatus(MD_CURRENT_KIT_REQUEST, CALLBACK_TIMEOUT);
 
@@ -2815,7 +3049,7 @@ void loadtrackinfo_page(uint8_t i) {
     trackinfo_param1.max = 8;
     trackinfo_param2.max = 12;
     trackinfo_param3.max = 64;
-    trackinfo_param4.max = 35;
+    trackinfo_param4.max = 17;
     trackinfo_param2.cur = 0;
     trackinfo_param1.cur = 1;
 
@@ -2838,7 +3072,7 @@ void clear_row (int row) {
   }
 }
 void clear_Grid(int i) {
-  temptrack.active = false;
+  temptrack.active = EMPTY_TRACK_TYPE;
   int32_t offset = (int32_t) sizeof(project_header) + (int32_t) i * (int32_t) sizeof(MDTrack);
   file.seek(&offset, FAT_SEEK_SET);
   file.write(( uint8_t*) & (temptrack.active), sizeof(temptrack.active));
@@ -3002,6 +3236,7 @@ void setup() {
 
   }
 
+
   //Enable callbacks, and disable some of the ones we don't want to use.
 
 
@@ -3075,6 +3310,7 @@ trackinfo_param2.handler = ptc_root_handler;
   //      MD.getBlockingKit(curkit);
 
   md_seq.setup();
+
 }
 
 
@@ -3103,7 +3339,7 @@ uint64_t getPatternMask(int column, int row, uint8_t j, bool load) {
     }
   }
 
-  if (temptrack.active != TRUE) {
+  if (temptrack.active == EMPTY_TRACK_TYPE) {
     return (uint64_t) 0;
   }
   else if (j == 1) {
@@ -3152,7 +3388,7 @@ uint32_t getGridModel(int column, int row, bool load) {
       return NULL;
     }
   }
-  if (temptrack.active != TRUE) {
+  if (temptrack.active == EMPTY_TRACK_TYPE) {
     return NULL;
   }
   else {
@@ -3176,7 +3412,7 @@ char *getTrackKit(int column, int row, bool load, bool scroll) {
       return "    ";
     }
 
-    if (temptrack.active != TRUE) {
+    if (temptrack.active == EMPTY_TRACK_TYPE) {
       return "    ";
     }
 
@@ -3272,6 +3508,28 @@ void OptionsPage::display() {
         options_param2.cur = 1;
       }
       merge = options_param2.getValue();
+    }
+  }
+   else if (options_param1.getValue() == 4) {
+
+
+    if (options_param1.hasChanged()) {
+      options_param1.old = options_param1.cur;
+      options_param2.setValue(clockout);
+    }
+    GUI.put_string_at_fill(0, "MIDI2 CLKOUT");
+
+    if (options_param2.getValue() == 0) {
+      GUI.put_string_at_fill(10, "OFF");
+    }
+    if (options_param2.getValue() >= 1) {
+      GUI.put_string_at_fill(10, "ON");
+    }
+    if (options_param2.hasChanged()) {
+      if (options_param2.getValue() > 1) {
+        options_param2.cur = 1;
+      }
+      clockout = options_param2.getValue();
     }
   }
   else if (options_param1.getValue() == 2) {
@@ -4132,7 +4390,7 @@ void turboSetSpeed(uint8_t speed) {
       CLEAR_LOCK();
 
   delay(10);
-  MidiUart.setSpeed(tmSpeeds[speed ]);
+  MidiUart.setSpeed(tmSpeeds[speed ],1);
   MidiUart.setActiveSenseTimer(290);
 }
 
@@ -4473,6 +4731,9 @@ bool handleEvent(gui_event_t *evt) {
         MidiClock.transmit = true;
 
         MidiClock.mode = MidiClock.EXTERNAL_UART2;
+      }
+      if (clockout == 1) {
+        MidiClock.transmit = true;
       }
       MidiClock.start();
       send_globals();
