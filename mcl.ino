@@ -1585,8 +1585,9 @@ class TrigCaptureClass : public MidiCallback {
 
       uint8_t note_num;
       for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
-        if (msg[1] == MD.global.drumMapping[i])
+        if (msg[1] == MD.global.drumMapping[i]) {
           note_num = i;
+        }
       }
 
 
@@ -1594,7 +1595,13 @@ class TrigCaptureClass : public MidiCallback {
       // if (msg[2] == 0) {
 
       if ((collect_notes) && (msg[0] == 153) && (noteproceed == 1))  {
+                    trigger_noteoff_interface(msg, DEVICE_MD);
 
+    for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+        if (msg[1] == MD.global.drumMapping[i]) {
+          note_num = i;
+        }
+      }
         if (note_num < 16) {
 
           if (notes[note_num] == 1)  {
@@ -1862,12 +1869,30 @@ class TrigCaptureClass : public MidiCallback {
 
         if (noteproceed == 1) {
           if ((collect_notes) && (msg[0] == 153)) {
-            for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
-              if (msg[1] == MD.global.drumMapping[i])
+            trigger_noteon_interface(msg, DEVICE_MD);
+          
+          }
+
+        }
+      }
+      //}
+    }
+
+};
+void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
+     if (device == DEVICE_MD) {
+
+        for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+              if (msg[1] == MD.global.drumMapping[i]) {
                 note_num = i;
             }
-
-            if (note_num < 16) {
+        }
+      }
+      else {
+        
+            note_num = (msg[1] - (msg[1] / 12) * 12) + 16;
+       }
+            if (note_num < 20) {
 
               if (notes[note_num] == 0) {
                 notes[note_num] = 1;
@@ -1915,15 +1940,7 @@ class TrigCaptureClass : public MidiCallback {
             }
 
 
-          }
-
-        }
-      }
-      //}
-    }
-
-};
-
+}
 /*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
 
 void place_track_inpattern(int curtrack, int column, int row) {
