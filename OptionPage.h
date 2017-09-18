@@ -1,5 +1,5 @@
 
-
+uint8_t clockout = 0;
 uint8_t turbo = 0;
 uint8_t merge = 0;
 
