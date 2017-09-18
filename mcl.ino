@@ -1304,6 +1304,149 @@ void encoder_param2_handle(Encoder *enc) {
   //  PatternLengths[i] = temptrack.length;
   // }
 }
+
+
+void trigger_noteoff_interface(uint8_t *msg, uint8_t device) {
+     uint8_t note_num;
+      if (device == DEVICE_MD) {
+
+        for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+              if (msg[1] == MD.global.drumMapping[i]) {
+                note_num = i;
+            }
+        }
+      }
+      else {
+        
+            note_num = (msg[1] - (msg[1] / 12) * 12) + 16;
+       }
+   if (note_num > 20) { return; }
+ 
+   if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE)) {
+          int i;
+          draw_notes(0);
+          uint8_t all_notes_off = 0;
+          uint8_t a = 0;
+          uint8_t b = 0;
+          for (i = 0; i < 16; i++) {
+            if (notes[i] == 1) {
+              a++;
+            }
+            if (notes[i] == 3) {
+              b++;
+            }
+          }
+
+          if ((a == 0) && (b > 0)) {
+            all_notes_off = 1;
+          }
+
+          if (all_notes_off == 1) {
+            if (curpage == S_PAGE)  {
+              exploit_off();
+              store_tracks_in_mem( 0, param2.getValue(), STORE_IN_PLACE);
+              GUI.setPage(&page);
+              curpage = 0;
+            }
+            if (curpage == W_PAGE) {
+              exploit_off();
+              write_tracks_to_md( 0, param2.getValue(), 0);
+              GUI.setPage(&page);
+              curpage = 0;
+            }
+            if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() > 0) && (b > 1)) {
+              toggle_cues_batch();
+              send_globals();
+              exploit_off();
+              GUI.setPage(&page);
+              curpage = 0;
+            }
+          }
+
+        }
+
+}
+void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
+  uint8_t note_num;
+  uint16_t current_clock = read_slowclock();
+     if (device == DEVICE_MD) {
+
+        for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+              if (msg[1] == MD.global.drumMapping[i]) {
+                note_num = i;
+            }
+        }
+      }
+      else {
+        
+            note_num = (msg[1] - (msg[1] / 12) * 12) + 16;
+       }
+            if (note_num > 20) { return; }
+
+              if (notes[note_num] == 0) {
+                notes[note_num] = 1;
+              }
+
+              if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() == 0)) {
+                toggle_cue(note_num); send_globals();
+              }
+              if (curpage == SEQ_STEP_PAGE) {
+                note_hold = current_clock;
+                int8_t timing = conditional_timing[cur_col][(note_num + (page_select * 16))] >> 4; //upper
+                uint8_t condition = conditional_timing[cur_col][(note_num + (page_select * 16))] & 0x0F; //lower
+
+
+                //Cond
+                trackinfo_param1.cur = condition;
+                //Micro
+                if (timing == 0) {
+                  timing = 6;
+                }
+                trackinfo_param2.cur = timing;
+              }
+
+              else if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
+                note_hold = current_clock;
+                uint8_t param_offset;
+                if (curpage == SEQ_PARAM_A_PAGE) {
+                  param_offset = 0;
+                }
+                else {
+                  param_offset = 2;
+                }
+                trackinfo_param1.cur = PatternLocksParams[last_md_track][param_offset];
+                trackinfo_param3.cur = PatternLocksParams[last_md_track][param_offset + 1];
+
+                trackinfo_param2.cur = PatternLocks[last_md_track][param_offset][(note_num + (page_select * 16))];
+                trackinfo_param4.cur = PatternLocks[last_md_track][param_offset + 1][(note_num + (page_select * 16))];
+                notes[note_num] = 1;
+
+
+              }
+              else {
+                draw_notes(0);
+              }
+
+
+}
+/*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
+
+void place_track_inpattern(int curtrack, int column, int row) {
+  //       if (Grids[encodervaluer] != NULL) {
+  A4Track analogfour_track;
+  
+  if (column > 16) {
+   load_track(column, row, (A4Track*)&analogfour_track);
+   analogfour_track.placeTrack(curtrack, column);
+  }
+  
+ else {
+  if (load_track(column, row, (A4Track*)&analogfour_track)) {
+    temptrack.placeTrack(curtrack, column);
+  }
+      }
+}
+
 class TrigCaptureClass : public MidiCallback {
 
 
@@ -1475,7 +1618,7 @@ class TrigCaptureClass : public MidiCallback {
           Extconditional_timing[channel][step_count] = timing | condition;
 
 
-          trigger_noteff_interface(msg, DEVICE_A4);
+          trigger_noteoff_interface(msg, DEVICE_A4);
 
  //       }
       
@@ -1847,144 +1990,6 @@ class TrigCaptureClass : public MidiCallback {
 
 
 
-void trigger_noteff_interface(uint8_t *msg, uint8_t device) {
-
-      if (device == DEVICE_MD) {
-
-        for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
-              if (msg[1] == MD.global.drumMapping[i]) {
-                note_num = i;
-            }
-        }
-      }
-      else {
-        
-            note_num = (msg[1] - (msg[1] / 12) * 12) + 16;
-       }
-   if (note_num > 20) { return; }
- 
-   if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE)) {
-          int i;
-          draw_notes(0);
-          uint8_t all_notes_off = 0;
-          uint8_t a = 0;
-          uint8_t b = 0;
-          for (i = 0; i < 16; i++) {
-            if (notes[i] == 1) {
-              a++;
-            }
-            if (notes[i] == 3) {
-              b++;
-            }
-          }
-
-          if ((a == 0) && (b > 0)) {
-            all_notes_off = 1;
-          }
-
-          if (all_notes_off == 1) {
-            if (curpage == S_PAGE)  {
-              exploit_off();
-              store_tracks_in_mem( 0, param2.getValue(), STORE_IN_PLACE);
-              GUI.setPage(&page);
-              curpage = 0;
-            }
-            if (curpage == W_PAGE) {
-              exploit_off();
-              write_tracks_to_md( 0, param2.getValue(), 0);
-              GUI.setPage(&page);
-              curpage = 0;
-            }
-            if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() > 0) && (b > 1)) {
-              toggle_cues_batch();
-              send_globals();
-              exploit_off();
-              GUI.setPage(&page);
-              curpage = 0;
-            }
-          }
-
-        }
-
-}
-void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
-     if (device == DEVICE_MD) {
-
-        for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
-              if (msg[1] == MD.global.drumMapping[i]) {
-                note_num = i;
-            }
-        }
-      }
-      else {
-        
-            note_num = (msg[1] - (msg[1] / 12) * 12) + 16;
-       }
-            if (note_num > 20) { return; }
-
-              if (notes[note_num] == 0) {
-                notes[note_num] = 1;
-              }
-
-              if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() == 0)) {
-                toggle_cue(note_num); send_globals();
-              }
-              if (curpage == SEQ_STEP_PAGE) {
-                note_hold = current_clock;
-                int8_t timing = conditional_timing[cur_col][(note_num + (page_select * 16))] >> 4; //upper
-                uint8_t condition = conditional_timing[cur_col][(note_num + (page_select * 16))] & 0x0F; //lower
-
-
-                //Cond
-                trackinfo_param1.cur = condition;
-                //Micro
-                if (timing == 0) {
-                  timing = 6;
-                }
-                trackinfo_param2.cur = timing;
-              }
-
-              else if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
-                note_hold = current_clock;
-                uint8_t param_offset;
-                if (curpage == SEQ_PARAM_A_PAGE) {
-                  param_offset = 0;
-                }
-                else {
-                  param_offset = 2;
-                }
-                trackinfo_param1.cur = PatternLocksParams[last_md_track][param_offset];
-                trackinfo_param3.cur = PatternLocksParams[last_md_track][param_offset + 1];
-
-                trackinfo_param2.cur = PatternLocks[last_md_track][param_offset][(note_num + (page_select * 16))];
-                trackinfo_param4.cur = PatternLocks[last_md_track][param_offset + 1][(note_num + (page_select * 16))];
-                notes[note_num] = 1;
-
-
-              }
-              else {
-                draw_notes(0);
-              }
-
-
-}
-/*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
-
-void place_track_inpattern(int curtrack, int column, int row) {
-  //       if (Grids[encodervaluer] != NULL) {
-  A4Track analogfour_track;
-  
-  if (column > 16) {
-   load_track(column, row, (A4Track*)&analogfour_track);
-   analogfour_track.placeTrack(curtrack, column);
-  }
-  
- else {
-  if (load_track(column, row, (A4Track*)&analogfour_track)) {
-    temptrack.placeTrack(curtrack, column);
-  }
-      }
-}
 
 /*
   ===================
@@ -2640,7 +2645,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   }
 
 
-  if (save_a4_tracks) {
+  if ((save_a4_tracks) && (Analog4.connected)) {
     if (!Analog4.getBlockingKitX(0)) { return; }
     if (!analog4_kit.fromSysex(MidiSysex2.data + 9, MidiSysex2.recordLen - 9)) { return; }
   }
@@ -2657,7 +2662,9 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
           curtrack = last_md_track;
           //MD.getCurrentTrack(CALLBACK_TIMEOUT);
         }
-        for (i = 0; i < 20; i++) {
+        uint8_t max_notes = 20;
+        if (!Analog4.connected) { max_notes = 16; }
+        for (i = 0; i < max_notes; i++) {
           if (notes[i] == 3) {
             if (first_note == 254) {
               first_note = i;
@@ -2829,8 +2836,11 @@ void send_pattern_kit_to_md() {
       //  if (cur_col > 0) {
       if (store_behaviour == STORE_IN_PLACE) {
         track = i;
-       if  (i > 16) { a4_send[track - 16] = 1; track = track - 16; }
-        place_track_inpattern(track, i + cur_col, cur_row);
+       if  (i > 16) { 
+        a4_send[track - 16] = 1; track = track - 16; 
+        if (Analog4.connected) { place_track_inpattern(track, i + cur_col, cur_row); }
+        }
+       else { place_track_inpattern(track, i + cur_col, cur_row); }
 
       }
 
@@ -2843,6 +2853,7 @@ void send_pattern_kit_to_md() {
        
       if (patternload_param4.getValue() == 8) {
         if (i < 16) { MD.kit.levels[track] = 0; }
+        else if (Analog4.connected) { Analog4.setLevel(i - 16, 0);}
       }
       //   }
 
@@ -2975,6 +2986,7 @@ void send_pattern_kit_to_md() {
   //Midiclock start hack
   
    //Send Analog4
+   if (Analog4.connected) {
    if (write_original == 1) {
     analog4_kit.toSysex();
    }
@@ -2983,7 +2995,7 @@ void send_pattern_kit_to_md() {
      if (a4_send[i] == 1) { analog4_kit.sounds[i].toSysex(); }
     }
    }
-
+   }
    
   if (pattern_start_clock32th > MidiClock.div32th_counter) {
     pattern_start_clock32th = 0;
@@ -3004,13 +3016,14 @@ void send_pattern_kit_to_md() {
 
 
       if (q_pattern_change != 1) {
-        for (i = 0; i < 16; i++) {
+        for (i = 0; i < 22; i++) {
           //If we're in cue mode, send the track to cue before unmuting
           if ((notes[i] > 1)) {
-            if (patternload_param4.getValue() == 7) {
+            if ((patternload_param4.getValue() == 7) && (i < 16)) {
               SET_BIT32(cue1, i);
               MD.setTrackRouting(i, 5);
             }
+            if (Analog4.connected) { Analog4.muteTrack(i - 16, false); }
             MD.muteTrack(i, false);
           }
         }
@@ -3486,6 +3499,7 @@ trackinfo_param2.handler = ptc_root_handler;
 
   md_seq.setup();
   A4SysexListener.setup();
+  Analog4.getBlockingSettings(0);
 
 }
 
