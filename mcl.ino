@@ -57,6 +57,10 @@
 #define A4_TRACK_TYPE 2
 #define MD_TRACK_TYPE 1
 #define EMPTY_TRACK_TYPE 0
+
+#define DEVICE_MD 2
+#define DEVICE_A4 6
+
 //Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
 
 
@@ -1388,6 +1392,7 @@ class TrigCaptureClass : public MidiCallback {
           }
           Extconditional_timing[channel][step_count] = timing | condition;
 
+          trigger_noteon_interface(msg, DEVICE_A4);
 
  //       }
       
@@ -1469,6 +1474,8 @@ class TrigCaptureClass : public MidiCallback {
           }
           Extconditional_timing[channel][step_count] = timing | condition;
 
+
+          trigger_noteff_interface(msg, DEVICE_A4);
 
  //       }
       
@@ -1679,49 +1686,7 @@ class TrigCaptureClass : public MidiCallback {
         }
         //If we're on track read/write page then check to see
 
-        if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE)) {
-          int i;
-          draw_notes(0);
-          uint8_t all_notes_off = 0;
-          uint8_t a = 0;
-          uint8_t b = 0;
-          for (i = 0; i < 16; i++) {
-            if (notes[i] == 1) {
-              a++;
-            }
-            if (notes[i] == 3) {
-              b++;
-            }
-          }
-
-          if ((a == 0) && (b > 0)) {
-            all_notes_off = 1;
-          }
-
-          if (all_notes_off == 1) {
-            if (curpage == S_PAGE)  {
-              exploit_off();
-              store_tracks_in_mem( 0, param2.getValue(), STORE_IN_PLACE);
-              GUI.setPage(&page);
-              curpage = 0;
-            }
-            if (curpage == W_PAGE) {
-              exploit_off();
-              write_tracks_to_md( 0, param2.getValue(), 0);
-              GUI.setPage(&page);
-              curpage = 0;
-            }
-            if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() > 0) && (b > 1)) {
-              toggle_cues_batch();
-              send_globals();
-              exploit_off();
-              GUI.setPage(&page);
-              curpage = 0;
-            }
-          }
-
-        }
-        // notes[note_num] = 0;
+               // notes[note_num] = 0;
       }
       // removeNote(msg[1]);
       //   clearLed();
@@ -1879,6 +1844,69 @@ class TrigCaptureClass : public MidiCallback {
     }
 
 };
+
+
+
+void trigger_noteff_interface(uint8_t *msg, uint8_t device) {
+
+      if (device == DEVICE_MD) {
+
+        for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+              if (msg[1] == MD.global.drumMapping[i]) {
+                note_num = i;
+            }
+        }
+      }
+      else {
+        
+            note_num = (msg[1] - (msg[1] / 12) * 12) + 16;
+       }
+   if (note_num > 20) { return; }
+ 
+   if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE)) {
+          int i;
+          draw_notes(0);
+          uint8_t all_notes_off = 0;
+          uint8_t a = 0;
+          uint8_t b = 0;
+          for (i = 0; i < 16; i++) {
+            if (notes[i] == 1) {
+              a++;
+            }
+            if (notes[i] == 3) {
+              b++;
+            }
+          }
+
+          if ((a == 0) && (b > 0)) {
+            all_notes_off = 1;
+          }
+
+          if (all_notes_off == 1) {
+            if (curpage == S_PAGE)  {
+              exploit_off();
+              store_tracks_in_mem( 0, param2.getValue(), STORE_IN_PLACE);
+              GUI.setPage(&page);
+              curpage = 0;
+            }
+            if (curpage == W_PAGE) {
+              exploit_off();
+              write_tracks_to_md( 0, param2.getValue(), 0);
+              GUI.setPage(&page);
+              curpage = 0;
+            }
+            if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() > 0) && (b > 1)) {
+              toggle_cues_batch();
+              send_globals();
+              exploit_off();
+              GUI.setPage(&page);
+              curpage = 0;
+            }
+          }
+
+        }
+
+}
 void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
      if (device == DEVICE_MD) {
 
@@ -1892,7 +1920,7 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
         
             note_num = (msg[1] - (msg[1] / 12) * 12) + 16;
        }
-            if (note_num < 20) {
+            if (note_num > 20) { return; }
 
               if (notes[note_num] == 0) {
                 notes[note_num] = 1;
@@ -1937,7 +1965,6 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
               else {
                 draw_notes(0);
               }
-            }
 
 
 }
