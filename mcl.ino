@@ -2572,7 +2572,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
             save_md_tracks = true;
           }
    }
-   for (i=i; i<22; i++) {
+   for (i=i; i<20; i++) {
           if (notes[i] == 3) {
             save_a4_tracks = true;
           }
@@ -2613,7 +2613,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
           curtrack = last_md_track;
           //MD.getCurrentTrack(CALLBACK_TIMEOUT);
         }
-        for (i = 0; i < 22; i++) {
+        for (i = 0; i < 20; i++) {
           if (notes[i] == 3) {
             if (first_note == 254) {
               first_note = i;
@@ -2683,7 +2683,7 @@ void write_tracks_to_md( int column, int row, int b) {
   //    MD.getBlockingKit(currentkit_temp);
   // }
   //else {
-  // currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
+  // currentkit_temp = MD.getCufrrentKit(CALLBACK_TIMEOUT);
   //    MD.saveCurrentKit(currentkit_temp);
   //   MD.getBlockingKit(currentkit_temp);
   if (!MD.getBlockingPattern(MD.currentPattern)) { return; }
@@ -2785,7 +2785,7 @@ void send_pattern_kit_to_md() {
       //  if (cur_col > 0) {
       if (store_behaviour == STORE_IN_PLACE) {
         track = i;
-       if  (i < 16) { a4_send[track - 16] = 1; track = track - 16; }
+       if  (i > 16) { a4_send[track - 16] = 1; track = track - 16; }
         place_track_inpattern(track, i + cur_col, cur_row);
 
       }
@@ -2932,11 +2932,11 @@ void send_pattern_kit_to_md() {
   
    //Send Analog4
    if (write_original == 1) {
-//    analog4_kit.toSysex();
+    analog4_kit.toSysex();
    }
    else {
     for (i = 0; i < 4; i++) {
-  //    if (a4_send[i] == 1) { analog4_kit.sounds[i].toSysex(); }
+     if (a4_send[i] == 1) { analog4_kit.sounds[i].toSysex(); }
     }
    }
 
@@ -4808,7 +4808,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
       if (EVENT_RELEASED(evt, Buttons.BUTTON2) ) {
-        for (int i = 0; i < 22; i++) {
+        for (int i = 0; i < 20; i++) {
 
           notes[i] = 3;
         }
