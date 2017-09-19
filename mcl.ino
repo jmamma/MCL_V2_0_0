@@ -1451,22 +1451,24 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
 
 }
 /*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
+      /** Unmute the given track. **/
+void load_analog4track_in_memory( int curtrack, int column, int row) {
 
+  A4Track analogfour_track;
+   load_track(column, row, (A4Track*)&analogfour_track);
+   analogfour_track.placeTrack(curtrack, column);
+}
 void place_track_inpattern(int curtrack, int column, int row) {
   //       if (Grids[encodervaluer] != NULL) {
   A4Track analogfour_track;
   
-  if (column > 16) {
-   load_track(column, row, (A4Track*)&analogfour_track);
-   analogfour_track.placeTrack(curtrack, column);
-  }
-  
- else {
+ if (column < 16) {
   if (load_track(column, row, (A4Track*)&analogfour_track)) {
     temptrack.placeTrack(curtrack, column);
   }
       }
 }
+
 
 class TrigCaptureClass : public MidiCallback {
 
@@ -2088,7 +2090,7 @@ class MDHandler2 : public MDCallback {
         //   if (MD.kit.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
 
         for (int i = 0; i < 16; i++) {
-          if ((i + cur_col + (cur_row * 16)) < (128 * 16)) {
+          if ((i + cur_col + (cur_row * GRID_WIDTH)) < (128 * GRID_WIDTH)) {
 
             /*Store the track at the  into Minicommand memory by moving the data from a Pattern object into a Track object*/
             store_track_inGrid(i, i, cur_row, &analog4_kit);
@@ -2844,7 +2846,7 @@ void send_pattern_kit_to_md() {
       if (i < 16) { place_track_inpattern(track, i + cur_col, cur_row); }
       else {
        a4_send[track - 16] = 1; track = track - 16; 
-        if (Analog4.connected) { place_track_inpattern(track, i + cur_col, cur_row); }
+        if (Analog4.connected) { load_analog4track_in_memory(track, i + cur_col, cur_row); }
       }
       }
 
