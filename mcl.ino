@@ -135,6 +135,7 @@ bool collect_notes = false;
 uint8_t dont_interrupt = 0;
 
 uint8_t in_sysex = 0;
+uint8_t in_sysex2 = 0;
 
 uint8_t page_select = 0;
 
@@ -205,6 +206,7 @@ uint64_t PatternMasks[16];
 uint64_t LockMasks[16];
 uint8_t conditional_timing[16][64];
 
+uint8_t ExtPatternMutes[6];
 uint8_t ExtPatternLengths[6];
 uint8_t ExtPatternLocks[6][4][64];
 uint8_t ExtPatternLocksParams[6][4];
@@ -219,6 +221,9 @@ uint16_t exploit_start_clock = 0;
 
 void clear_step_locks(int curtrack, int i) ;
 /*A toggle for handling incoming pattern and kit data.*/
+
+#define SEQ_MUTE_ON 1
+#define SEQ_MUTE_OFF 0
 
 #define PATTERN_STORE 0
 #define PATTERN_UDEF 254
@@ -306,6 +311,7 @@ class A4Track {
     uint8_t Seqconditional_timing[64];
 
     bool copyTrack (int tracknumber, uint8_t column, A4Kit *analog4_kit) {
+      
     sound.origPosition = analog4_kit->sounds[tracknumber].origPosition;
     m_memcpy(sound.payload, analog4_kit->sounds[tracknumber].payload, sizeof(sound.payload));
     m_memcpy(&kit_payload_start, analog4_kit->payload_start, sizeof(kit_payload_start));
@@ -996,7 +1002,7 @@ bool store_track_inGrid(int track, int32_t column, int32_t row, A4Kit *analog4_k
   }
 /*analog 4 tracks*/
   else {
-
+  
   A4Track analog4_track;
   analog4_track.copyTrack(track, column - 16, analog4_kit);
   file.write(( uint8_t*) & (analog4_track), sizeof(A4Track));
@@ -1210,14 +1216,14 @@ class MDSequencer : public ClockCallback {
        }
         for (uint8_t i = 0; i < 5; i++) {
           ExtPatternLengths[i] = 16;
+          ExtPatternMutes[i] = SEQ_MUTE_OFF;
        }
       MidiClock.addOn96Callback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSequencerCallback);
     };
     void MDSequencerCallback() {
       //   setTrackParam(1,0,random(127));
-      if (in_sysex == 1) {
-        return;
-      }
+      if (in_sysex == 0) {
+      
       for (uint8_t i = 0; i < 16; i++) {
         //if (MidiClock.mod6_counter == 0) { MD.triggerTrack(i, 127); }
         uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[i] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[i]));
@@ -1253,8 +1259,9 @@ class MDSequencer : public ClockCallback {
 
         }
       }
-
-            for (uint8_t i = 0; i < 5; i++) {
+      }
+            for (uint8_t i = 0; i < 4; i++) {
+             
         uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (ExtPatternLengths[i] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / ExtPatternLengths[i]));
 
         int8_t timing = Extconditional_timing[i][step_count] >> 4; //upper
@@ -1262,12 +1269,14 @@ class MDSequencer : public ClockCallback {
 
         int8_t timing_next = Extconditional_timing[i][step_count + 1] >> 4; //upper
         uint8_t condition_next = Extconditional_timing[i][step_count + 1] & 0x0F; //lower
-                 
+               if (!in_sysex2) { 
+        
         if ((timing >= 6) && (timing - 6 == (int8_t)MidiClock.mod6_counter)) {
 
         for (uint8_t c = 0; c < 4; c++) {
            if (IS_BIT_SET64(ExtPatternMasksOff[i][c], step_count )) { MidiUart2.sendNoteOff(i,  ExtPatternLocks[i][c][step_count] - 1, 0); }
-           else if (IS_BIT_SET64(ExtPatternMasksOn[i][c], step_count )) { MidiUart2.sendNoteOn(i, ExtPatternLocks[i][c][step_count] - 1, 100); }
+             
+           else if (IS_BIT_SET64(ExtPatternMasksOn[i][c], step_count ) && (ExtPatternMutes[i] == SEQ_MUTE_OFF)) { MidiUart2.sendNoteOn(i, ExtPatternLocks[i][c][step_count] - 1, 100); }
            }
 
         }
@@ -1277,11 +1286,12 @@ class MDSequencer : public ClockCallback {
              for (uint8_t c = 0; c < 4; c++) {
 
          if (IS_BIT_SET64(ExtPatternMasksOff[i][c], step_count + 1 )) { MidiUart2.sendNoteOff(i, ExtPatternLocks[i][c][step_count + 1] - 1, 0); }
-         else if (IS_BIT_SET64(ExtPatternMasksOn[i][c], step_count + 1 )) { MidiUart2.sendNoteOn(i, ExtPatternLocks[i][c][step_count + 1] - 1, 100); }
+         else if (IS_BIT_SET64(ExtPatternMasksOn[i][c], step_count + 1 ) && (ExtPatternMutes[i] == SEQ_MUTE_OFF)) { MidiUart2.sendNoteOn(i, ExtPatternLocks[i][c][step_count + 1] - 1, 100); }
 
           }
         }
-            
+               }
+              
     }
 
       
@@ -1305,7 +1315,14 @@ void encoder_param2_handle(Encoder *enc) {
   // }
 }
 
-
+uint8_t note_to_track_map(uint8_t note) {
+            uint8_t note_to_track_map[7] = { 0, 2, 4, 5, 7, 9, 11 };
+            for (uint8_t i = 0; i < 7; i++) {
+              if (note_to_track_map[i] == (note - (note / 12) * 12)) {
+                return i + 16;
+              }
+            }
+}
 void trigger_noteoff_interface(uint8_t *msg, uint8_t device) {
      uint8_t note_num;
       if (device == DEVICE_MD) {
@@ -1317,9 +1334,10 @@ void trigger_noteoff_interface(uint8_t *msg, uint8_t device) {
         }
       }
       else {
-        
-            note_num = (msg[1] - (msg[1] / 12) * 12) + 16;
+                    note_num = note_to_track_map(msg[1]);
        }
+   notes[note_num] = 3;
+   
    if (note_num > 20) { return; }
  
    if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE)) {
@@ -1328,7 +1346,7 @@ void trigger_noteoff_interface(uint8_t *msg, uint8_t device) {
           uint8_t all_notes_off = 0;
           uint8_t a = 0;
           uint8_t b = 0;
-          for (i = 0; i < 16; i++) {
+          for (i = 0; i < 20; i++) {
             if (notes[i] == 1) {
               a++;
             }
@@ -1366,6 +1384,8 @@ void trigger_noteoff_interface(uint8_t *msg, uint8_t device) {
         }
 
 }
+
+
 void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
   uint8_t note_num;
   uint16_t current_clock = read_slowclock();
@@ -1378,9 +1398,10 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
         }
       }
       else {
-        
-            note_num = (msg[1] - (msg[1] / 12) * 12) + 16;
+            note_num = note_to_track_map(msg[1]);
+
        }
+
             if (note_num > 20) { return; }
 
               if (notes[note_num] == 0) {
@@ -1467,40 +1488,23 @@ class TrigCaptureClass : public MidiCallback {
 
     void onNoteOnCallback_Midi2(uint8_t *msg) {
       uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
-      
-    //  if ((curpage == SEQ_RTRK_EXTERN_PAGE) && 
-   //   if ((channel <= 4)) {
-    //  MidiUart2.m_putc(0xF8);
 
+         trigger_noteon_interface(msg, DEVICE_A4);
 
-//  if ((curpage == SEQ_EXT_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) ) {
-
-       
-     
           uint8_t realPitch;
           uint8_t note_num = msg[1];
           uint8_t pitch = msg[1];
                             
-        /*  uint8_t pitch = trackinfo_param1.getValue() * 12 + note_num + trackinfo_param2.getValue();
-          
-          if (trackinfo_param4.cur > 0) {
-          uint8_t size = scales[trackinfo_param4.cur]->size;
-            uint8_t m = note_num / size;
-            note_num = note_num - (scales[trackinfo_param4.cur]->size * m); 
-         //   }
-          note_num = scales[trackinfo_param4.cur]->pitches[note_num];
-          pitch = (trackinfo_param1.getValue() * 12) + trackinfo_param2.getValue() + (m * 12) + note_num;
-
-          }*/
+      
         
           trackinfo_param3.cur = ExtPatternLengths[cur_col];
+          
 
-          MidiUart2.sendNoteOn(channel, pitch, msg[2]);
-
-         if (MidiClock.state != 2) {
+         if ((MidiClock.state != 2) || (curpage != SEQ_RTRK_PAGE)) {
   //   (curpage == SEQ_EXT_PTC_PAGE)) {
            return;
           }
+          MidiUart2.sendNoteOn(channel, pitch, msg[2]);
 
           uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (ExtPatternLengths[channel] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / ExtPatternLengths[channel]));
 
@@ -1535,7 +1539,6 @@ class TrigCaptureClass : public MidiCallback {
           }
           Extconditional_timing[channel][step_count] = timing | condition;
 
-          trigger_noteon_interface(msg, DEVICE_A4);
 
  //       }
       
@@ -1570,15 +1573,17 @@ class TrigCaptureClass : public MidiCallback {
           pitch = (trackinfo_param1.getValue() * 12) + trackinfo_param2.getValue() + (m * 12) + note_num;
 
           }*/
-        
+                  trigger_noteoff_interface(msg, DEVICE_A4);
+
           trackinfo_param3.cur = ExtPatternLengths[cur_col];
 
-          MidiUart2.sendNoteOff(channel, pitch, msg[2]);
 
-         if (MidiClock.state != 2)  {
+         if ((MidiClock.state != 2) || (curpage != SEQ_RTRK_PAGE)) {
           //| (curpage == SEQ_EXT_PTC_PAGE))
+          
            return;
          }
+          MidiUart2.sendNoteOff(channel, pitch, msg[2]);
 
           uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (ExtPatternLengths[channel] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / ExtPatternLengths[channel]));
 
@@ -1618,7 +1623,6 @@ class TrigCaptureClass : public MidiCallback {
           Extconditional_timing[channel][step_count] = timing | condition;
 
 
-          trigger_noteoff_interface(msg, DEVICE_A4);
 
  //       }
       
@@ -1745,7 +1749,6 @@ class TrigCaptureClass : public MidiCallback {
       // if (msg[2] == 0) {
 
       if ((collect_notes) && (msg[0] == 153) && (noteproceed == 1))  {
-                    trigger_noteoff_interface(msg, DEVICE_MD);
 
     for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
         if (msg[1] == MD.global.drumMapping[i]) {
@@ -1823,7 +1826,7 @@ class TrigCaptureClass : public MidiCallback {
               return;
             }
             else {
-              notes[note_num] = 3;
+              trigger_noteoff_interface(msg, DEVICE_MD);
             }
           }
         }
@@ -2088,7 +2091,7 @@ class MDHandler2 : public MDCallback {
           if ((i + cur_col + (cur_row * 16)) < (128 * 16)) {
 
             /*Store the track at the  into Minicommand memory by moving the data from a Pattern object into a Track object*/
-            store_track_inGrid(i, i, cur_row, (A4Kit*) &analog4_kit);
+            store_track_inGrid(i, i, cur_row, &analog4_kit);
 
           }
           /*Update the encoder page to show current Grids*/
@@ -2616,7 +2619,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   bool save_md_tracks = false;
   bool save_a4_tracks = false;
   uint8_t i = 0;
-  for (i = 0; i < 16; i++) {
+  for (i = 0; i < 20; i++) {
           if (notes[i] == 3) {
             save_md_tracks = true;
           }
@@ -2827,7 +2830,7 @@ void send_pattern_kit_to_md() {
 
   //Used as a way of flaggin which A4 tracks are to be sent
   uint8_t a4_send[4] = { 0, 0, 0, 0 };
-  while ((i < 16)) {
+  while ((i < 20)) {
 
     if ((notes[i] > 1)) {
       if (first_note == 254) {
@@ -2836,12 +2839,13 @@ void send_pattern_kit_to_md() {
       //  if (cur_col > 0) {
       if (store_behaviour == STORE_IN_PLACE) {
         track = i;
-       if  (i > 16) { 
-        a4_send[track - 16] = 1; track = track - 16; 
+   
+        
+      if (i < 16) { place_track_inpattern(track, i + cur_col, cur_row); }
+      else {
+       a4_send[track - 16] = 1; track = track - 16; 
         if (Analog4.connected) { place_track_inpattern(track, i + cur_col, cur_row); }
-        }
-       else { place_track_inpattern(track, i + cur_col, cur_row); }
-
+      }
       }
 
      
@@ -2860,6 +2864,7 @@ void send_pattern_kit_to_md() {
       note_count++;
       if ((quantize_mute > 0) && (patternload_param4.getValue() < 8)) {
        if (i < 16) { MD.muteTrack(track, true); }
+       else { ExtPatternMutes[i - 16] = SEQ_MUTE_ON; }
       }
     }
     i++;
@@ -2988,15 +2993,20 @@ void send_pattern_kit_to_md() {
    //Send Analog4
    if (Analog4.connected) {
    if (write_original == 1) {
+
     analog4_kit.toSysex();
+
    }
    else {
     for (i = 0; i < 4; i++) {
-     if (a4_send[i] == 1) { analog4_kit.sounds[i].toSysex(); }
+             in_sysex2 = 1;
+
+    if (a4_send[i] == 1) { analog4_kit.sounds[i].origPosition = i; analog4_kit.sounds[i].toSysex(); }
+           in_sysex2 = 0;
+
     }
    }
    }
-   
   if (pattern_start_clock32th > MidiClock.div32th_counter) {
     pattern_start_clock32th = 0;
   }
@@ -3016,15 +3026,17 @@ void send_pattern_kit_to_md() {
 
 
       if (q_pattern_change != 1) {
-        for (i = 0; i < 22; i++) {
+        for (i = 0; i < 20; i++) {
           //If we're in cue mode, send the track to cue before unmuting
           if ((notes[i] > 1)) {
             if ((patternload_param4.getValue() == 7) && (i < 16)) {
               SET_BIT32(cue1, i);
               MD.setTrackRouting(i, 5);
             }
-            if (Analog4.connected) { Analog4.muteTrack(i - 16, false); }
-            MD.muteTrack(i, false);
+            if (i < 16) {
+                          MD.muteTrack(i, false);
+            }
+            else { ExtPatternMutes[i - 16] = SEQ_MUTE_OFF; }
           }
         }
       }
@@ -3499,8 +3511,8 @@ trackinfo_param2.handler = ptc_root_handler;
 
   md_seq.setup();
   A4SysexListener.setup();
-  Analog4.getBlockingSettings(0);
-
+ // Analog4.getBlockingSettings(0);
+  Analog4.connected = true;
 }
 
 
@@ -4442,7 +4454,7 @@ void set_midinote_totrack_mapping() {
 }
 
 void init_notes() {
-  for (uint8_t i = 0; i < 16; i++) {
+  for (uint8_t i = 0; i < 20; i++) {
     notes[i] = 0;
     // notes_off[i] = 0;
   }
@@ -4911,7 +4923,7 @@ bool handleEvent(gui_event_t *evt) {
     if (curpage == W_PAGE) {
 
       if (EVENT_PRESSED(evt, Buttons.BUTTON3)) {
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < 20; i++) {
 
           notes[i] = 3;
         }
