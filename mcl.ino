@@ -57,7 +57,6 @@
 // Used for I2C or SPI
 #define OLED_RESET 38 
 
-#define EXTSEQ_TRACK_TYPE 128
 #define A4_TRACK_TYPE 2
 #define MD_TRACK_TYPE 1
 #define EMPTY_TRACK_TYPE 0
@@ -204,8 +203,8 @@ TrackInfoEncoder loadproj_param1(1, 64);
 TrackInfoPage loadproj_page(&loadproj_param1);
 
 uint8_t PatternLengths[16];
-uint8_t PatternLocks[15][4][64];
-uint8_t PatternLocksParams[15][4];
+uint8_t PatternLocks[16][4][64];
+uint8_t PatternLocksParams[16][4];
 uint64_t PatternMasks[16];
 uint64_t LockMasks[16];
 uint8_t conditional_timing[16][64];
@@ -216,15 +215,14 @@ uint8_t ExtPatternLengths[6];
 //Resolution = 2 / ExtPatternResolution
 uint8_t ExtPatternResolution[6];
 
-int8_t ExtPatternNotes[6][4][128];
+int8_t ExtPatternNotes[6][4][64];
 uint8_t ExtPatternNoteBuffer[6][SEQ_NOTEBUF_SIZE];
 
 uint8_t ExtPatternLocks[6][4][64];
 uint8_t ExtPatterLockParams[6][4];
 uint64_t ExtLockMasks[6];
 
-uint8_t Extconditional_timing[6][128];
-
+uint8_t Extconditional_timing[6][64];
 
 uint8_t euclid_root[16];
 uint16_t exploit_start_clock = 0;
@@ -313,46 +311,19 @@ struct musical_notes  {
 */
 A4Kit analog4_kit;
 
-class ExtSeqTrack {
+
+class A4Track {
   public:
     uint8_t active = EMPTY_TRACK_TYPE;
-    char kitName[17];
-    char trackName[17];
+    A4Sound sound;
+    uint8_t kit_payload_start[38];
+    uint8_t kit_payload_end[1034];
+
     uint8_t SeqPatternLength;
     uint8_t SeqPatternNotes[4][64];
     uint64_t SeqLockMask;
     uint8_t Seqconditional_timing[64];
     uint8_t SeqPatternResolution;
-
-    bool placeExtSeqTrack(int tracknumber, uint8_t column) {
-          m_memcpy(&ExtPatternNotes[tracknumber], &SeqPatternNotes, sizeof(SeqPatternNotes));
-    
-
-    ExtLockMasks[tracknumber] = SeqLockMask;
-    ExtPatternLengths[tracknumber] = SeqPatternLength;
-
-    ExtPatternResolution[tracknumber] = SeqPatternResolution;
-
-    m_memcpy(&Extconditional_timing[tracknumber], &Seqconditional_timing, sizeof(Seqconditional_timing));
-}
-
-    bool copyExtSeqTrack (int tracknumber, uint8_t column, A4Kit *analog4_kit) {
-    active = EXTSEQ_TRACK_TYPE;
-    m_memcpy(&SeqPatternNotes, &ExtPatternNotes[tracknumber], sizeof(SeqPatternNotes));
-    SeqPatternResolution = ExtPatternResolution[tracknumber];
-
-    SeqLockMask = ExtLockMasks[tracknumber];
-    SeqPatternLength = ExtPatternLengths[tracknumber];
-    m_memcpy(&Seqconditional_timing, &Extconditional_timing[tracknumber], sizeof(Seqconditional_timing));
-}
-};
-
-class A4Track : public ExtSeqTrack {
-  public:
-
-    A4Sound sound;
-    uint8_t kit_payload_start[38];
-    uint8_t kit_payload_end[1034];
 
     bool copyTrack (int tracknumber, uint8_t column, A4Kit *analog4_kit) {
       
@@ -362,12 +333,18 @@ class A4Track : public ExtSeqTrack {
    
     m_memcpy(&kit_payload_end, &analog4_kit->payload_end, sizeof(kit_payload_end));
     
+    m_memcpy(&SeqPatternNotes, &ExtPatternNotes[tracknumber], sizeof(SeqPatternNotes));
+    SeqPatternResolution = ExtPatternResolution[tracknumber];
+
+    SeqLockMask = ExtLockMasks[tracknumber];
+    SeqPatternLength = ExtPatternLengths[tracknumber];
+    m_memcpy(&Seqconditional_timing, &Extconditional_timing[tracknumber], sizeof(Seqconditional_timing));
 
     active = A4_TRACK_TYPE;
       
     }
   bool placeTrack(int tracknumber, uint8_t column) {
-    if (active == A4_TRACK_TYPE) {
+      if (active == A4_TRACK_TYPE) {
         analog4_kit.sounds[tracknumber].workSpace = true;
     analog4_kit.sounds[tracknumber].origPosition = sound.origPosition;
     m_memcpy(&analog4_kit.sounds[tracknumber].payload, &sound.payload, sizeof(sound.payload));
@@ -376,11 +353,21 @@ class A4Track : public ExtSeqTrack {
    
     m_memcpy(&analog4_kit.payload_end, &kit_payload_end, sizeof(kit_payload_end));
     }
-    }
+    
+    m_memcpy(&ExtPatternNotes[tracknumber], &SeqPatternNotes, sizeof(SeqPatternNotes));
+    
 
+    ExtLockMasks[tracknumber] = SeqLockMask;
+    ExtPatternLengths[tracknumber] = SeqPatternLength;
+
+    ExtPatternResolution[tracknumber] = SeqPatternResolution;
+
+    m_memcpy(&Extconditional_timing[tracknumber], &Seqconditional_timing, sizeof(Seqconditional_timing));
       return true;
-      
-     
+      }
+      else {
+      return false;
+      }
   }
 };
 
@@ -407,13 +394,6 @@ class KitExtra {
 class MDTrack {
   public:
     uint8_t active = MD_TRACK_TYPE;
-    uint8_t SeqPatternLocks[4][64];
-    uint8_t SeqPatternLocksParams[4];
-    uint64_t SeqPatternMask;
-    uint64_t SeqLockMask;
-    uint8_t SeqConditional_timing[64];
-    int8_t SeqParamLocks[24];
-    uint8_t SeqPatternLegnth;
     char kitName[17];
     char trackName[17];
     uint8_t origPosition;
@@ -425,6 +405,13 @@ class MDTrack {
     uint64_t swingPattern;
     //Machine object for Track Machine Type
     MDMachine machine;
+    uint8_t SeqPatternLocks[4][64];
+    uint8_t SeqPatternLocksParams[4];
+    uint64_t SeqPatternMask;
+    uint64_t SeqLockMask;
+    uint8_t SeqConditional_timing[64];
+    int8_t SeqParamLocks[24];
+    uint8_t SeqPatternLegnth;
     //Array to hold parameter locks.
     int arraysize;
     KitExtra kitextra;
@@ -956,13 +943,7 @@ bool load_track(int32_t column, int32_t row, int m = 0, A4Track *analogfour_trac
   }
   }
   else {
-    if (Analog4.connected) {
       file.read(( uint8_t*) & (analogfour_track), sizeof(A4Track));
-    }
-    else {
-      file.read(( uint8_t*) & (analogfour_track), sizeof(ExtSeqTrack));
-
-    }
   }
 
 }
@@ -1038,13 +1019,11 @@ bool store_track_inGrid(int track, int32_t column, int32_t row, A4Kit *analog4_k
   file.write(( uint8_t*) & (temptrack2.value[0]), temptrack2.arraysize);
   file.write(( uint8_t*) & (temptrack2.step[0]), temptrack2.arraysize);
   }
-/*ext seq tracks*/
+/*analog 4 tracks*/
   else {
   
-  analogfour_track.copyExtSeqTrack(track - 16, column - 16, &analog4_kit);
-  if (Analog4.connected) { analogfour_track.copyTrack(track - 16, column - 16, &analog4_kit); file.write(( uint8_t*) & (analogfour_track), sizeof(A4Track)); } 
-  else { file.write(( uint8_t*) & (analogfour_track), sizeof(ExtSeqTrack)); }
- 
+  analogfour_track.copyTrack(track - 16, column - 16, &analog4_kit);
+  file.write(( uint8_t*) & (analogfour_track), sizeof(A4Track));
   }
   return true;
 }
@@ -1417,7 +1396,7 @@ class MDSequencer : public ClockCallback {
         }
       }
       }
-            for (uint8_t i = 0; i < 6; i++) {
+            for (uint8_t i = 0; i < 4; i++) {
           //  isr_usart1(1); 
           
         uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter * ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
@@ -1664,7 +1643,10 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
 }
 /*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
       /** Unmute the given track. **/
- 
+bool load_analog4track_in_memory( int curtrack, int column, int row) {
+   load_track(column, row, (A4Track*)&analogfour_track);
+   return analogfour_track.placeTrack(curtrack, column);
+}
 void place_track_inpattern(int curtrack, int column, int row) {
   //       if (Grids[encodervaluer] != NULL) {
   
@@ -1703,7 +1685,6 @@ class TrigCaptureClass : public MidiCallback {
     void setup() {
 
       Midi.addOnProgramChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onProgramChangeCallback);
-
       Midi.addOnNoteOnCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOnCallback);
       Midi.addOnNoteOffCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOffCallback);
       
@@ -1711,21 +1692,12 @@ class TrigCaptureClass : public MidiCallback {
       Midi2.addOnNoteOffCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOffCallback_Midi2);
 
       Midi.addOnControlChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onControlChangeCallback);
-      Midi2.addOnControlChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onControlChangeCallback_Midi2);
 
      
 
     };
 
-    void onControlChangeCallback_Midi2(uint8_t *msg) {
-      uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
-      uint8_t param = msg[1];
-      uint8_t value = msg[2];
-      if (param == 0x5E) {
-        ExtPatternMutes[channel] = value;
-      }
-      
-      }
+  
     void onNoteOnCallback_Midi2(uint8_t *msg) {
       uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
 
@@ -2418,15 +2390,9 @@ class MDHandler2 : public MDCallback {
         }          
 
         MD.setStatus(0x22, curtrack);
-        if (Analog4.getBlockingSettings(0)) {
-        Analog4.connected = true;
-        turboSetSpeed(4,2);
-        }
-        else {
-          Analog4.connected = false;
-        }
         delay(500);
         turboSetSpeed(4,1);
+        turboSetSpeed(4,2);
       }
 
     }
@@ -2999,7 +2965,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   patternswitch = PATTERN_STORE;
 
   bool save_md_tracks = false;
-  bool save_extseq_tracks = false;
+  bool save_a4_tracks = false;
   uint8_t i = 0;
   for (i = 0; i < 16; i++) {
           if (notes[i] == 3) {
@@ -3008,7 +2974,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
    }
    for (i=16; i<20; i++) {
           if (notes[i] == 3) {
-            save_extseq_tracks = true;
+            save_a4_tracks = true;
           }
    }
 
@@ -3030,7 +2996,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   }
 
 
-  if ((save_extseq_tracks) && (Analog4.connected)) {
+  if ((save_a4_tracks) && (Analog4.connected)) {
     if (!Analog4.getBlockingKitX(0)) { return; }
     if (!analog4_kit.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8)) { return; }
   }
@@ -3048,6 +3014,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
           //MD.getCurrentTrack(CALLBACK_TIMEOUT);
         }
         uint8_t max_notes = 20;
+        if (!Analog4.connected) { max_notes = 16; }
         for (i = 0; i < max_notes; i++) {
           if (notes[i] == 3) {
             if (first_note == 254) {
@@ -3211,8 +3178,8 @@ void send_pattern_kit_to_md() {
   uint8_t first_note = 254;
 
   //Used as a way of flaggin which A4 tracks are to be sent
-  uint8_t a4_send[6] = { 0, 0, 0, 0, 0, 0 };
-  while ((i < 22)) {
+  uint8_t a4_send[4] = { 0, 0, 0, 0 };
+  while ((i < 20)) {
 
     if ((notes[i] > 1)) {
       if (first_note == 254) {
@@ -3225,20 +3192,15 @@ void send_pattern_kit_to_md() {
         
       if (i < 16) { place_track_inpattern(track, i + cur_col, cur_row); }
       else {
-        track = track - 16;
-          load_track(i + cur_col, cur_row, (A4Track*)&analogfour_track);
-              analogfour_track->placeExtSeqTrack(track, i + cur_col);
-
-             if (Analog4.connected) {
-              analogfour_track->placeTrack(track, i + cur_col);
-                           a4_send[track] = 1;
-
-             }
-
-       
+        track = track - 16; 
+        if (Analog4.connected) { 
+          if (load_analog4track_in_memory(track, i + cur_col, cur_row)) {
+             a4_send[track] = 1;
           }
-          
+          }
       }
+      }
+
      
       else if ((cur_col + (i - first_note) < 16) && (i < 16)) {
         track = cur_col + (i - first_note);
@@ -3386,7 +3348,7 @@ void send_pattern_kit_to_md() {
     uint8_t a4_kit_send = 0;
    //if (write_original == 1) {
              in_sysex2 = 1;
-             for (i = 0; i < 6; i++) {
+             for (i = 0; i < 4; i++) {
   if (a4_send[i] == 1) { a4_kit_send = 1; seq_buffer_notesoff(i);
 
   }
@@ -3427,7 +3389,7 @@ void send_pattern_kit_to_md() {
 
 
       if (q_pattern_change != 1) {
-        for (i = 0; i < 22; i++) {
+        for (i = 0; i < 20; i++) {
           //If we're in cue mode, send the track to cue before unmuting
           if ((notes[i] > 1)) {
             if ((patternload_param4.getValue() == 7) && (i < 16)) {
@@ -3540,7 +3502,7 @@ void pattern_len_handler(Encoder *enc) {
       ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
       }
     }
-    else if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE)) {
+    else if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) {
       if (cur_col < 16) {
       PatternLengths[last_md_track] = trackinfo_param3.getValue();
       }
@@ -3926,7 +3888,8 @@ trackinfo_param2.handler = ptc_root_handler;
   md_seq.setup();
   A4SysexListener.setup();
   analog4_kit.workSpace = true;
-
+ // Analog4.getBlockingSettings(0);
+  Analog4.connected = true;
 }
 
 
@@ -4020,7 +3983,12 @@ uint32_t getGridModel(int column, int row, bool load) {
     }
   }
   else {
-  return analogfour_track.active;
+  if (analogfour_track.active == EMPTY_TRACK_TYPE) {
+    return 0;
+  }
+    else {
+    return 1;
+  }
   
   }
   
@@ -4592,7 +4560,7 @@ else {
        uint8_t notenum;
 
 
-      for (uint8_t i = 0; i < 6; i++) {
+      for (uint8_t i = 0; i < 4; i++) {
          
          notenum = abs(ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + page_select * 16]);
          if (notenum != 0) {
@@ -4900,13 +4868,14 @@ void GridEncoder::displayAt(int i) {
 const char *str;
   /*Calculate the position of the Grid to be displayed based on the Current Row, Column and Encoder*/
   //int value = displayx + (displayy * 16) + i;
-  GUI.setLine(GUI.LINE1);
-  char a4_name1[3] = "A4";
-  char a4_name2[3] = "TK";
 
+  GUI.setLine(GUI.LINE1);
+  
+  char a4_name1[2] = "A4";
+  char a4_name2[2] = "TK";
   
   char strn[3] = "--";
-uint8_t grid_type;
+
   /*Retrieve the first 2 characters of Maching Name associated with the Track at the current Grid. First obtain the Model object from the Track object, then convert the MachineType into a string*/
  if (param1.getValue() + i < 16) {
   str = getMachineNameShort(getGridModel(param1.getValue() + i, param2.getValue(), true), 1);
@@ -4914,9 +4883,7 @@ uint8_t grid_type;
   else { GUI.put_p_string_at((0 + (i * 3)), str); }
  }
  else {
-       grid_type = getGridModel(param1.getValue() + i, param2.getValue(), true);
-       if (grid_type == EMPTY_TRACK_TYPE) { GUI.put_string_at((0 + (i * 3)), strn); }
-       if (grid_type == EXTSEQ_TRACK_TYPE) { GUI.put_string_at((0 + (i * 3)), "EX"); }
+       if (getGridModel(param1.getValue() + i, param2.getValue(), true) == 0) { GUI.put_string_at((0 + (i * 3)), strn); }
        else {  GUI.put_string_at((0 + (i * 3)), a4_name1); }
  }
  
@@ -4934,9 +4901,12 @@ uint8_t grid_type;
    }
    
    else {
-       if (grid_type == EMPTY_TRACK_TYPE) { GUI.put_string_at((0 + (i * 3)), strn); }
-       if (grid_type == EXTSEQ_TRACK_TYPE) { GUI.put_string_at((0 + (i * 3)), "TK"); }
-       else {  GUI.put_string_at((0 + (i * 3)), a4_name2); }
+       if (getGridModel(param1.getValue() + i, param2.getValue(), false) == 0) {
+         GUI.put_string_at((0 + (i * 3)), strn);
+       }
+       else {
+         GUI.put_string_at((0 + (i * 3)), a4_name2);
+       }
    }
   redisplay = false;
 
@@ -5358,7 +5328,7 @@ bool handleEvent(gui_event_t *evt) {
     
     if (cur_col > 15) {
       if (ExtPatternResolution[cur_col - 16] == 1) {
-        pagemax = 8;
+        pagemax = 4;
       }
     }
     if (page_select >= pagemax) {
