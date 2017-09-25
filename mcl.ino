@@ -636,7 +636,7 @@ class MDTrack {
 /*Temporary track objects for manipulation*/
 MDTrack temptrack;
 MDTrack temptrack2;
-A4Track analogfour_track;
+//A4Track analogfour_track;
 
 /*
   ================
@@ -952,7 +952,7 @@ void write_config() {
   Read a track/Grid from the SD Card and store it in a temporary track object "temptrack"
 
 */
-bool load_track(int32_t column, int32_t row, int m = 0, A4Track *analogfour_track_blah = NULL) {
+bool load_track(int32_t column, int32_t row, int m, A4Track* temp_track) {
 
   // char projectfile[5 + m_strlen(projectdir) + 10];
   //         get_trackfilename(projectfile, 0, 0);
@@ -980,7 +980,12 @@ bool load_track(int32_t column, int32_t row, int m = 0, A4Track *analogfour_trac
   }
   }
   else {
-      file.read(( uint8_t*) & (analogfour_track), sizeof(A4Track));
+    if (Analog4.connected) {
+      file.read(( uint8_t*) (temp_track), sizeof(A4Track));
+    }
+    else {
+      file.read(( uint8_t*) (temp_track), sizeof(ExtSeqTrack));
+    }
   }
 
 }
@@ -1058,13 +1063,47 @@ bool store_track_inGrid(int track, int32_t column, int32_t row, A4Kit *analog4_k
   }
 /*analog 4 tracks*/
   else {
-  
-  analogfour_track.copyTrack(track - 16, column - 16, &analog4_kit);
-  file.write(( uint8_t*) & (analogfour_track), sizeof(A4Track));
+  A4Track track_buf;
+  track_buf.copyTrack(track - 16, column - 16, &analog4_kit);
+  file.write(( uint8_t*) & (track_buf), sizeof(A4Track));
   }
   return true;
 }
+bool store_extseq_track_inGrid(int track, int32_t column, int32_t row, A4Kit *analog4_kitx, A4Track *track_buf) {
+  /*Assign a track to Grid i*/
+  /*Extraact track data from received pattern and kit and store in track object*/
 
+  int32_t len;
+  int32_t offset = (int32_t) sizeof(Project) + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
+  file.seek(&offset, FAT_SEEK_SET);
+  if (column < 16) {
+
+  temptrack2.copyTrack(track, column);
+
+
+  len = sizeof(MDTrack) - (LOCK_AMOUNT * 3);
+
+  file.write(( uint8_t*) & (temptrack2), len);
+
+  file.write(( uint8_t*) & (temptrack2.param_number[0]), temptrack2.arraysize);
+  file.write(( uint8_t*) & (temptrack2.value[0]), temptrack2.arraysize);
+  file.write(( uint8_t*) & (temptrack2.step[0]), temptrack2.arraysize);
+  }
+/*analog 4 tracks*/
+  else {
+  if (Analog4.connected) {
+   A4Track track_buf;
+  track_buf.copyTrack(track - 16, column - 16, &analog4_kit);
+  file.write(( uint8_t*) & (track_buf), sizeof(A4Track));
+  }
+  else {
+      ExtSeqTrack track_buf;
+      track_buf.copyTrack(track - 16, column - 16, &analog4_kit);
+      file.write(( uint8_t*) & (track_buf), sizeof(ExtSeqTrack));
+  }
+  }
+  return true;
+}
 
 void draw_levels() {
   GUI.setLine(GUI.LINE2);
@@ -1680,18 +1719,32 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
 }
 /*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
       /** Unmute the given track. **/
-bool load_analog4track_in_memory( int curtrack, int column, int row) {
-   load_track(column, row, (A4Track*)&analogfour_track);
-   return analogfour_track.placeTrack(curtrack, column);
-}
-void place_track_inpattern(int curtrack, int column, int row) {
+
+
+bool place_track_inpattern(int curtrack, int column, int row) {
   //       if (Grids[encodervaluer] != NULL) {
   
  if (column < 16) {
-  if (load_track(column, row, (A4Track*)&analogfour_track)) {
+     A4Track track_buf;
+
+  if (load_track(column, row, 0, (A4Track*)&track_buf)) {
     temptrack.placeTrack(curtrack, column);
   }
-      }
+ }
+ else {
+   if (Analog4.connected) {
+   A4Track track_buf;
+   load_track(column, row, 0, (A4Track*)&track_buf);
+   return track_buf.placeTrack(curtrack, column);
+  }
+  else {
+       ExtSeqTrack track_buf;
+   load_track(column, row, 0, (A4Track*)&track_buf);
+   return track_buf.placeTrack(curtrack, column);
+  }
+ }
+
+      
 }
 uint8_t seq_ext_pitch(uint8_t note_num) {
       uint8_t note_orig = note_num;
@@ -3149,10 +3202,10 @@ void write_tracks_to_md( int column, int row, int b) {
 
 void send_pattern_kit_to_md() {
   
-  A4Track *analogfour_track;
+  A4Track *track_buf;
 
   MD.getBlockingKit(currentkit_temp);
-  load_track(0, cur_row, 0, analogfour_track);
+  load_track(0, cur_row, 0, track_buf);
   if (!Analog4.getBlockingKitX(0)) { return; }
   if (!analog4_kit.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8)) { return; }
 
@@ -3222,7 +3275,7 @@ void send_pattern_kit_to_md() {
   uint8_t first_note = 254;
 
   //Used as a way of flaggin which A4 tracks are to be sent
-  uint8_t a4_send[4] = { 0, 0, 0, 0 };
+  uint8_t a4_send[6] = { 0, 0, 0, 0, 0, 0 };
   while ((i < 20)) {
 
     if ((notes[i] > 1)) {
@@ -3237,11 +3290,12 @@ void send_pattern_kit_to_md() {
       if (i < 16) { place_track_inpattern(track, i + cur_col, cur_row); }
       else {
         track = track - 16; 
-        if (Analog4.connected) { 
-          if (load_analog4track_in_memory(track, i + cur_col, cur_row)) {
-             a4_send[track] = 1;
+        
+          if (place_track_inpattern(track, i + cur_col, cur_row)) {
+             if (Analog4.connected) { a4_send[track] = 1; }
           }
-          }
+          
+          
       }
       }
 
@@ -3959,8 +4013,9 @@ trackinfo_param2.handler = ptc_root_handler;
 */
 
 uint64_t getPatternMask(int column, int row, uint8_t j, bool load) {
+  A4Track track_buf;
   if (load) {
-    if (!load_track(column, row, 50, (A4Track*)&analogfour_track)) {
+    if (!load_track(column, row, 50, (A4Track*)&track_buf)) {
       return 0;
     }
   }
@@ -3970,7 +4025,7 @@ uint64_t getPatternMask(int column, int row, uint8_t j, bool load) {
   }
   }
   else {
-  if (analogfour_track.active == EMPTY_TRACK_TYPE) {
+  if (track_buf.active == EMPTY_TRACK_TYPE) {
     return (uint64_t) 0;
   }
   }
@@ -4016,8 +4071,9 @@ uint64_t getPatternMask(int column, int row, uint8_t j, bool load) {
 */
 
 uint32_t getGridModel(int column, int row, bool load) {
+  A4Track track_buf;
   if ( load == true) {
-    if (!load_track(column, row, 50, (A4Track*) &analogfour_track)) {
+    if (!load_track(column, row, 50, (A4Track*) &track_buf)) {
       return NULL;
     }
   }
@@ -4031,7 +4087,7 @@ uint32_t getGridModel(int column, int row, bool load) {
     }
   }
   else {
-  if (analogfour_track.active == EMPTY_TRACK_TYPE) {
+  if (track_buf.active == EMPTY_TRACK_TYPE) {
     return 0;
   }
     else {
@@ -4053,8 +4109,9 @@ uint32_t getGridModel(int column, int row, bool load) {
 
 
 char *getTrackKit(int column, int row, bool load, bool scroll) {
+  A4Track trackbuf;
   if (load) {
-    if (!load_track(column, row, 50, (A4Track*) &analogfour_track)) {
+    if (!load_track(column, row, 50, (A4Track*) &trackbuf)) {
       return "    ";
     }
 
