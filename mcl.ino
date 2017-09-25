@@ -23,11 +23,11 @@
 //#include <SimpleFS.hh>
 //#include <TrigCapture.h>
 //RELEASE 1 BYTE/STABLE-BETA 1 BYTE /REVISION 2 BYTES
-#define VERSION 2009
+#define VERSION 2011
 #define LOCK_AMOUNT 256
 #define GRID_LENGTH 130
 #define GRID_WIDTH 22
-#define GRID_SLOT_BYTES 2048
+#define GRID_SLOT_BYTES 4096
 #define CALLBACK_TIMEOUT 500
 
 #define CUE_PAGE 5
@@ -59,6 +59,8 @@
 
 #define A4_TRACK_TYPE 2
 #define MD_TRACK_TYPE 1
+#define EXT_TRACK_TYPE 3
+
 #define EMPTY_TRACK_TYPE 0
 
 #define DEVICE_MD 2
@@ -215,10 +217,10 @@ uint8_t ExtPatternLengths[6];
 //Resolution = 2 / ExtPatternResolution
 uint8_t ExtPatternResolution[6];
 
-int8_t ExtPatternNotes[6][4][64];
+int8_t ExtPatternNotes[6][4][128];
 uint8_t ExtPatternNoteBuffer[6][SEQ_NOTEBUF_SIZE];
 
-uint8_t ExtPatternLocks[6][4][64];
+uint8_t ExtPatternLocks[6][4][128];
 uint8_t ExtPatterLockParams[6][4];
 uint64_t ExtLockMasks[6];
 
@@ -311,19 +313,54 @@ struct musical_notes  {
 */
 A4Kit analog4_kit;
 
-
-class A4Track {
+class ExtSeqTrack {
   public:
     uint8_t active = EMPTY_TRACK_TYPE;
-    A4Sound sound;
-    uint8_t kit_payload_start[38];
-    uint8_t kit_payload_end[1034];
-
+    char kitName[17];
+    char trackName[17];
     uint8_t SeqPatternLength;
     uint8_t SeqPatternNotes[4][64];
     uint64_t SeqLockMask;
     uint8_t Seqconditional_timing[64];
     uint8_t SeqPatternResolution;
+   bool copyTrack (int tracknumber, uint8_t column, A4Kit *analog4_kit) {
+ 
+    m_memcpy(&SeqPatternNotes, &ExtPatternNotes[tracknumber], sizeof(SeqPatternNotes));
+    SeqPatternResolution = ExtPatternResolution[tracknumber];
+
+    SeqLockMask = ExtLockMasks[tracknumber];
+    SeqPatternLength = ExtPatternLengths[tracknumber];
+    m_memcpy(&Seqconditional_timing, &Extconditional_timing[tracknumber], sizeof(Seqconditional_timing));
+
+    active = EXT_TRACK_TYPE;
+      
+    }
+  bool placeTrack(int tracknumber, uint8_t column) {
+
+    
+    m_memcpy(&ExtPatternNotes[tracknumber], &SeqPatternNotes, sizeof(SeqPatternNotes));
+    
+
+    ExtLockMasks[tracknumber] = SeqLockMask;
+    ExtPatternLengths[tracknumber] = SeqPatternLength;
+
+    ExtPatternResolution[tracknumber] = SeqPatternResolution;
+
+    m_memcpy(&Extconditional_timing[tracknumber], &Seqconditional_timing, sizeof(Seqconditional_timing));
+      return true;
+  
+  }
+
+};
+
+class A4Track : public ExtSeqTrack {
+  public:
+
+    A4Sound sound;
+    uint8_t kit_payload_start[38];
+    uint8_t kit_payload_end[1034];
+
+
 
     bool copyTrack (int tracknumber, uint8_t column, A4Kit *analog4_kit) {
       
@@ -1692,12 +1729,20 @@ class TrigCaptureClass : public MidiCallback {
       Midi2.addOnNoteOffCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOffCallback_Midi2);
 
       Midi.addOnControlChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onControlChangeCallback);
-
-     
+      Midi2.addOnControlChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onControlChangeCallback_Midi2);
 
     };
 
-  
+  void onControlChangeCallback_Midi2(uint8_t *msg) {
+      uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
+      uint8_t param = msg[1];
+      uint8_t value = msg[2];
+      if (param == 0x5E) {
+        ExtPatternMutes[channel] = value;
+      }    
+     
+      }
+
     void onNoteOnCallback_Midi2(uint8_t *msg) {
       uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
 
@@ -2392,7 +2437,6 @@ class MDHandler2 : public MDCallback {
         MD.setStatus(0x22, curtrack);
         delay(500);
         turboSetSpeed(4,1);
-        turboSetSpeed(4,2);
       }
 
     }
@@ -3886,10 +3930,14 @@ trackinfo_param2.handler = ptc_root_handler;
   //      MD.getBlockingKit(curkit);
   
   md_seq.setup();
+
   A4SysexListener.setup();
   analog4_kit.workSpace = true;
- // Analog4.getBlockingSettings(0);
+  sei();
+  if (Analog4.getBlockingSettings(0)) {
   Analog4.connected = true;
+  turboSetSpeed(4,2);
+  }
 }
 
 
