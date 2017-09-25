@@ -311,7 +311,6 @@ struct musical_notes  {
   Machine Settings, Step Sequencer Triggers (trig, accent, slide, swing), Parameter Locks,
 
 */
-A4Kit analog4_kit;
 
 class ExtSeqTrack {
   public:
@@ -380,15 +379,15 @@ class A4Track : public ExtSeqTrack {
     active = A4_TRACK_TYPE;
       
     }
-  bool placeTrack(int tracknumber, uint8_t column) {
+  bool placeTrack(int tracknumber, uint8_t column, A4Kit *analog4_kit) {
       if (active == A4_TRACK_TYPE) {
-        analog4_kit.sounds[tracknumber].workSpace = true;
-    analog4_kit.sounds[tracknumber].origPosition = sound.origPosition;
-    m_memcpy(&analog4_kit.sounds[tracknumber].payload, &sound.payload, sizeof(sound.payload));
+    analog4_kit->sounds[tracknumber].workSpace = true;
+    analog4_kit->sounds[tracknumber].origPosition = sound.origPosition;
+    m_memcpy(analog4_kit->sounds[tracknumber].payload, &sound.payload, sizeof(sound.payload));
     if (write_original) {
-    m_memcpy(&analog4_kit.payload_start, &kit_payload_start, sizeof(kit_payload_start));
+    m_memcpy(analog4_kit->payload_start, &kit_payload_start, sizeof(kit_payload_start));
    
-    m_memcpy(&analog4_kit.payload_end, &kit_payload_end, sizeof(kit_payload_end));
+    m_memcpy(analog4_kit->payload_end, &kit_payload_end, sizeof(kit_payload_end));
     }
     
     m_memcpy(&ExtPatternNotes[tracknumber], &SeqPatternNotes, sizeof(SeqPatternNotes));
@@ -1035,7 +1034,7 @@ void sd_buf_readwrite(int32_t offset, bool read) {
 
 */
 
-bool store_track_inGrid(int track, int32_t column, int32_t row, A4Kit *analog4_kitx) {
+bool store_track_inGrid(int track, int32_t column, int32_t row, A4Kit *analog4_kit) {
   /*Assign a track to Grid i*/
   /*Extraact track data from received pattern and kit and store in track object*/
 
@@ -1064,12 +1063,12 @@ bool store_track_inGrid(int track, int32_t column, int32_t row, A4Kit *analog4_k
 /*analog 4 tracks*/
   else {
   A4Track track_buf;
-  track_buf.copyTrack(track - 16, column - 16, &analog4_kit);
+  track_buf.copyTrack(track - 16, column - 16, analog4_kit);
   file.write(( uint8_t*) & (track_buf), sizeof(A4Track));
   }
   return true;
 }
-bool store_extseq_track_inGrid(int track, int32_t column, int32_t row, A4Kit *analog4_kitx, A4Track *track_buf) {
+bool store_extseq_track_inGrid(int track, int32_t column, int32_t row, A4Kit *analog4_kit, A4Track *track_buf) {
   /*Assign a track to Grid i*/
   /*Extraact track data from received pattern and kit and store in track object*/
 
@@ -1093,12 +1092,12 @@ bool store_extseq_track_inGrid(int track, int32_t column, int32_t row, A4Kit *an
   else {
   if (Analog4.connected) {
    A4Track track_buf;
-  track_buf.copyTrack(track - 16, column - 16, &analog4_kit);
+  track_buf.copyTrack(track - 16, column - 16,analog4_kit);
   file.write(( uint8_t*) & (track_buf), sizeof(A4Track));
   }
   else {
       ExtSeqTrack track_buf;
-      track_buf.copyTrack(track - 16, column - 16, &analog4_kit);
+      track_buf.copyTrack(track - 16, column - 16, analog4_kit);
       file.write(( uint8_t*) & (track_buf), sizeof(ExtSeqTrack));
   }
   }
@@ -1721,7 +1720,7 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
       /** Unmute the given track. **/
 
 
-bool place_track_inpattern(int curtrack, int column, int row) {
+bool place_track_inpattern(int curtrack, int column, int row, A4Kit *analog4_kit) {
   //       if (Grids[encodervaluer] != NULL) {
   
  if (column < 16) {
@@ -1735,7 +1734,7 @@ bool place_track_inpattern(int curtrack, int column, int row) {
    if (Analog4.connected) {
    A4Track track_buf;
    load_track(column, row, 0, (A4Track*)&track_buf);
-   return track_buf.placeTrack(curtrack, column);
+   return track_buf.placeTrack(curtrack, column, analog4_kit);
   }
   else {
        ExtSeqTrack track_buf;
@@ -2514,9 +2513,9 @@ class MDHandler2 : public MDCallback {
 
         for (int i = 0; i < 16; i++) {
           if ((i + cur_col + (cur_row * GRID_WIDTH)) < (128 * GRID_WIDTH)) {
-
+            A4Kit *analog4_kit;
             /*Store the track at the  into Minicommand memory by moving the data from a Pattern object into a Track object*/
-            store_track_inGrid(i, i, cur_row, &analog4_kit);
+            store_track_inGrid(i, i, cur_row, analog4_kit);
 
           }
           /*Update the encoder page to show current Grids*/
@@ -3053,6 +3052,8 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   if ((patternload_param1.getValue() * 16 + patternload_param2.getValue()) != MD.currentPattern) {
     readpattern = (patternload_param1.getValue() * 16 + patternload_param2.getValue());
   }
+  A4Kit analog4_kit;
+  analog4_kit.workSpace = true;
 
   cur_col = column;
   cur_row = row;
@@ -3199,15 +3200,17 @@ void write_tracks_to_md( int column, int row, int b) {
   //clearLed();
 
 }
-
+A4Kit analogfour_kit;
 void send_pattern_kit_to_md() {
   
   A4Track *track_buf;
+  
+  analogfour_kit.workSpace = true;
 
   MD.getBlockingKit(currentkit_temp);
   load_track(0, cur_row, 0, track_buf);
   if (!Analog4.getBlockingKitX(0)) { return; }
-  if (!analog4_kit.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8)) { return; }
+  if (!analogfour_kit.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8)) { return; }
 
   /*Send a quick sysex message to get the current selected track of the MD*/
   int curtrack = last_md_track;
@@ -3287,11 +3290,11 @@ void send_pattern_kit_to_md() {
         track = i;
    
         
-      if (i < 16) { place_track_inpattern(track, i + cur_col, cur_row); }
+      if (i < 16) { place_track_inpattern(track, i + cur_col, cur_row,  &analogfour_kit); }
       else {
         track = track - 16; 
         
-          if (place_track_inpattern(track, i + cur_col, cur_row)) {
+          if (place_track_inpattern(track, i + cur_col, cur_row, &analogfour_kit)) {
              if (Analog4.connected) { a4_send[track] = 1; }
           }
           
@@ -3302,7 +3305,7 @@ void send_pattern_kit_to_md() {
      
       else if ((cur_col + (i - first_note) < 16) && (i < 16)) {
         track = cur_col + (i - first_note);
-        place_track_inpattern(track,  i, cur_row);
+        place_track_inpattern(track,  i, cur_row, &analogfour_kit);
 
       }
        
@@ -3451,7 +3454,7 @@ void send_pattern_kit_to_md() {
 
   }
              }
-    if (a4_kit_send == 1) { analog4_kit.toSysex(); }
+    if (a4_kit_send == 1) { analogfour_kit.toSysex(); }
            in_sysex2 = 0;
 
    //}
@@ -3986,7 +3989,6 @@ trackinfo_param2.handler = ptc_root_handler;
   md_seq.setup();
 
   A4SysexListener.setup();
-  analog4_kit.workSpace = true;
   sei();
   if (Analog4.getBlockingSettings(0)) {
   Analog4.connected = true;
