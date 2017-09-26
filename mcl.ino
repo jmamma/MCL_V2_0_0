@@ -3046,13 +3046,13 @@ void toggle_fx2() {
   Main function for storing one or more consecutive tracks in to the Grid
 
 */
+  A4Kit analog4_kit;
 
 void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   uint8_t readpattern = MD.currentPattern;
   if ((patternload_param1.getValue() * 16 + patternload_param2.getValue()) != MD.currentPattern) {
     readpattern = (patternload_param1.getValue() * 16 + patternload_param2.getValue());
   }
-  A4Kit analog4_kit;
   analog4_kit.workSpace = true;
 
   cur_col = column;
@@ -3200,17 +3200,17 @@ void write_tracks_to_md( int column, int row, int b) {
   //clearLed();
 
 }
-A4Kit analogfour_kit;
+
 void send_pattern_kit_to_md() {
   
   A4Track *track_buf;
   
-  analogfour_kit.workSpace = true;
+  analog4_kit.workSpace = true;
 
   MD.getBlockingKit(currentkit_temp);
   load_track(0, cur_row, 0, track_buf);
   if (!Analog4.getBlockingKitX(0)) { return; }
-  if (!analogfour_kit.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8)) { return; }
+  if (!analog4_kit.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8)) { return; }
 
   /*Send a quick sysex message to get the current selected track of the MD*/
   int curtrack = last_md_track;
@@ -3290,11 +3290,11 @@ void send_pattern_kit_to_md() {
         track = i;
    
         
-      if (i < 16) { place_track_inpattern(track, i + cur_col, cur_row,  &analogfour_kit); }
+      if (i < 16) { place_track_inpattern(track, i + cur_col, cur_row,  &analog4_kit); }
       else {
         track = track - 16; 
         
-          if (place_track_inpattern(track, i + cur_col, cur_row, &analogfour_kit)) {
+          if (place_track_inpattern(track, i + cur_col, cur_row, &analog4_kit)) {
              if (Analog4.connected) { a4_send[track] = 1; }
           }
           
@@ -3305,7 +3305,7 @@ void send_pattern_kit_to_md() {
      
       else if ((cur_col + (i - first_note) < 16) && (i < 16)) {
         track = cur_col + (i - first_note);
-        place_track_inpattern(track,  i, cur_row, &analogfour_kit);
+        place_track_inpattern(track,  i, cur_row, &analog4_kit);
 
       }
        
@@ -3454,7 +3454,7 @@ void send_pattern_kit_to_md() {
 
   }
              }
-    if (a4_kit_send == 1) { analogfour_kit.toSysex(); }
+    if (a4_kit_send == 1) { analog4_kit.toSysex(); }
            in_sysex2 = 0;
 
    //}
