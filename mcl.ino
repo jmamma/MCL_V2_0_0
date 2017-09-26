@@ -4030,10 +4030,9 @@ uint64_t getPatternMask(int column, int row, uint8_t j, bool load) {
 
 */
 
-uint32_t getGridModel(int column, int row, bool load) {
-  A4Track track_buf;
+uint32_t getGridModel(int column, int row, bool load, A4Track *track_buf) {
   if ( load == true) {
-    if (!load_track(column, row, 50, (A4Track*) &track_buf)) {
+    if (!load_track(column, row, 50,  track_buf)) {
       return NULL;
     }
   }
@@ -4047,12 +4046,8 @@ uint32_t getGridModel(int column, int row, bool load) {
     }
   }
   else {
-  if (track_buf.active == EMPTY_TRACK_TYPE) {
-    return 0;
-  }
-    else {
-    return 1;
-  }
+    return track_buf->active;
+  
   
   }
   
@@ -4936,20 +4931,32 @@ const char *str;
 
   GUI.setLine(GUI.LINE1);
   
-  char a4_name1[2] = "A4";
   char a4_name2[2] = "TK";
   
   char strn[3] = "--";
+  A4Track track_buf;
+       uint8_t model = getGridModel(param1.getValue() + i, param2.getValue(), true, (A4Track*) &track_buf);
 
   /*Retrieve the first 2 characters of Maching Name associated with the Track at the current Grid. First obtain the Model object from the Track object, then convert the MachineType into a string*/
  if (param1.getValue() + i < 16) {
-  str = getMachineNameShort(getGridModel(param1.getValue() + i, param2.getValue(), true), 1);
+  str = getMachineNameShort(model, 1);
+  
   if (str == NULL) { GUI.put_string_at((0 + (i * 3)), strn); }
   else { GUI.put_p_string_at((0 + (i * 3)), str); }
  }
  else {
-       if (getGridModel(param1.getValue() + i, param2.getValue(), true) == 0) { GUI.put_string_at((0 + (i * 3)), strn); }
-       else {  GUI.put_string_at((0 + (i * 3)), a4_name1); }
+       if (model == EMPTY_TRACK_TYPE) { GUI.put_string_at((0 + (i * 3)), strn); }
+       else { 
+        if (model == A4_TRACK_TYPE) {
+          char a4_name1[2] = "A4";
+           GUI.put_string_at((0 + (i * 3)), a4_name1); 
+
+        }
+        if (model == EXT_TRACK_TYPE) {
+          char ex_name1[2] = "EX";
+          GUI.put_string_at((0 + (i * 3)), ex_name1); 
+        }
+        }
  }
  
   GUI.setLine(GUI.LINE2);
@@ -4957,7 +4964,7 @@ const char *str;
   
    if (param1.getValue() + i < 16) {
 
-  str = getMachineNameShort(getGridModel( param1.getValue() + i, param2.getValue(), false), 2);
+  str = getMachineNameShort(model, 2);
   
   if (str == NULL) { GUI.put_string_at((0 + (i * 3)), strn);  }
   else {
@@ -4966,11 +4973,13 @@ const char *str;
    }
    
    else {
-       if (getGridModel(param1.getValue() + i, param2.getValue(), false) == 0) {
+       if (model == EMPTY_TRACK_TYPE) {
          GUI.put_string_at((0 + (i * 3)), strn);
        }
        else {
          GUI.put_string_at((0 + (i * 3)), a4_name2);
+         GUI.put_value_at1(1 + (i * 3),param1.getValue() + i - 15);
+
        }
    }
   redisplay = false;
