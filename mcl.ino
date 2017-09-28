@@ -228,7 +228,7 @@ uint8_t Extconditional_timing[6][64];
 
 uint8_t euclid_root[16];
 uint16_t exploit_start_clock = 0;
-//  TrigCaptureClass test
+//  MCLMidiEvents test
 
 void clear_step_locks(int curtrack, int i) ;
 /*A toggle for handling incoming pattern and kit data.*/
@@ -1728,22 +1728,22 @@ uint8_t seq_ext_pitch(uint8_t note_num) {
           return pitch;
 }
 
-class TrigCaptureClass : public MidiCallback {
+class MCLMidiEvents : public MidiCallback {
 
 
   public:
 
     void setup() {
 
-      Midi.addOnProgramChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onProgramChangeCallback);
-      Midi.addOnNoteOnCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOnCallback);
-      Midi.addOnNoteOffCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOffCallback);
+      Midi.addOnProgramChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onProgramChangeCallback);
+      Midi.addOnNoteOnCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOnCallback);
+      Midi.addOnNoteOffCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOffCallback);
       
-      Midi2.addOnNoteOnCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOnCallback_Midi2);
-      Midi2.addOnNoteOffCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onNoteOffCallback_Midi2);
+      Midi2.addOnNoteOnCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOnCallback_Midi2);
+      Midi2.addOnNoteOffCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOffCallback_Midi2);
 
-      Midi.addOnControlChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onControlChangeCallback);
-      Midi2.addOnControlChangeCallback(this, (midi_callback_ptr_t)&TrigCaptureClass::onControlChangeCallback_Midi2);
+      Midi.addOnControlChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onControlChangeCallback);
+      Midi2.addOnControlChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onControlChangeCallback_Midi2);
 
     };
 
@@ -3256,7 +3256,7 @@ void send_pattern_kit_to_md() {
         track = track - 16; 
            seq_buffer_notesoff(track);
           if (place_track_inpattern(track, i + cur_col, cur_row, (A4Sound*) &sound_array[track])) {
-             if (Analog4.connected) { a4_send[track] = 1; }
+             if (Analog4.connected) { sound_array[track].workSpace = true; a4_send[track] = 1; }
           }
           
           
@@ -3928,7 +3928,7 @@ trackinfo_param2.handler = ptc_root_handler;
 
   //For base channel 10. needed for mutes to work properly.
   MD.global.baseChannel = 9;
-  TrigCaptureClass trigger;
+  MCLMidiEvents trigger;
 
   trigger.setup();
   //
