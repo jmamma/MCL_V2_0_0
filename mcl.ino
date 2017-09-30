@@ -1318,8 +1318,9 @@ seq_note_on(track, note);
   }
 
   else if (condition <= 8) {
+  //  if ((((MidiClock.div32th_counter / ExtPatternResolution[track]) - pattern_start_clock32th * ExtPatternResolution[track] / 2) + PatternLengths[i]) / PatternLengths[i]) % ( (condition)) == 0) {
 
-       if (((MidiClock.div16th_counter - pattern_start_clock32th / 2 + PatternLengths[track]) / PatternLengths[track]) % ( (condition)) == 0) {
+       if ((((MidiClock.div32th_counter / ExtPatternResolution[track]) - (pattern_start_clock32th / ExtPatternResolution[track]) + PatternLengths[track] * (2 / ExtPatternResolution[track])) / PatternLengths[track] * (2 / ExtPatternResolution[track])) % ( (condition)) == 0) {
 
    // if ( (int16_t) (((MidiClock.div32th_counter * ExtPatternResolution[track]) - (pattern_start_clock32th / ExtPatternResolution[track]) + ExtPatternLengths[track]) / ExtPatternLengths[track]) % (int16_t) ( (condition * (2 / ExtPatternResolution[track]))) == 0) {
 seq_note_on(track, note);
@@ -1409,7 +1410,8 @@ class MDSequencer : public ClockCallback {
     }
     void MDSequencerCallback() {
       // if (IS_BIT_SET8(UCSR1A, RXC1)) { isr_usart1(1); }
-
+      uint8_t next_step;
+     
       //   setTrackParam(1,0,random(127));
       if (in_sysex == 0) {
       
@@ -1421,8 +1423,11 @@ class MDSequencer : public ClockCallback {
         int8_t timing = conditional_timing[i][step_count] >> 4; //upper
         uint8_t condition = conditional_timing[i][step_count] & 0x0F; //lower
 
-        int8_t timing_next = conditional_timing[i][step_count + 1] >> 4; //upper
-        uint8_t condition_next = conditional_timing[i][step_count + 1] & 0x0F; //lower
+        if (step_count == (PatternLengths[i] - 1)) { next_step = 0; }
+        else { next_step = step_count + 1; }
+
+        int8_t timing_next = conditional_timing[i][next_step] >> 4; //upper
+        uint8_t condition_next = conditional_timing[i][next_step] & 0x0F; //lower
 
         //-5 -4 -3 -2 -1  0  1 2 3 4 5
         //   0 1  2  3  4  5  6  7 8 9 10 11
@@ -1441,9 +1446,9 @@ class MDSequencer : public ClockCallback {
 
         if ((timing_next < 6) && ((timing_next) == (int8_t) MidiClock.mod6_counter)) {
 
-          parameter_locks(i, step_count + 1);
+          parameter_locks(i, next_step);
 
-          if (IS_BIT_SET64(PatternMasks[i], step_count + 1)) {
+          if (IS_BIT_SET64(PatternMasks[i], next_step)) {
             trig_conditional(condition_next, i);
           }
 
@@ -1452,16 +1457,21 @@ class MDSequencer : public ClockCallback {
       }
             for (uint8_t i = 0; i < 4; i++) {
           //  isr_usart1(1); 
-          
-        uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter * ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
+       
+     //   uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter * ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
+      //  uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[i] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[i]));
+
+   //     uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th * ExtPatternResolution[i] / 2)) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th * ExtPatternResolution[i] / 2)) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
+        uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
 
         int8_t timing = Extconditional_timing[i][step_count] >> 4; //upper
-       // timing = timing;
         uint8_t condition = Extconditional_timing[i][step_count] & 0x0F; //lower
 
-        int8_t timing_next = Extconditional_timing[i][step_count + 1] >> 4; //upper
-        //timing_next = timing_ne;
-        uint8_t condition_next = Extconditional_timing[i][step_count + 1] & 0x0F; //lower
+        if (step_count == (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) - 1)) { next_step = 0; }
+        else { next_step = step_count + 1; }
+
+        int8_t timing_next = Extconditional_timing[i][next_step] >> 4; //upper
+        uint8_t condition_next = Extconditional_timing[i][next_step] & 0x0F; //lower
                if (!in_sysex2) { 
 
        int8_t timing_counter = MidiClock.mod6_counter;
@@ -1486,8 +1496,8 @@ class MDSequencer : public ClockCallback {
 
              for (uint8_t c = 0; c < 4; c++) {
 
-         if (ExtPatternNotes[i][c][step_count + 1] < 0) { seq_note_off(i, abs(ExtPatternNotes[i][c][step_count + 1]) - 1);  }
-         else if (ExtPatternNotes[i][c][step_count + 1] > 0) { if (ExtPatternMutes[i] == SEQ_MUTE_OFF) { noteon_conditional(condition, i, abs(ExtPatternNotes[i][c][step_count + 1]) - 1); } }
+         if (ExtPatternNotes[i][c][step_count + 1] < 0) { seq_note_off(i, abs(ExtPatternNotes[i][c][next_step]) - 1);  }
+         else if (ExtPatternNotes[i][c][step_count + 1] > 0) { if (ExtPatternMutes[i] == SEQ_MUTE_OFF) { noteon_conditional(condition, i, abs(ExtPatternNotes[i][c][next_step]) - 1); } }
 
           }
         }
@@ -1823,16 +1833,24 @@ class MCLMidiEvents : public MidiCallback {
                 return;
                }
                         trigger_noteon_interface(msg, DEVICE_A4);
-
-         if ((curpage != SEQ_RTRK_PAGE) && (curpage != SEQ_PTC_PAGE) && (curpage != SEQ_RPTC_PAGE) ) {
-  //   (curpage == SEQ_EXT_PTC_PAGE)) {
-           return;
-          }
-           trackinfo_param3.cur = ExtPatternLengths[channel];
+   trackinfo_param3.cur = ExtPatternLengths[channel];
 
 
           cur_col = 16 + channel;
           last_extseq_track = channel;
+           if (ExtPatternResolution[channel] == 2) {
+            trackinfo_param3.max = 128;
+           }
+           else {
+        trackinfo_param3.max = 64;
+           }
+           
+         if ((curpage != SEQ_RTRK_PAGE) && (curpage != SEQ_PTC_PAGE) && (curpage != SEQ_RPTC_PAGE) ) {
+  //   (curpage == SEQ_EXT_PTC_PAGE)) {
+           return;
+          }
+
+        
           
           pitch = seq_ext_pitch(note_num);
 
@@ -1840,8 +1858,11 @@ class MCLMidiEvents : public MidiCallback {
                     MidiUart2.sendNoteOn(channel, pitch, msg[2]);
           if ((curpage != SEQ_RPTC_PAGE) || (MidiClock.state != 2)) { return; }
 
-        uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel]) ) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * (((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
-           uint8_t timing = (MidiClock.mod3_counter + 3)  << 4;
+      //  uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel]) ) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * (((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+      // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+        uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+
+        uint8_t timing = (MidiClock.mod3_counter + 3)  << 4;
 
          if (ExtPatternResolution[channel] > 1) {
             timing = (MidiClock.mod6_counter + 6)  << 4;
@@ -1962,7 +1983,9 @@ class MCLMidiEvents : public MidiCallback {
           if ((curpage != SEQ_RPTC_PAGE) || (MidiClock.state != 2)) { return; }
           
 
-        uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * (((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+       // uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * (((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+        uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
 
            uint8_t timing = (MidiClock.mod3_counter + 3)  << 4;
 
@@ -2327,6 +2350,14 @@ class MCLMidiEvents : public MidiCallback {
       //              setTrackParam(last_md_track, 1, MD.kit.params[last_md_track][1]);
           MD.triggerTrack(last_md_track, 127);
 
+         trackinfo_param3.cur = PatternLengths[last_md_track];
+
+
+          cur_col = last_md_track;
+          last_extseq_track = last_md_track;
+          
+        trackinfo_param3.max = 64;
+           
 
           if ((MidiClock.state != 2) || (curpage == SEQ_PTC_PAGE)) {
             return;
@@ -4419,7 +4450,7 @@ void TrackInfoPage::display()  {
 
     const char *str1 = getMachineNameShort(MD.kit.models[cur_col], 1);
     const char *str2 = getMachineNameShort(MD.kit.models[cur_col], 2);
-   GUI.put_value_at2(6, trackinfo_param3.getValue());
+    GUI.put_value_at(5, trackinfo_param3.getValue());
     if (cur_col < 16) {
     GUI.put_p_string_at(9, str1);
     GUI.put_p_string_at(11, str2);
@@ -4455,7 +4486,7 @@ else {
      GUI.put_string_at(0, "PTC");
 
 }
-    GUI.put_value_at2(6, trackinfo_param3.getValue());
+    GUI.put_value_at(5, trackinfo_param3.getValue());
     if (cur_col < 16) {
     GUI.put_p_string_at(9, str1);
     GUI.put_p_string_at(11, str2);
@@ -4653,14 +4684,14 @@ else {
       } 
       else {
                GUI.put_value_at1(15, page_select + 1);
-           GUI.put_value_at2(6, trackinfo_param3.getValue());
+           GUI.put_value_at(5, trackinfo_param3.getValue());
 
              if (cur_col < 16) {
     GUI.put_p_string_at(9, str1);
     GUI.put_p_string_at(11, str2);
     }
     else {
-          GUI.put_value_at2(6, trackinfo_param3.getValue());
+          GUI.put_value_at(5, trackinfo_param3.getValue());
     GUI.put_string_at(9, "MID");
     GUI.put_value_at1(12, last_extseq_track + 1);
     }
@@ -4672,7 +4703,7 @@ else {
      if (curpage == SEQ_STEP_PAGE) {
       GUI.put_p_string_at(9, str1);
       GUI.put_p_string_at(11, str2);
-      GUI.put_value_at2(6, trackinfo_param3.getValue());
+      GUI.put_value_at(5, trackinfo_param3.getValue());
       GUI.put_value_at1(15, page_select + 1);
       GUI.put_value_at2(6, trackinfo_param3.getValue());
       draw_patternmask((page_select * 16), DEVICE_MD);
