@@ -1127,7 +1127,26 @@ void load_the_damnkit(uint8_t pattern) {
 
 
 }
+void load_seq_step_page(uint8_t track) {
 
+    cur_col = track;
+    trackinfo_param3.cur = PatternLengths[track];
+    trackinfo_param2.max = 5;
+    curpage = SEQ_STEP_PAGE;
+}
+
+
+void load_seq_extstep_page(uint8_t track) {
+   if (ExtPatternResolution[last_extseq_track] == 1) { trackinfo_param2.max = 5; }
+   else {
+   trackinfo_param2.max = 11;
+   }
+   last_extseq_track = track;
+   trackinfo_param3.cur = ExtPatternLengths[track];
+   cur_col = track + 16;
+   curpage = SEQ_EXTSTEP_PAGE;
+                                 
+}
 void clear_seq_conditional(uint8_t i) {
   for (uint8_t c = 0; c < 64; c++) {
 conditional_timing[i][c] = 0; 
@@ -1149,7 +1168,7 @@ Extconditional_timing[i][c] = 0;
 }
 void clear_extseq_locks(uint8_t i) {
   for (uint8_t c = 0; c < 4; c++) {
-    for (uint8_t x = 0; x < 64; x++) {
+    for (uint8_t x = 0; x < 128; x++) {
       ExtPatternNotes[i][c][x] = 0;
     }
    // ExtPatternNotesParams[i][c] = 0;
@@ -1597,18 +1616,13 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
               }
                   
                   if ((curpage == SEQ_STEP_PAGE) && (device == DEVICE_A4)) {
-
-                        if (ExtPatternResolution[last_extseq_track] == 1) { trackinfo_param2.max = 5; }
-                  else {
-                    trackinfo_param2.max = 11;
-                }
-               
-                 curpage = SEQ_EXTSTEP_PAGE;
+                       
+                                 load_seq_extstep_page(channel);
+                    return;
                }
                 if ((device == DEVICE_A4) && (curpage == SEQ_EXTSTEP_PAGE)) {
                  //curpage = SEQ_EXTSTEP_PAGE;
-                 last_extseq_track = channel;
-                 cur_col = note_num + 16;
+                                                  load_seq_extstep_page(channel);
                  return;
                  }
 
@@ -2024,7 +2038,7 @@ class MCLMidiEvents : public MidiCallback {
         curpage = 0;
 
       }
-      if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
+      if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE) || (curpage == SEQ_STEP_PAGE) || (curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) {
         exploit_off();
         GUI.setPage(&page);
         curpage = 0;
@@ -3561,7 +3575,7 @@ void pattern_len_handler(Encoder *enc) {
       ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
       }
     }
-    else if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) {
+    else if ((curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) {
       if (cur_col < 16) {
       PatternLengths[last_md_track] = trackinfo_param3.getValue();
       }
@@ -3683,7 +3697,7 @@ void loadtrackinfo_page(uint8_t i) {
     trackinfo_param1.max = 8;
     trackinfo_param2.max = 64;
     trackinfo_param3.max = 64;
-    trackinfo_param4.max = 17;
+    trackinfo_param4.max = 15;
     trackinfo_param2.cur = 32;
     trackinfo_param1.cur = 1;
 
@@ -4537,18 +4551,9 @@ else {
 
       const char *str1 = getMachineNameShort(MD.kit.models[last_md_track], 1);
     const char *str2 = getMachineNameShort(MD.kit.models[last_md_track], 2);
-       if (cur_col < 16) {
-    GUI.put_p_string_at(9, str1);
-    GUI.put_p_string_at(11, str2);
-    }
-    else {
-    GUI.put_string_at(9, "MID");
-    GUI.put_value_at1(12, last_extseq_track + 1);
-    }
+  
        char c[3] = "--";
 
-       GUI.put_value_at1(15, page_select + 1);
-           GUI.put_value_at2(6, trackinfo_param3.getValue());
            
       if (trackinfo_param1.getValue() == 0) {
         GUI.put_string_at(0, "L1");
@@ -4566,7 +4571,6 @@ else {
         GUI.put_value_at1(1, prob[trackinfo_param1.getValue() - 9]);
       }
 
-    GUI.put_value_at2(6, trackinfo_param3.getValue());
 
       //Cond
       //    GUI.put_value_at2(0, trackinfo_param1.getValue());
@@ -4601,7 +4605,7 @@ else {
         GUI.put_value_at1(3, trackinfo_param2.getValue() - 6);
       }
       }
-    }
+    
     if (curpage == SEQ_EXTSTEP_PAGE) {
 
    //   GUI.put_value_at2(5, trackinfo_param3.getValue());
@@ -4618,9 +4622,14 @@ else {
      
        struct musical_notes number_to_note;
        uint8_t notenum;
+     uint8_t notes_held = 0;
+     uint8_t i;
+      for (i = 0; i < 16; i++) {
+        if (notes[i] == 1) { notes_held += 1; }
+      }
 
-
-      for (uint8_t i = 0; i < 4; i++) {
+      if (notes_held > 0)  {
+      for ( i = 0; i < 4; i++) {
          
          notenum = abs(ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + page_select * 16]);
          if (notenum != 0) {
@@ -4641,22 +4650,35 @@ else {
          }
          }
       }
-     
+      } 
+      else {
+               GUI.put_value_at1(15, page_select + 1);
+           GUI.put_value_at2(6, trackinfo_param3.getValue());
+
+             if (cur_col < 16) {
+    GUI.put_p_string_at(9, str1);
+    GUI.put_p_string_at(11, str2);
+    }
+    else {
+          GUI.put_value_at2(6, trackinfo_param3.getValue());
+    GUI.put_string_at(9, "MID");
+    GUI.put_value_at1(12, last_extseq_track + 1);
+    }
+      }
       //PatternLengths[cur_col] = trackinfo_param3.getValue();
       draw_patternmask((page_select * 16), DEVICE_A4);
       
     }
      if (curpage == SEQ_STEP_PAGE) {
-  
-      /*Display the Kit name associated with selected track on line 1*/
-      //GUI.put_string_at(0, getTrackKit(cur_col, cur_row, true, false));
-      //Len
-  
-      //PatternLengths[cur_col] = trackinfo_param3.getValue();
+      GUI.put_p_string_at(9, str1);
+      GUI.put_p_string_at(11, str2);
+      GUI.put_value_at2(6, trackinfo_param3.getValue());
+      GUI.put_value_at1(15, page_select + 1);
+      GUI.put_value_at2(6, trackinfo_param3.getValue());
       draw_patternmask((page_select * 16), DEVICE_MD);
 
     }
-
+    }
 
     /*              PatternLengths[cur_col] = trackinfo_param2.getValue();
 
@@ -5281,15 +5303,21 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
-   if ((curpage == SEQ_EXTSTEP_PAGE)  && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
+   if (((curpage == SEQ_EXTSTEP_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON3)) {
+   if (ExtPatternResolution[last_extseq_track] == 1) { ExtPatternResolution[last_extseq_track] = 2; }
+   else { ExtPatternResolution[last_extseq_track] = 1; }
+   }
+   
+   if ((curpage == SEQ_EXTSTEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
    clear_extseq_track(last_extseq_track);
    return true;
   }
+
   if ((curpage == SEQ_STEP_PAGE)  && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
     clear_seq_track(last_md_track);
     return true;
   }
-  if (((curpage == SEQ_RPTC_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
+  if (((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
     
     if (cur_col < 16) { clear_seq_track(last_md_track); }
     else { clear_extseq_track(last_extseq_track); }
@@ -5301,17 +5329,10 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
-   if (((curpage == SEQ_EXTSTEP_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON3)) {
-   if (ExtPatternResolution[last_extseq_track] == 1) { ExtPatternResolution[last_extseq_track] = 2; }
-   else { ExtPatternResolution[last_extseq_track] = 1; }
-   }
   
     if ((curpage == SEQ_STEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
-       if (ExtPatternResolution[last_extseq_track] == 1) { trackinfo_param2.max = 5; }
-                  else {
-                    trackinfo_param2.max = 11;
-                }
-      curpage = SEQ_EXTSTEP_PAGE;
+     load_seq_extstep_page(last_extseq_track);
+
       return true;
    /*
     trackinfo_param1.max = 64;
@@ -5327,9 +5348,8 @@ bool handleEvent(gui_event_t *evt) {
  
     }
     if ((curpage == SEQ_EXTSTEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
-            cur_col = last_md_track;
-      trackinfo_param3.cur = PatternLengths[cur_col];
-      curpage = SEQ_STEP_PAGE;
+        
+      load_seq_step_page(last_md_track);
 
     return true;
     }
@@ -5387,10 +5407,7 @@ bool handleEvent(gui_event_t *evt) {
     setEuclid(last_md_track, trackinfo_param1.cur, PatternLengths[last_md_track], trackinfo_param2.cur,trackinfo_param4.cur,trackinfo_param3.cur);
     return true;
   }
-  if (( (curpage == SEQ_STEP_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
-    clear_seq_track(last_md_track);
-    return true;
-  }
+
   if (((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
     clear_seq_track(cur_col);
     return true;
