@@ -4532,12 +4532,17 @@ else {
   }
   else if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE))  {
     GUI.setLine(GUI.LINE1);
-    char myName[4];
+    char myName[4] = "-- ";
+    char myName2[4] = "-- ";
     if (trackinfo_param1.getValue() == 0) {
       GUI.put_string_at(0, "--");
     }
     else {
-      m_strncpy_p(myName, model_param_name(MD.kit.models[last_md_track], trackinfo_param1.getValue() - 1), 4);
+      PGM_P modelname = NULL;
+      modelname = model_param_name(MD.kit.models[last_md_track], trackinfo_param1.getValue() - 1);
+      if (modelname != NULL) {
+      m_strncpy_p(myName, modelname, 4);
+      }
       GUI.put_string_at(0, myName);
     }
     GUI.put_value_at2(4, trackinfo_param2.getValue());
@@ -4545,8 +4550,12 @@ else {
       GUI.put_string_at(7, "--");
     }
     else {
-      m_strncpy_p(myName, model_param_name(MD.kit.models[last_md_track], trackinfo_param3.getValue() - 1), 4);
-      GUI.put_string_at(7, myName);
+       PGM_P modelname = NULL;
+       modelname = model_param_name(MD.kit.models[last_md_track], trackinfo_param3.getValue() - 1) ;
+      if (modelname != NULL) {
+        m_strncpy_p(myName2, modelname, 4);
+      }
+      GUI.put_string_at(7, myName2);
     }
 
     GUI.put_value_at2(11, trackinfo_param4.getValue());
@@ -5456,9 +5465,8 @@ bool handleEvent(gui_event_t *evt) {
     page_select += 1;
     
     if (cur_col > 15) {
-      if (ExtPatternResolution[cur_col - 16] == 1) {
-        pagemax = 4;
-      }
+        pagemax = 8;
+      
     }
     if (page_select >= pagemax) {
       page_select = 0;
