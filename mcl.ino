@@ -1319,12 +1319,18 @@ seq_note_on(track, note);
 
   else if (condition <= 8) {
   //  if ((((MidiClock.div32th_counter / ExtPatternResolution[track]) - pattern_start_clock32th * ExtPatternResolution[track] / 2) + PatternLengths[i]) / PatternLengths[i]) % ( (condition)) == 0) {
+     // if ((((MidiClock.div32th_counter / ExtPatternResolution[track]) - (pattern_start_clock32th / ExtPatternResolution[track]) + PatternLengths[track] * (2 / ExtPatternResolution[track])) / PatternLengths[track] * (2 / ExtPatternResolution[track])) % ( (condition)) == 0) {
 
-       if ((((MidiClock.div32th_counter / ExtPatternResolution[track]) - (pattern_start_clock32th / ExtPatternResolution[track]) + PatternLengths[track] * (2 / ExtPatternResolution[track])) / PatternLengths[track] * (2 / ExtPatternResolution[track])) % ( (condition)) == 0) {
-
-   // if ( (int16_t) (((MidiClock.div32th_counter * ExtPatternResolution[track]) - (pattern_start_clock32th / ExtPatternResolution[track]) + ExtPatternLengths[track]) / ExtPatternLengths[track]) % (int16_t) ( (condition * (2 / ExtPatternResolution[track]))) == 0) {
-seq_note_on(track, note);
+   if (ExtPatternResolution[track] == 2) {
+    if (((MidiClock.div16th_counter - pattern_start_clock32th / 2 + PatternLengths[track]) / PatternLengths[track]) % ( (condition)) == 0) {
+   seq_note_on(track, note);
     }
+  }
+  else {
+      if (((MidiClock.div32th_counter - pattern_start_clock32th  + PatternLengths[track]) / PatternLengths[track]) % ( (condition)) == 0) {
+   seq_note_on(track, note);
+    }
+  }
   }
   else if ((condition == 9) && (random(100) <= 10)) {
 seq_note_on(track, note);
@@ -1462,7 +1468,10 @@ class MDSequencer : public ClockCallback {
       //  uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[i] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[i]));
 
    //     uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th * ExtPatternResolution[i] / 2)) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th * ExtPatternResolution[i] / 2)) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
-        uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
+       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
+       
+       
+         uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i])));
 
         int8_t timing = Extconditional_timing[i][step_count] >> 4; //upper
         uint8_t condition = Extconditional_timing[i][step_count] & 0x0F; //lower
@@ -1838,12 +1847,8 @@ class MCLMidiEvents : public MidiCallback {
 
           cur_col = 16 + channel;
           last_extseq_track = channel;
-           if (ExtPatternResolution[channel] == 2) {
             trackinfo_param3.max = 128;
-           }
-           else {
-        trackinfo_param3.max = 64;
-           }
+         
            
          if ((curpage != SEQ_RTRK_PAGE) && (curpage != SEQ_PTC_PAGE) && (curpage != SEQ_RPTC_PAGE) ) {
   //   (curpage == SEQ_EXT_PTC_PAGE)) {
@@ -1860,7 +1865,8 @@ class MCLMidiEvents : public MidiCallback {
 
       //  uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel]) ) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * (((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
-        uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+         uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
 
         uint8_t timing = (MidiClock.mod3_counter + 3)  << 4;
 
@@ -1985,7 +1991,8 @@ class MCLMidiEvents : public MidiCallback {
 
        // uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * (((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
        // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
-        uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+         uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
 
            uint8_t timing = (MidiClock.mod3_counter + 3)  << 4;
 
