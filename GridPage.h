@@ -26,7 +26,7 @@ typedef struct md_machine_name_s_short {
 //Data structure for defining shorter names for the MD Machines
 
 md_machine_name_t_short const machine_names_short[134] PROGMEM = {
-  { "GN","", 0},
+  { "GN","--", 0},
   { "GN", "SN", 1},
   { "GN", "NS", 2},
   { "GN", "IM", 3},
@@ -165,9 +165,10 @@ uint32_t getGridModel(int i);
 
 PGM_P getMachineNameShort(uint8_t machine,uint8_t type) {
 
-  if (machine == NULL) { return NULL; } 
-
-  else {
+  if (machine == NULL) {
+    if (type == 1) { return machine_names_short[0].name2; } 
+  }
+  //else {
   for (uint8_t i = 0; i < countof(machine_names_short); i++) {
     if (pgm_read_byte(&machine_names_short[i].id) == machine) {
       if (type == 1) {
@@ -179,8 +180,8 @@ PGM_P getMachineNameShort(uint8_t machine,uint8_t type) {
       
    }
   }
-  return NULL;
-  }
+//  return NULL;
+ // }
 }
 
 
