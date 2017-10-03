@@ -220,9 +220,9 @@ uint8_t ExtPatternResolution[6];
 int8_t ExtPatternNotes[6][4][128];
 uint8_t ExtPatternNoteBuffer[6][SEQ_NOTEBUF_SIZE];
 
-uint8_t ExtPatternLocks[6][4][128];
-uint8_t ExtPatterLockParams[6][4];
-uint64_t ExtLockMasks[6];
+uint8_t ExtPatternLocks[4][4][128];
+uint8_t ExtPatterLockParams[4][4];
+uint64_t ExtLockMasks[4];
 
 uint8_t Extconditional_timing[6][64];
 
@@ -617,7 +617,7 @@ class MDTrack {
 
 /*Temporary track objects for manipulation*/
 MDTrack temptrack;
-MDTrack temptrack2;
+//MDTrack temptrack2;
 //A4Track analogfour_track;
 
 /*
@@ -973,40 +973,6 @@ bool load_track(int32_t column, int32_t row, int m, A4Track* temp_track) {
 }
 
 
-/*
-  ================
-  function: sd_buf_readwrite(int32_t offset, bool read)
-  ================
-
-  Function for reading and writing track data to/from the SD Card
-  Dynamic Read and Write
-  Automatically compensates for reduced buffer sizes, defined by variable: size
-  pretty clever!!
-
-  Note: Not used, data needs to be written/restored on a per object basis. See store_track_inGrid(int track, int32_t column, int32_t row)
-
-*/
-
-void sd_buf_readwrite(int32_t offset, bool read) {
-  file.seek(&offset, FAT_SEEK_SET);
-  int x = sizeof(MDTrack);
-  int size = 200;
-  int count = 0;
-  while (x > 0) {
-    x = x - size;
-    if (x < 0) {
-      size = size - x;
-    }
-    if (read == true) {
-      size = file.read(( uint8_t*)&temptrack + count, size);
-    }
-    else {
-      size = file.write(( uint8_t*)&temptrack2 + count, size);
-    }
-    count = count + size;
-  }
-
-}
 
 /*
   ===================
@@ -1017,7 +983,7 @@ void sd_buf_readwrite(int32_t offset, bool read) {
 
 */
 
-bool store_track_inGrid(int track, int32_t column, int32_t row, A4Track *analogfour_track) {
+bool store_track_inGrid(int track, int32_t column, int32_t row, A4Track *analogfour_track, MDTrack *temptrack2) {
   /*Assign a track to Grid i*/
   /*Extraact track data from received pattern and kit and store in track object*/
 
@@ -1026,7 +992,7 @@ bool store_track_inGrid(int track, int32_t column, int32_t row, A4Track *analogf
   file.seek(&offset, FAT_SEEK_SET);
   if (column < 16) {
 
-  temptrack2.copyTrack(track, column);
+  temptrack2->copyTrack(track, column);
   //  if (!SDCard.isInit) { setLed(); }
 
   // SDCard.deleteFile("/valertest.mcl");
@@ -1037,11 +1003,11 @@ bool store_track_inGrid(int track, int32_t column, int32_t row, A4Track *analogf
 
   len = sizeof(MDTrack) - (LOCK_AMOUNT * 3);
 
-  file.write(( uint8_t*) & (temptrack2), len);
+  file.write(( uint8_t*)  (temptrack2), len);
 
-  file.write(( uint8_t*) & (temptrack2.param_number[0]), temptrack2.arraysize);
-  file.write(( uint8_t*) & (temptrack2.value[0]), temptrack2.arraysize);
-  file.write(( uint8_t*) & (temptrack2.step[0]), temptrack2.arraysize);
+  file.write(( uint8_t*)  (temptrack2->param_number[0]), temptrack2->arraysize);
+  file.write(( uint8_t*)  (temptrack2->value[0]), temptrack2->arraysize);
+  file.write(( uint8_t*)  (temptrack2->step[0]), temptrack2->arraysize);
     return true;
 
   }
@@ -2528,8 +2494,10 @@ class MDHandler2 : public MDCallback {
         for (int i = 0; i < 16; i++) {
           if ((i + cur_col + (cur_row * GRID_WIDTH)) < (128 * GRID_WIDTH)) {
             A4Track *analogfour_track;
+            MDTrack *temptrack2;
+
             /*Store the track at the  into Minicommand memory by moving the data from a Pattern object into a Track object*/
-            store_track_inGrid(i, i, cur_row, analogfour_track);
+            store_track_inGrid(i, i, cur_row, analogfour_track, (MDTrack*) &temptrack2);
 
           }
           /*Update the encoder page to show current Grids*/
@@ -3106,6 +3074,8 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   }
 
   A4Track analogfour_track;
+  MDTrack temptrack2;
+
         bool n;
         /*Send a quick sysex message to get the current selected track of the MD*/
 
@@ -3133,11 +3103,11 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
                   analogfour_track.sound.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8);
                   } 
             }
-              n = store_track_inGrid(i, i, cur_row, (A4Track*) &analogfour_track);
+              n = store_track_inGrid(i, i, cur_row, (A4Track*) &analogfour_track, (MDTrack*) &temptrack2);
             }
             
             if ((store_behaviour == STORE_AT_SPECIFIC) && (i < 16)) {
-              n = store_track_inGrid(curtrack + (i - first_note), i, cur_row, (A4Track*) &analogfour_track);
+              n = store_track_inGrid(curtrack + (i - first_note), i, cur_row, (A4Track*) &analogfour_track, (MDTrack*) &temptrack2);
             }
             //CLEAR_BIT32(notes, i);
           }
