@@ -1384,10 +1384,10 @@ public:
       
     };
      void onMidiStartCallback() {
-        if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
+   //     if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
     exploit_start_clock = read_slowclock();
     noteproceed = 0;
-  }
+ // }
   pattern_start_clock32th = 0;
     }
 };
@@ -4457,12 +4457,13 @@ void TrackInfoPage::display()  {
 
     const char *str1 = getMachineNameShort(MD.kit.models[cur_col], 1);
     const char *str2 = getMachineNameShort(MD.kit.models[cur_col], 2);
-    GUI.put_value_at(5, trackinfo_param3.getValue());
     if (cur_col < 16) {
     GUI.put_p_string_at(9, str1);
     GUI.put_p_string_at(11, str2);
+        GUI.put_value_at(5, trackinfo_param3.getValue());
     }
     else {
+                    GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
     GUI.put_string_at(9, "MID");
     GUI.put_value_at1(12, cur_col - 16 + 1);
     }
@@ -4493,12 +4494,13 @@ else {
      GUI.put_string_at(0, "PTC");
 
 }
-    GUI.put_value_at(5, trackinfo_param3.getValue());
     if (cur_col < 16) {
+          GUI.put_value_at(5, trackinfo_param3.getValue());
     GUI.put_p_string_at(9, str1);
     GUI.put_p_string_at(11, str2);
     }
     else {
+              GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
     GUI.put_string_at(9, "MID");
     GUI.put_value_at1(12, cur_col - 16 + 1);
     }
@@ -4707,7 +4709,7 @@ else {
     GUI.put_p_string_at(11, str2);
     }
     else {
-          GUI.put_value_at(5, trackinfo_param3.getValue());
+          GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
     GUI.put_string_at(9, "MID");
     GUI.put_value_at1(12, last_extseq_track + 1);
     }
@@ -5319,6 +5321,9 @@ bool handleEvent(gui_event_t *evt) {
     if ((EVENT_PRESSED(evt, Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON4)) || (EVENT_PRESSED(evt, Buttons.BUTTON4) && BUTTON_DOWN(Buttons.BUTTON3) )) {
       for (uint8_t n = 0; n < 16; n++) {
         clear_seq_track(n);
+      }
+  for (uint8_t n = 0; n < 6; n++) {
+        clear_extseq_track(n);
       }
 
 
