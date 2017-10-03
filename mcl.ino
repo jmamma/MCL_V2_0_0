@@ -5176,8 +5176,13 @@ void exploit_off() {
     MidiUart.m_putc_immediate(MIDI_CONTINUE);
   }
   //   }
+  if (cur_col < 16) {
+      MD.setStatus(0x22, cur_col);
 
+  }
+  else {
   MD.setStatus(0x22, last_md_track);
+  }
 //in_sysex = 0;
 }
 static uint8_t turbomidi_sysex_header[] = {
@@ -5289,14 +5294,19 @@ bool handleEvent(gui_event_t *evt) {
   }
   if ((curpage > 10) || (curpage == SEQ_STEP_PAGE)) {
     if ((EVENT_PRESSED(evt, Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON4)) || (EVENT_PRESSED(evt, Buttons.BUTTON4) && BUTTON_DOWN(Buttons.BUTTON3) )) {
-      for (uint8_t n = 0; n < 16; n++) {
-        clear_seq_track(n);
-      }
+     
+      
+        if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_EXTSTEP_PAGE)) {
   for (uint8_t n = 0; n < 6; n++) {
         clear_extseq_track(n);
       }
-
-
+        }
+        else {
+           for (uint8_t n = 0; n < 16; n++) {
+        clear_seq_track(n);
+      }
+        }
+      
     }
 
   }
