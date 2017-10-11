@@ -3565,34 +3565,53 @@ void octave_handler(Encoder *enc) {
 }
 void pattern_len_handler(Encoder *enc) {
   
-  if (BUTTON_DOWN(Buttons.BUTTON3)) {
-    for (uint8_t c = 0; c < 16; c++) {
-      PatternLengths[c] = trackinfo_param3.getValue();
-    }
-
-  }
-  else {
     if  (curpage == SEQ_EXTSTEP_PAGE) {
+       if (BUTTON_DOWN(Buttons.BUTTON3)) {
+      for (uint8_t c = 0; c < 6; c++) {
+      ExtPatternLengths[c] = trackinfo_param3.getValue();
+    }
+      }
        ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
     }
     else if ((curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_STEP_PAGE)) {
       if (cur_col < 16) {
       PatternLengths[cur_col] = trackinfo_param3.getValue();
+  if (BUTTON_DOWN(Buttons.BUTTON3)) {
+    for (uint8_t c = 0; c < 16; c++) {
+      PatternLengths[c] = trackinfo_param3.getValue();
+    }
+      }
+      
       }
       else {
+         if (BUTTON_DOWN(Buttons.BUTTON3)) {
+      for (uint8_t c = 0; c < 6; c++) {
+      ExtPatternLengths[c] = trackinfo_param3.getValue();
+    }
+      }
       ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
       }
     }
     else if ((curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) {
       if (cur_col < 16) {
+         if (BUTTON_DOWN(Buttons.BUTTON3)) {
+    for (uint8_t c = 0; c < 16; c++) {
+      PatternLengths[c] = trackinfo_param3.getValue();
+    }
+      }
       PatternLengths[last_md_track] = trackinfo_param3.getValue();
       }
      else {
+       if (BUTTON_DOWN(Buttons.BUTTON3)) {
+      for (uint8_t c = 0; c < 6; c++) {
+      ExtPatternLengths[c] = trackinfo_param3.getValue();
+    }
+      }
       ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
       }
     }
   }
-}
+
 void encoder_fx_handle(Encoder *enc) {
   GridEncoder *mdEnc = (GridEncoder *)enc;
 
@@ -5335,9 +5354,12 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
-   if (((curpage == SEQ_EXTSTEP_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON3)) {
+   if (((curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) && ((EVENT_RELEASED(evt, Buttons.BUTTON3) && BUTTON_DOWN(Buttons.BUTTON2)) || (EVENT_RELEASED(evt, Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3)))) {
+   //if (cur_col < 16) {
    if (ExtPatternResolution[last_extseq_track] == 1) { ExtPatternResolution[last_extseq_track] = 2; }
    else { ExtPatternResolution[last_extseq_track] = 1; }
+ //  }
+    return true;
    }
    
    if ((curpage == SEQ_EXTSTEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
