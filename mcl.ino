@@ -1125,6 +1125,8 @@ void clear_seq_locks(uint8_t i) {
     }
     PatternLocksParams[i][c] = 0;
   }
+    LockMasks[i] = 0;
+
 }
 
 void clear_extseq_conditional(uint8_t i) {
@@ -5349,8 +5351,19 @@ bool handleEvent(gui_event_t *evt) {
 
   }
 
-  if (((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE) || (curpage == SEQ_RTRK_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
+  if (((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE) || (curpage == SEQ_RLCK_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
     clear_seq_locks(cur_col);
+    return true;
+
+  }
+  
+  if ((curpage == SEQ_RTRK_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
+    if (cur_col < 16) {
+    clear_seq_track(cur_col);
+    }
+    else {
+    clear_extseq_track(cur_col - 16);
+    }
     return true;
 
   }
