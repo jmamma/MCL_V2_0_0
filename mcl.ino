@@ -5323,9 +5323,17 @@ bool handleEvent(gui_event_t *evt) {
       }
         }
         else {
+          if ((curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
+     
+                for (uint8_t n = 0; n < 16; n++) {
+            clear_seq_locks(n);
+      }
+          }
+          else {
            for (uint8_t n = 0; n < 16; n++) {
         clear_seq_track(n);
       }
+          }
         }
       
     }
