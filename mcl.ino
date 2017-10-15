@@ -1096,14 +1096,16 @@ void load_seq_step_page(uint8_t track) {
 
     cur_col = track;
     trackinfo_param3.cur = PatternLengths[track];
-    trackinfo_param2.max = 5;
+    trackinfo_param2.cur = 6;
+    trackinfo_param2.max = 11;
     curpage = SEQ_STEP_PAGE;
 }
 
 
 void load_seq_extstep_page(uint8_t track) {
-   if (ExtPatternResolution[last_extseq_track] == 1) { trackinfo_param2.max = 5; }
+   if (ExtPatternResolution[last_extseq_track] == 1) {     trackinfo_param2.cur = 3; trackinfo_param2.max = 5; }
    else {
+        trackinfo_param2.cur = 6;
    trackinfo_param2.max = 11;
    }
    last_extseq_track = track;
@@ -1616,7 +1618,8 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
                if ((curpage == SEQ_EXTSTEP_PAGE) && (device == DEVICE_MD)) {
                                 note_hold = current_clock;
 
-              
+                            if ((note_num + (page_select * 16)) >= ExtPatternLengths[last_extseq_track]) { notes[note_num] = 0; return; }
+
                 int8_t timing = Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] >> 4; //upper
                 uint8_t condition = Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] & 0x0F; //lower
              trackinfo_param1.cur = condition;
@@ -1636,7 +1639,8 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
 
               if (curpage == SEQ_STEP_PAGE) {
 
-              
+               if ((note_num + (page_select * 16)) >= PatternLengths[cur_col]) { notes[note_num] = 0; return; }
+
               trackinfo_param2.max = 11;
                 note_hold = current_clock;
                 int8_t timing = conditional_timing[cur_col][(note_num + (page_select * 16))] >> 4; //upper
@@ -4457,7 +4461,12 @@ void TrackInfoPage::display()  {
     }
     else {
                     GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
-    GUI.put_string_at(9, "MID");
+    if (Analog4.connected) {
+      GUI.put_string_at(9, "A4T");
+    }
+     else { 
+      GUI.put_string_at(9, "MID");
+    }
     GUI.put_value_at1(12, cur_col - 16 + 1);
     }
 
@@ -4494,7 +4503,12 @@ else {
     }
     else {
               GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
-    GUI.put_string_at(9, "MID");
+if (Analog4.connected) {
+      GUI.put_string_at(9, "A4T");
+    }
+     else { 
+      GUI.put_string_at(9, "MID");
+    }   
     GUI.put_value_at1(12, cur_col - 16 + 1);
     }
     GUI.setLine(GUI.LINE2);
@@ -4703,7 +4717,12 @@ else {
     }
     else {
           GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
-    GUI.put_string_at(9, "MID");
+ if (Analog4.connected) {
+      GUI.put_string_at(9, "A4T");
+    }
+     else { 
+      GUI.put_string_at(9, "MID");
+    }   
     GUI.put_value_at1(12, last_extseq_track + 1);
     }
       }
@@ -5383,10 +5402,17 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
-   if (((curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) && ((EVENT_RELEASED(evt, Buttons.BUTTON3) && BUTTON_DOWN(Buttons.BUTTON2)) || (EVENT_RELEASED(evt, Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3)))) {
+   if (((curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) && ( BUTTON_DOWN(Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3))) {
+   //((EVENT_RELEASED(evt, Buttons.BUTTON3) && BUTTON_DOWN(Buttons.BUTTON2)) || (EVENT_RELEASED(evt, Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3)))) {
    //if (cur_col < 16) {
-   if (ExtPatternResolution[last_extseq_track] == 1) { ExtPatternResolution[last_extseq_track] = 2; }
-   else { ExtPatternResolution[last_extseq_track] = 1; }
+   if (ExtPatternResolution[last_extseq_track] == 1) { 
+    ExtPatternResolution[last_extseq_track] = 2;
+     load_seq_extstep_page(last_extseq_track);
+
+    }
+   else { ExtPatternResolution[last_extseq_track] = 1; 
+       load_seq_extstep_page(last_extseq_track);
+   }
  //  }
     return true;
    }
