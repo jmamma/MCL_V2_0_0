@@ -109,7 +109,7 @@ uint8_t write_original = 0;
 //ProjectName string
 
 char newprj[18];
-char row_name[5] = "    ";
+char row_name[17] = "                ";
 float row_name_offset = 0;
 uint8_t write_ready = 0;
 
@@ -123,6 +123,7 @@ uint8_t store_behaviour;
 float frames_fps = 10;
 uint16_t frames = 0;
 uint16_t frames_startclock;
+uint16_t grid_lastclock = 0;
 
 uint32_t pattern_start_clock32th = 0;
 
@@ -240,6 +241,8 @@ void clear_step_locks(int curtrack, int i) ;
 #define PATTERN_UDEF 254
 #define STORE_IN_PLACE 0
 #define STORE_AT_SPECIFIC 254
+
+#define GUI_NAME_TIMEOUT 800
 
 uint8_t patternswitch = PATTERN_UDEF;
 
@@ -1354,7 +1357,7 @@ public:
     };
      void onMidiStartCallback() {
    //     if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
-    exploit_start_clock = read_slowclock();
+    exploit_start_clock = slowclock;
     noteproceed = 0;
  // }
   pattern_start_clock32th = 0;
@@ -1500,6 +1503,7 @@ void encoder_param2_handle(Encoder *enc) {
   //  PatternMasks[i] = getPatternMask(i, enc->getValue(), 3, true);
   //  PatternLengths[i] = temptrack.length;
   // }
+  grid_lastclock = slowclock;
 }
 
 uint8_t note_to_track_map(uint8_t note) {
@@ -1579,7 +1583,7 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
         uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
 
   uint8_t note_num = 0;
-  uint16_t current_clock = read_slowclock();
+  uint16_t current_clock = slowclock;
      if (device == DEVICE_MD) {
 
         for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
@@ -2113,7 +2117,7 @@ class MCLMidiEvents : public MidiCallback {
       //((int) (MidiClock.div32th_counter / 32) * 32);
     };
     void onNoteOffCallback(uint8_t *msg) {
-      uint16_t current_clock = read_slowclock();
+      uint16_t current_clock = slowclock;
 
 
       uint8_t note_num;
@@ -2246,7 +2250,7 @@ class MCLMidiEvents : public MidiCallback {
 
     void onNoteOnCallback(uint8_t *msg) {
       //   if (msg[2] > 0) {
-      uint16_t current_clock = read_slowclock();
+      uint16_t current_clock = slowclock;
 
       int note_num;
       uint8_t channel = MIDI_NOTE_ON & msg[0];
@@ -2380,7 +2384,7 @@ class MCLMidiEvents : public MidiCallback {
       }
       else {
         if ((noteproceed == 0) && (curpage > 0)) {
-          uint16_t current_clock = read_slowclock();
+          uint16_t current_clock = slowclock;
 
           //We need to wait 500ms for the exploit to take effect before collecting notes
           if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
@@ -2893,18 +2897,18 @@ void setTrackParam(uint8_t track, uint8_t param, uint8_t value) {
 
 */
 void tick_frames() {
-    uint16_t current_clock = read_slowclock();
+    uint16_t current_clock = slowclock;
 
   frames += 1;
   if (clock_diff(frames_startclock, current_clock) >= 400) {
-    frames_startclock = read_slowclock();
+    frames_startclock = slowclock;
     frames = 0;
   }
   if (clock_diff(frames_startclock, current_clock) >= 250) {
     frames_fps = frames;
     // frames_fps = ((frames + frames_fps)/ 2);
     frames = 0;
-    frames_startclock = read_slowclock();
+    frames_startclock = slowclock;
   }
 }
 void splashscreen() {
@@ -3967,7 +3971,7 @@ trackinfo_param4.handler = octave_handler;
 trackinfo_param2.handler = ptc_root_handler;
   //mixer_param2.handler = encoder_filter_handle;
   //Setup Turbo Midi
-  frames_startclock = read_slowclock();
+  frames_startclock = slowclock;
   //TurboMidi.setup();
   //Start the SD Card Initialisation.
   sd_load_init();
@@ -4055,10 +4059,10 @@ uint64_t getPatternMask(int column, int row, uint8_t j, bool load) {
 }
 /*
   void my_block(uint8_t time) {
-    uint16_t start_clock = read_slowclock();
+    uint16_t start_clock = slowclock;
     uint16_t current_clock = start_clock;
     do {
-        current_clock = read_slowclock();
+        current_clock = slowclock;
 
        //MCL Code, trying to replicate main loop
 
@@ -4121,12 +4125,12 @@ char *getTrackKit(int column, int row, bool load, bool scroll) {
     }
 
     if (temptrack.active == EMPTY_TRACK_TYPE) {
-      return "    ";
+      return "----";
     }
 
 
     uint8_t char_position = 0;
-    //if ((read_slowclock() % 50) == 0) { row_name_offset++; }
+    //if ((slowclock % 50) == 0) { row_name_offset++; }
     if (row_name_offset > 15) {
       row_name_offset = 0;
     }
@@ -4156,7 +4160,10 @@ char *getTrackKit(int column, int row, bool load, bool scroll) {
       for (uint8_t a = 0; a < 16; a++) {
         row_name[a] = temptrack.kitName[a];
       }
+            row_name[16] = '\0';
+
     }
+    
     return row_name;
   }
 }
@@ -4940,8 +4947,11 @@ void GridEncoderPage::display() {
   if (BUTTON_DOWN(Buttons.ENCODER4) && (param4.hasChanged())) {
     toggle_fx2();
   }
-
-
+uint8_t display_name = 0;
+ if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
+      display_name = 1;
+    }
+    else {
   /*For each of the 4 encoder objects, ie 4 Grids to be displayed on screen*/
   for (uint8_t i = 0; i < 4; i++) {
 
@@ -4953,6 +4963,7 @@ void GridEncoderPage::display() {
 
 
   }
+    }
   // int value = encoders[0]->getValue() + (encoders[1]->getValue() * 16);
 
 
@@ -4997,9 +5008,28 @@ void GridEncoderPage::display() {
   else {
     GUI.setLine(GUI.LINE1);
     /*Displays the kit name of the left most Grid on the first line at position 12*/
+   if (display_name == 1) {
+            GUI.put_string_at(0,"                ");
+
+     GUI.put_string_at(0, getTrackKit(encoders[0]->cur, encoders[1]->cur, true, false ));
+                    GUI.setLine(GUI.LINE2);
+
+                GUI.put_string_at(0,"                ");
+   // temptrack.patternOrigPosition;
+ char str[5];
+
+
+  if (patternload_param1.getValue() < 8) {
+    if (temptrack.active != EMPTY_TRACK_TYPE) {
+    MD.getPatternName(temptrack.patternOrigPosition , str);
+    GUI.put_string_at(0, str);
+    }
+  }
+   }
+   else {
 
     GUI.put_string_at(12, getTrackKit(encoders[0]->getValue(), encoders[1]->getValue(), true, true ));
-
+   }
     GUI.setLine(GUI.LINE2);
 
     /*Displays the value of the current Row on the screen.*/
@@ -5168,7 +5198,7 @@ void exploit_on() {
   MD.setStatus(0x22, 15);
   // MD.getBlockingGlobal(0);
   init_notes();
-  exploit_start_clock = read_slowclock();
+  exploit_start_clock = slowclock;
   noteproceed = 0;
 
   /*if (MidiClock.state == 2) {
