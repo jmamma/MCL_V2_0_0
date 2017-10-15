@@ -4196,13 +4196,13 @@ void OptionsPage::display() {
       options_param1.old = options_param1.cur;
       options_param2.setValue(merge);
     }
-    GUI.put_string_at_fill(0, "MERGE");
+    GUI.put_string_at_fill(0, "CLK REC:");
 
     if (options_param2.getValue() == 0) {
-      GUI.put_string_at_fill(10, "OFF");
+      GUI.put_string_at_fill(10, "MIDI1");
     }
     if (options_param2.getValue() >= 1) {
-      GUI.put_string_at_fill(10, "ON");
+      GUI.put_string_at_fill(10, "MIDI2");
     }
     if (options_param2.hasChanged()) {
       if (options_param2.getValue() > 1) {
@@ -4218,13 +4218,13 @@ void OptionsPage::display() {
       options_param1.old = options_param1.cur;
       options_param2.setValue(clockout);
     }
-    GUI.put_string_at_fill(0, "MIDI2 CLKOUT");
+    GUI.put_string_at_fill(0, "CLK SEND:");
 
     if (options_param2.getValue() == 0) {
-      GUI.put_string_at_fill(10, "OFF");
+      GUI.put_string_at_fill(11, "  OFF");
     }
     if (options_param2.getValue() >= 1) {
-      GUI.put_string_at_fill(10, "ON");
+      GUI.put_string_at_fill(11, "MIDI2");
     }
     if (options_param2.hasChanged()) {
       if (options_param2.getValue() > 1) {
@@ -5641,20 +5641,24 @@ bool handleEvent(gui_event_t *evt) {
 
 
       MidiClock.stop();
+       if (clockout == 1) {
+        MidiClock.transmit_uart2 = true;
+      }
+      else {
+        MidiClock.transmit_uart2 = false;
+      }
       if (merge == 0) {
 
         MidiClock.mode = MidiClock.EXTERNAL_MIDI;
-        MidiClock.transmit = false;
+        MidiClock.transmit_uart1 = false;
 
       }
       else {
-        MidiClock.transmit = true;
-
+        MidiClock.transmit_uart1 = true;
+        MidiClock.transmit_uart2 = false;
         MidiClock.mode = MidiClock.EXTERNAL_UART2;
       }
-      if (clockout == 1) {
-        MidiClock.transmit = true;
-      }
+     
       MidiClock.start();
       send_globals();
       delay(100);
