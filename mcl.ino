@@ -3618,6 +3618,7 @@ void pattern_len_handler(Encoder *enc) {
       ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
       }
     }
+init_notes();
   }
 
 void encoder_fx_handle(Encoder *enc) {
