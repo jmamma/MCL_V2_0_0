@@ -5420,11 +5420,11 @@ bool handleEvent(gui_event_t *evt) {
    //if (cur_col < 16) {
    if (ExtPatternResolution[last_extseq_track] == 1) { 
     ExtPatternResolution[last_extseq_track] = 2;
-     load_seq_extstep_page(last_extseq_track);
+    if (curpage == SEQ_EXTSTEP_PAGE) {  load_seq_extstep_page(last_extseq_track); }
 
     }
    else { ExtPatternResolution[last_extseq_track] = 1; 
-       load_seq_extstep_page(last_extseq_track);
+    if (curpage == SEQ_EXTSTEP_PAGE) {  load_seq_extstep_page(last_extseq_track); }
    }
  //  }
     return true;
