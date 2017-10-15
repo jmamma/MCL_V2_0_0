@@ -734,9 +734,8 @@ void sd_load_init() {
 
 */
 
-SDCardEntry entries[8];
+SDCardEntry entries[20];
 void load_project_page() {
-
   int numEntries = SDCard.listDirectory("/", entries, countof(entries));
   if (numEntries <= 0) {
     numEntries = 0;
@@ -2140,6 +2139,7 @@ class MCLMidiEvents : public MidiCallback {
             else if  (curpage == SEQ_EXTSTEP_PAGE) {
               uint8_t timing = (trackinfo_param2.cur + 0) << 4;
               uint8_t condition = trackinfo_param1.cur & 0x0F;
+              if ((note_num + (page_select * 16)) >= ExtPatternLengths[last_extseq_track]) { return; }
 
               //  timing = 3;
               //condition = 3;
@@ -2161,8 +2161,10 @@ class MCLMidiEvents : public MidiCallback {
             }
             else if ((curpage == SEQ_STEP_PAGE))  {
               notes[note_num] = 0;
+              if ((note_num + (page_select * 16)) >= PatternLengths[cur_col]) { return; }
               uint8_t timing = (trackinfo_param2.cur + 0) << 4;
               uint8_t condition = trackinfo_param1.cur & 0x0F;
+            
 
               //  timing = 3;
               //condition = 3;
@@ -4792,7 +4794,10 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
   /*For 16 steps check to see if there is a trigger at pattern position i + (encoder_offset * 16) */
   for (int i = 0; i < 16; i++) {
     if (device == DEVICE_MD) {
-    if (IS_BIT_SET64(patternmask, i + offset) ) {
+    if (i + offset >= PatternLengths[cur_col]) {
+            mystr[i] = ' ';
+    }
+    else if (IS_BIT_SET64(patternmask, i + offset) ) {
       /*If the bit is set, there is a trigger at this position. We'd like to display it as [] on screen*/
       /*Char 219 on the minicommand LCD is a []*/
       mystr[i] = (char) 219;
@@ -4800,7 +4805,10 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
     }
     else {
       for (uint8_t a = 0; a < 4; a++) {
-        if (ExtPatternNotes[last_extseq_track][a][i + offset] != 0) {
+        if (i + offset >= ExtPatternLengths[last_extseq_track]) {
+            mystr[i] = ' ';
+    }
+        else if (ExtPatternNotes[last_extseq_track][a][i + offset] != 0) {
                 mystr[i] = (char) 219;
 
         }
