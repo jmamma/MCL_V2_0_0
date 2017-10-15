@@ -4814,8 +4814,14 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
   /*For 16 steps check to see if there is a trigger at pattern position i + (encoder_offset * 16) */
   for (int i = 0; i < 16; i++) {
     if (device == DEVICE_MD) {
+    uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[cur_col] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[cur_col]));
+
+    
     if (i + offset >= PatternLengths[cur_col]) {
             mystr[i] = ' ';
+    }
+    else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
+                  mystr[i] = ' ';
     }
     else if (IS_BIT_SET64(patternmask, i + offset) ) {
       /*If the bit is set, there is a trigger at this position. We'd like to display it as [] on screen*/
@@ -4824,9 +4830,15 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
     }
     }
     else {
+        uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track]) - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) - (ExtPatternLengths[last_extseq_track] * ((MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track] - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) / (ExtPatternLengths[last_extseq_track])));
+
       for (uint8_t a = 0; a < 4; a++) {
+        
         if (i + offset >= ExtPatternLengths[last_extseq_track]) {
             mystr[i] = ' ';
+    }
+     else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
+                  mystr[i] = ' ';
     }
         else if (ExtPatternNotes[last_extseq_track][a][i + offset] != 0) {
                 mystr[i] = (char) 219;
