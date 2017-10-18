@@ -16,9 +16,10 @@ public:
 	 * name, initial value, and handling function. The initRangeEncoder
 	 * will be called with the constructor arguments.
 	 **/
-	TrackInfoEncoder(int _max = 127, int _min = 0, const char *_name = NULL, int init = 0, encoder_handle_t _handler = NULL) : Encoder(_name, _handler) {
-		initTrackInfoEncoder(_max, _min, _name, init, _handler);
-	}
+    TrackInfoEncoder(int _max = 127, int _min = 0, int res = 1) : Encoder() {
+    initTrackInfoEncoder(_max, _min, (const char *) NULL, (int) 0, res, (encoder_handle_t) NULL);
+  }
+	
 	
 	/**
 	 * Initialize the encoder with the same argument as the constructor.
@@ -29,8 +30,9 @@ public:
 	 *
 	 * The initial value is called without calling the handling function.
 	 **/
-	void initTrackInfoEncoder(int _max = 128, int _min = 0, const char *_name = NULL, int init = 0,
+	void initTrackInfoEncoder(int _max = 128, int _min = 0, const char *_name = NULL, int init = 0, int res = 1,
 						  encoder_handle_t _handler = NULL) {
+    rot_res = res;
 		setName(_name);
 		handler = _handler;
 		if (_min > _max) {
@@ -156,16 +158,23 @@ void TrackInfoPage::display() {
 */
 
 int TrackInfoEncoder::update(encoder_t *enc) {
-	//int inc = 8;
+ int inc = enc->normal + (pressmode ? 0 : (scroll_fastmode ? 4 * enc->button : enc->button));
+  //int inc = 4 + (pressmode ? 0 : (fastmode ? 5 * enc->button : enc->button));
 
-	//cur = limit_value(cur, inc, min, max);
+    rot_counter +=  enc->normal;
+    if (rot_counter > rot_res) { 
+      cur = limit_value(cur, inc, min, max);
+      rot_counter = 0;
+    }   
+    else if (rot_counter < 0)  {
+      cur = limit_value(cur, inc, min, max);
+      rot_counter = rot_res;
+    }   
 
-        
-	int inc = enc->normal;
-        //int inc = 4 + (pressmode ? 0 : (fastmode ? 5 * enc->button : enc->button));
-	cur = limit_value(cur, inc, min, max);
 
-	return cur;
+
+
+  return cur;
 }
 
 

@@ -66,6 +66,10 @@
 #define DEVICE_MD 2
 #define DEVICE_A4 6
 
+#define ENCODER_RES_GRID 2
+#define ENCODER_RES_SEQ 2
+#define ENCODER_RES_SYS 2
+#define ENCODER_RES_PAT 2
 //Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
 
 
@@ -145,10 +149,10 @@ uint8_t in_sysex2 = 0;
 
 uint8_t page_select = 0;
 
-GridEncoder param1(0, GRID_WIDTH - 4);
-GridEncoder param2(0, 127);
-GridEncoder param3(0, 127);
-GridEncoder param4(0, 127);
+GridEncoder param1(0, GRID_WIDTH - 4, ENCODER_RES_GRID);
+GridEncoder param2(0, 127, ENCODER_RES_GRID);
+GridEncoder param3(0, 127, 1);
+GridEncoder param4(0, 127, 1);
 
 GridEncoderPage page(&param1, &param2, &param3, &param4);
 
@@ -157,10 +161,10 @@ GridEncoderPage page(&param1, &param2, &param3, &param4);
 // TrackInfoEncoder trackinfo_param3(0, 7);
 // TrackInfoEncoder trackinfo_param4(0, 7);
 
-TrackInfoEncoder trackinfo_param1(0, 3);
-TrackInfoEncoder trackinfo_param2(0, 64);
-TrackInfoEncoder trackinfo_param3(0, 10);
-TrackInfoEncoder trackinfo_param4(0, 16);
+TrackInfoEncoder trackinfo_param1(0, 3, ENCODER_RES_SEQ);
+TrackInfoEncoder trackinfo_param2(0, 64, ENCODER_RES_SEQ);
+TrackInfoEncoder trackinfo_param3(0, 10, ENCODER_RES_SEQ);
+TrackInfoEncoder trackinfo_param4(0, 16, ENCODER_RES_SEQ);
 
 TrackInfoPage trackinfo_page(&trackinfo_param1, &trackinfo_param2, &trackinfo_param3, &trackinfo_param4);
 
@@ -179,30 +183,30 @@ TrackInfoPage mixer_page(&mixer_param1, &mixer_param2, &mixer_param3);
 //PatternLoadEncoder patternload_param3(0, 64);
 // PatternLoadEncoder patternload_param4(0, 11);
 
-TrackInfoEncoder patternload_param1(0, 8);
-TrackInfoEncoder patternload_param2(0, 15);
-TrackInfoEncoder patternload_param3(0, 64);
-TrackInfoEncoder patternload_param4(0, 11);
+TrackInfoEncoder patternload_param1(0, 8, ENCODER_RES_PAT);
+TrackInfoEncoder patternload_param2(0, 15, ENCODER_RES_PAT);
+TrackInfoEncoder patternload_param3(0, 64, ENCODER_RES_PAT);
+TrackInfoEncoder patternload_param4(0, 11, ENCODER_RES_PAT);
 PatternLoadPage patternload_page(&patternload_param1, &patternload_param2, &patternload_param3, &patternload_param4);
 
 //OptionsEncoder options_param1(0, 3);
 //OptionsEncoder  options_param2(0, 2);
 
-TrackInfoEncoder options_param1(0, 4);
-TrackInfoEncoder  options_param2(0, 2);
+TrackInfoEncoder options_param1(0, 4, ENCODER_RES_SYS);
+TrackInfoEncoder  options_param2(0, 2, ENCODER_RES_SYS);
 OptionsPage options_page(&options_param1, &options_param2);
 
 // TrackInfoEncoder proj_param1(1, 10);
 //  TrackInfoEncoder proj_param2(0, 36);
 // TrackInfoEncoder proj_param4(0, 127);
 
-TrackInfoEncoder proj_param1(1, 10);
-TrackInfoEncoder proj_param2(0, 36);
-TrackInfoEncoder proj_param4(0, 127);
+TrackInfoEncoder proj_param1(1, 10, ENCODER_RES_SYS);
+TrackInfoEncoder proj_param2(0, 36, ENCODER_RES_SYS);
+TrackInfoEncoder proj_param4(0, 127, ENCODER_RES_SYS);
 TrackInfoPage proj_page(&proj_param1, &proj_param2);
 
 //  TrackInfoEncoder loadproj_param1(1, 64);
-TrackInfoEncoder loadproj_param1(1, 64);
+TrackInfoEncoder loadproj_param1(1, 64, ENCODER_RES_SYS);
 TrackInfoPage loadproj_page(&loadproj_param1);
 
 uint8_t PatternLengths[16];
@@ -4882,38 +4886,20 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
 
 int GridEncoder::update(encoder_t *enc) {
 
-
-  /* Set encoder value to it's minimum or maximum depending on the rotation of the encoder*/
-  /* Old value is compared to new value to determine which way the encoder is turned*/
-  /*if (BUTTON_DOWN(Buttons.BUTTON1)) {
-    int inc = enc->normal + (pressmode ? 0 : (scroll_fastmode ? 4 * enc->button : enc->button));
-    cur = limit_value(cur, inc, min, max);
-                     if (cur > old) { cur = max; }
-                     if (cur < old) { cur = min; }
-
-                     if (cur > old) { cur = max; }
-                     if (cur < old) { cur = min; }
-
-
-           } */
-
-  /*If shift1 is pressed then increase the encoder value by 4 (Fast encoder movement)*/
-  //      else if (BUTTON_DOWN(Buttons.BUTTON2)) {
-  //	int inc = (enc->normal + (pressmode ? 0 : (scroll_fastmode ? 4 * enc->button : enc->button))) * 4;
-
-  //	cur = limit_value(cur, inc, min, max);
-  //            }
-
-  /*Increase encoder value as usual*/
-  //            else {
   int inc = enc->normal + (pressmode ? 0 : (scroll_fastmode ? 4 * enc->button : enc->button));
   //int inc = 4 + (pressmode ? 0 : (fastmode ? 5 * enc->button : enc->button));
-  cur = limit_value(cur, inc, min, max);
 
-  //   GridEncoder *mdEnc = (GridEncoder *)enc;
+    rot_counter +=  enc->normal;
+    if (rot_counter > rot_res) { 
+      cur = limit_value(cur, inc, min, max);
+      rot_counter = 0;
+    }   
+    else if (rot_counter < 0)  {
+      cur = limit_value(cur, inc, min, max);
+      rot_counter = rot_res;
+    }   
 
-  // if (mdEnc->effect) { dispeffect = 1; }
-  //      }
+
 
 
   return cur;

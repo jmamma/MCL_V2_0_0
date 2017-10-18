@@ -206,10 +206,11 @@ public:
 	 * name, initial value, and handling function. The initRangeEncoder
 	 * will be called with the constructor arguments.
 	 **/
-	GridEncoder(int _max = 127, int _min = 0, const char *_name = NULL, int init = 0, encoder_handle_t _handler = NULL) : Encoder(_name, _handler) {
-		initGridEncoder(_max, _min, _name, init, _handler);
-	}
-	
+
+	   GridEncoder(int _max = 127, int _min = 0, int res = 1) : Encoder() {
+    initGridEncoder(_max, _min, (const char *) NULL, (int) 0, res, (encoder_handle_t) NULL);
+  }
+  
 	/**
 	 * Initialize the encoder with the same argument as the constructor.
 	 *
@@ -219,8 +220,9 @@ public:
 	 *
 	 * The initial value is called without calling the handling function.
 	 **/
-	void initGridEncoder(int _max = 128, int _min = 0, const char *_name = NULL, int init = 0,
+	void initGridEncoder(int _max = 128, int _min = 0, const char *_name = NULL, int init = 0,int res = 1,
 						  encoder_handle_t _handler = NULL) {
+    rot_res = res;
 		setName(_name);
 		handler = _handler;
 		if (_min > _max) {
