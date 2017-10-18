@@ -4465,6 +4465,8 @@ void TrackInfoPage::display()  {
 
   else if ((curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_RLCK_PAGE)) {
     GUI.setLine(GUI.LINE1);
+              GUI.put_value_at1(15, page_select + 1);
+
     if (curpage == SEQ_RLCK_PAGE) {
       GUI.put_string_at(0, "RLCK");
 
@@ -4598,7 +4600,7 @@ if (Analog4.connected) {
     if (curpage == SEQ_PARAM_B_PAGE) {
       GUI.put_string_at(14, "B");
     }
-    GUI.put_value_at1(16, (page_select + 1) * 10);
+    GUI.put_value_at1(15, (page_select + 1));
     draw_lockmask(page_select * 16);
 
   }
