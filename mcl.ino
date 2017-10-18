@@ -2427,8 +2427,12 @@ class MCLMidiEvents : public MidiCallback {
 
 */
 void switchGlobal (uint8_t global_page) {
+
   uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
+        in_sysex = 1;
   MD.sendSysex(data, countof(data));
+      in_sysex = 0;
+
 }
 class MDHandler2 : public MDCallback {
 
@@ -3836,9 +3840,11 @@ void send_globals() {
     ElektronDataToSysexEncoder encoder(&MidiUart);
     ElektronDataToSysexEncoder encoder2(&MidiUart);
     setup_global(0);
+    in_sysex = 1;
     global_one.toSysex(encoder);
     setup_global(1);
     global_one.toSysex(encoder2);
+    in_sysex = 0;
   }
 }
 void setup_global(int global_num) {
