@@ -2857,13 +2857,17 @@ void setLevel(int curtrack, int value) {
   else if (curtrack < 16) {
     cc = curtrack - 4;
   }
-
+  USE_LOCK();
+  SET_LOCK();
   if (exploit == 1) {
     MidiUart.sendCC(channel + 3, cc, value);
   }
   else {
     MidiUart.sendCC(channel + 9, cc, value);
   }
+  CLEAR_LOCK();
+  in_sysex = 0;
+
 }
 
 void setTrackParam(uint8_t track, uint8_t param, uint8_t value) {
