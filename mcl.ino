@@ -4787,9 +4787,17 @@ void draw_lockmask(uint8_t offset) {
   GUI.setLine(GUI.LINE2);
 
   char str[17] = "----------------";
+    uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[cur_col] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[cur_col]));
 
   for (int i = 0; i < 16; i++) {
 
+    if (i + offset >= PatternLengths[cur_col]) {
+            str[i] = ' ';
+    }
+    else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
+                  str[i] = ' ';
+    }
+    else {
     if  (IS_BIT_SET64(LockMasks[cur_col], i + offset) ) {
       str[i] = 'x';
 
@@ -4804,14 +4812,14 @@ void draw_lockmask(uint8_t offset) {
       str[i] = (char) 219;
 
     }
-
+    
     if (notes[i] > 0)  {
       /*If the bit is set, there is a cue at this position. We'd like to display it as [] on screen*/
       /*Char 219 on the minicommand LCD is a []*/
 
       str[i] = (char) 255;
     }
-
+    }
   }
   GUI.put_string_at(0, str);
 
