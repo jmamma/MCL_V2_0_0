@@ -1379,12 +1379,16 @@ class MDSequencer : public ClockCallback {
           ExtPatternResolution[i] = 1;
           ExtPatternMutes[i] = SEQ_MUTE_OFF;
        }
+      MidiClock.addOnClockCallback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSetup);
       MidiClock.addOn96Callback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSequencerCallback);
       MidiClock.addOnMidiStopCallback(this, (midi_clock_callback_ptr_t)&MDSequencer::onMidiStopCallback);
 
    
     
     };
+    void MDSetup() {
+      if (MD.connected == false) { md_setup(); }
+    }
     void onMidiStopCallback() {
       for (uint8_t i = 0; i < 6; i++) {
       seq_buffer_notesoff(i);
@@ -1739,14 +1743,72 @@ uint8_t seq_ext_pitch(uint8_t note_num) {
           
           return pitch;
 }
+void a4_setup() {
+          MidiUart.setSpeed(31250,2);
 
+   if (Analog4.getBlockingSettings(0)) {
+          GUI.flash_strings_fill("A4", "CONNECTED");
+
+          Analog4.connected = true;
+          turboSetSpeed(4, 2);
+        }
+}
+void md_setup() {
+
+            MD.connected = true;
+
+        MidiUart.setSpeed(31250,1);
+
+        delay(100);
+         if (MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,CALLBACK_TIMEOUT)) {
+       
+          turboSetSpeed(4, 1);
+          delay(100);
+          
+          switchGlobal(7);
+          MD.resetMidiMap();
+          MD.global.baseChannel = 9;
+          
+          if (!MD.getBlockingGlobal(7)) {
+            MD.connected = false;
+            return;
+          }
+          if (!global_one.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
+            GUI.flash_strings_fill("GLOBAL", "ERROR");
+            MD.connected = false;
+            return;
+          }
+          if (rec_global != 1) {
+
+            rec_global = 1;
+            send_globals();
+          }
+          switchGlobal(7);
+          uint8_t curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
+          for (uint8_t x = 0; x < 2; x++) {
+            for (uint8_t y = 0; y < 16; y++) {
+              MD.setStatus(0x22, y);
+
+            }
+          }
+          MD.setStatus(0x22, curtrack);
+          GUI.flash_strings_fill("MD", "CONNECTED");
+
+          return;
+        }
+        MD.connected = false;
+}
 class MCLMidiEvents : public MidiCallback {
 
 
   public:
 
     void setup() {
-
+     // MidiUart.addOnRecvActiveSenseCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onRecvActiveSenseCallbackUartx);
+    //  MidiUart2.addOnRecvActiveSenseCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onRecvActiveSenseCallbackUart2);
+      Midi.addOnControlChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onMDStartup);
+//      MidiUart2.addOnProgramChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onRecvActiveSenseCallbackUart2);
+  
       Midi.addOnProgramChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onProgramChangeCallback);
       Midi.addOnNoteOnCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOnCallback);
       Midi.addOnNoteOffCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOffCallback);
@@ -1758,7 +1820,28 @@ class MCLMidiEvents : public MidiCallback {
       Midi2.addOnControlChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onControlChangeCallback_Midi2);
 
     };
+    void onA4Startup(uint8_t *msg) {
+     
+    }
+void onMDStartup(uint8_t *msg) {
 
+ //     uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
+ //     uint8_t param = msg[1];
+ //     uint8_t value = msg[2];
+  //     if ((channel != 15) || (param != 0x7B)) {
+  //      return;
+   //   }
+      
+       
+      
+    };
+
+    void onRecvActiveSenseCallbackUart2(uint8_t *msg) {
+   //   if (Analog4.connected == false) {
+       
+   //   }
+
+    };
   void onControlChangeCallback_Midi2(uint8_t *msg) {
       uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
       uint8_t param = msg[1];
@@ -2445,7 +2528,6 @@ class MDHandler2 : public MDCallback {
       MDSysexListener.addOnStatusResponseCallback(this, (md_status_callback_ptr_t)&MDHandler2::onStatusResponseCallback);
       MDSysexListener.addOnPatternMessageCallback(this, (md_callback_ptr_t)&MDHandler2::onPatternMessage);
       MDSysexListener.addOnKitMessageCallback(this, (md_callback_ptr_t)&MDHandler2::onKitMessage);
-      MDSysexListener.addOnGlobalMessageCallback(this, (md_callback_ptr_t)&MDHandler2::onGlobalMessage);
 
     }
 
@@ -2466,32 +2548,7 @@ class MDHandler2 : public MDCallback {
       }
     }
 
-    void onGlobalMessage() {
 
-      if (!global_one.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
-        GUI.flash_strings_fill("GLOBAL", "ERROR");
-        return;
-      }
-      if (rec_global != 1) {
-
-        rec_global = 1;
-        send_globals();
-
-        switchGlobal(7);
-        uint8_t curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
-        for (uint8_t x = 0; x < 2; x++) {
-          for (uint8_t y = 0; y < 16; y++) {
-            MD.setStatus(0x22, y);
-
-          }
-        }          
-
-        MD.setStatus(0x22, curtrack);
-        delay(500);
-        turboSetSpeed(4,1);
-      }
-
-    }
     /*A kit has been received by the Minicommand in the form of a Sysex message which is residing
       in memory*/
 
@@ -3991,11 +4048,7 @@ trackinfo_param2.handler = ptc_root_handler;
   sd_load_init();
   MidiClock.mode = MidiClock.EXTERNAL_MIDI;
 
-  switchGlobal(7);
-  MD.resetMidiMap();
 
-  //For base channel 10. needed for mutes to work properly.
-  MD.global.baseChannel = 9;
   MCLMidiEvents trigger;
 
   trigger.setup();
@@ -4005,21 +4058,19 @@ trackinfo_param2.handler = ptc_root_handler;
   trig_interface.setup();
   MidiClock.start();
   //   MidiUart.setActiveSenseTimer(290);
-  MD.requestGlobal(7);
 
 
   // patternswitch = 7;
   //     int curkit = MD.getCurrentKit(CALLBACK_TIMEOUT);
   //      MD.getBlockingKit(curkit);
-  
   md_seq.setup();
 
   A4SysexListener.setup();
+
   sei();
-  if (Analog4.getBlockingSettings(0)) {
-  Analog4.connected = true;
-  turboSetSpeed(4,2);
-  }
+    //md_setup();
+
+  
 }
 
 
@@ -4925,6 +4976,39 @@ int GridEncoder::update(encoder_t *enc) {
   return cur;
 }
 
+void GridEncoderPage::loop() {
+     if (MD.connected == true) {
+     if ((MidiUart.recvActiveSenseTimer > 300) && (MidiUart.speed > 1))  {
+    //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
+      turboSetSpeed(1,1);
+      MD.connected = false;
+      GUI.flash_strings_fill("MD", "DISCONNECTED");
+   //   }
+     }
+     }
+   if (MD.connected == false) {
+    if (MidiUart.recvActiveSenseTimer < 100) {
+      md_setup();
+       if (Analog4.connected == false) { a4_setup(); }
+    }
+     }
+
+    if (Analog4.connected == true) {
+     if ((MidiUart2.recvActiveSenseTimer > 300) && (MidiUart2.speed > 1))  {
+    //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
+      turboSetSpeed(1,2);
+      Analog4.connected = false;
+      GUI.flash_strings_fill("A4", "DISCONNECTED");
+   //   }
+     }
+     }
+   if (Analog4.connected == false) {
+    if (MidiUart2.recvActiveSenseTimer < 100) {
+      a4_setup();
+    }
+   }
+     
+}
 
 /*
   ===================
@@ -4937,6 +5021,8 @@ int GridEncoder::update(encoder_t *enc) {
 
 
 */
+
+
 void GridEncoderPage::display() {
 
   tick_frames();
@@ -5321,6 +5407,7 @@ void turboSetSpeed(uint8_t speed, uint8_t port) {
   delay(10);
   MidiUart_->setSpeed(tmSpeeds[speed ],port);
   MidiUart_->setActiveSenseTimer(290);
+  MidiUart_->speed = speed;
 }
 
 /*

@@ -309,6 +309,7 @@ public:
   // uint32_t getGridModel(int i);
   /* @} */
   void displayScroll(uint8_t i);
+  void loop();
 };
 
 
