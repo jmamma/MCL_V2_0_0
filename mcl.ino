@@ -55,14 +55,15 @@
 #define OLED_DC 44
 
 // Used for I2C or SPI
-#define OLED_RESET 38 
+#define OLED_RESET 38
 
 #define A4_TRACK_TYPE 2
 #define MD_TRACK_TYPE 1
 #define EXT_TRACK_TYPE 3
 
 #define EMPTY_TRACK_TYPE 0
-
+#define DEVICE_NULL 0
+#define DEVICE_MIDI 128
 #define DEVICE_MD 2
 #define DEVICE_A4 6
 
@@ -71,7 +72,8 @@
 #define ENCODER_RES_SYS 2
 #define ENCODER_RES_PAT 2
 //Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
-
+uint8_t uart1_device = DEVICE_NULL;
+uint8_t uart2_device = DEVICE_NULL;
 
 /*MDKit and Pattern objects must be defined outside of Classes and Methods otherwise the Minicommand freezes.*/
 MDPattern pattern_rec;
@@ -263,47 +265,47 @@ uint8_t last_extseq_track = 0;
 uint8_t gui_last_trig_press = 0;
 
 const scale_t *scales[16] {
-&chromaticScale,
-&ionianScale,          
-//&dorianScale,
-&phrygianScale,
-//&lydianScale,
-//&mixolydianScale,
-//&aeolianScale,
-//&locrianScale,
-&harmonicMinorScale,
-&melodicMinorScale,
-//&lydianDominantScale,
-//&wholeToneScale,
-//&wholeHalfStepScale,
-//&halfWholeStepScale,
-&majorPentatonicScale,
-&minorPentatonicScale,
-&suspendedPentatonicScale,
-&inSenScale,
-&bluesScale,
-//&majorBebopScale,
-//&dominantBebopScale,
-//&minorBebopScale,
-&majorArp,
-&minorArp,
-&majorMaj7Arp,
-&majorMin7Arp,
-&minorMin7Arp,
-//&minorMaj7Arp,
-&majorMaj7Arp9,
-//&majorMaj7ArpMin9,
-//&majorMin7Arp9,
-//&majorMin7ArpMin9,
-//&minorMin7Arp9,
-//&minorMin7ArpMin9,
-//&minorMaj7Arp9,
-//&minorMaj7ArpMin9
+  &chromaticScale,
+  &ionianScale,
+  //&dorianScale,
+  &phrygianScale,
+  //&lydianScale,
+  //&mixolydianScale,
+  //&aeolianScale,
+  //&locrianScale,
+  &harmonicMinorScale,
+  &melodicMinorScale,
+  //&lydianDominantScale,
+  //&wholeToneScale,
+  //&wholeHalfStepScale,
+  //&halfWholeStepScale,
+  &majorPentatonicScale,
+  &minorPentatonicScale,
+  &suspendedPentatonicScale,
+  &inSenScale,
+  &bluesScale,
+  //&majorBebopScale,
+  //&dominantBebopScale,
+  //&minorBebopScale,
+  &majorArp,
+  &minorArp,
+  &majorMaj7Arp,
+  &majorMin7Arp,
+  &minorMin7Arp,
+  //&minorMaj7Arp,
+  &majorMaj7Arp9,
+  //&majorMaj7ArpMin9,
+  //&majorMin7Arp9,
+  //&majorMin7ArpMin9,
+  //&minorMin7Arp9,
+  //&minorMin7ArpMin9,
+  //&minorMaj7Arp9,
+  //&minorMaj7ArpMin9
 };
 
 struct musical_notes  {
-   const char *notes_upper[16] = { "C ", "C#", "D ", "D#", "E ", "F", "F#", "G ", "G#", "A ", "A#", "B " };
-   const char *notes_lower[16] = { "c ", "c#", "d ", "d#", "e ", "f", "f#", "g ", "g#", "a ", "a#", "b " };
+  const char *notes_upper[16] = { "C ", "C#", "D ", "D#", "E ", "F", "F#", "G ", "G#", "A ", "A#", "B " };
+  const char *notes_lower[16] = { "c ", "c#", "d ", "d#", "e ", "f", "f#", "g ", "g#", "a ", "a#", "b " };
 
 };
 /*
@@ -329,33 +331,33 @@ class ExtSeqTrack {
     uint64_t SeqLockMask;
     uint8_t Seqconditional_timing[64];
     uint8_t SeqPatternResolution;
-   bool copyTrack (int tracknumber, uint8_t column) {
- 
-    m_memcpy(&SeqPatternNotes, &ExtPatternNotes[tracknumber], sizeof(SeqPatternNotes));
-    SeqPatternResolution = ExtPatternResolution[tracknumber];
+    bool copyTrack (int tracknumber, uint8_t column) {
 
-    SeqLockMask = ExtLockMasks[tracknumber];
-    SeqPatternLength = ExtPatternLengths[tracknumber];
-    m_memcpy(&Seqconditional_timing, &Extconditional_timing[tracknumber], sizeof(Seqconditional_timing));
+      m_memcpy(&SeqPatternNotes, &ExtPatternNotes[tracknumber], sizeof(SeqPatternNotes));
+      SeqPatternResolution = ExtPatternResolution[tracknumber];
 
-    active = EXT_TRACK_TYPE;
-      
+      SeqLockMask = ExtLockMasks[tracknumber];
+      SeqPatternLength = ExtPatternLengths[tracknumber];
+      m_memcpy(&Seqconditional_timing, &Extconditional_timing[tracknumber], sizeof(Seqconditional_timing));
+
+      active = EXT_TRACK_TYPE;
+
     }
-  bool placeTrack(int tracknumber, uint8_t column) {
+    bool placeTrack(int tracknumber, uint8_t column) {
 
-    
-    m_memcpy(&ExtPatternNotes[tracknumber], &SeqPatternNotes, sizeof(SeqPatternNotes));
-    
 
-    ExtLockMasks[tracknumber] = SeqLockMask;
-    ExtPatternLengths[tracknumber] = SeqPatternLength;
+      m_memcpy(&ExtPatternNotes[tracknumber], &SeqPatternNotes, sizeof(SeqPatternNotes));
 
-    ExtPatternResolution[tracknumber] = SeqPatternResolution;
 
-    m_memcpy(&Extconditional_timing[tracknumber], &Seqconditional_timing, sizeof(Seqconditional_timing));
+      ExtLockMasks[tracknumber] = SeqLockMask;
+      ExtPatternLengths[tracknumber] = SeqPatternLength;
+
+      ExtPatternResolution[tracknumber] = SeqPatternResolution;
+
+      m_memcpy(&Extconditional_timing[tracknumber], &Seqconditional_timing, sizeof(Seqconditional_timing));
       return true;
-  
-  }
+
+    }
 
 };
 
@@ -365,36 +367,36 @@ class A4Track : public ExtSeqTrack {
     A4Sound sound;
 
     bool copyTrack (int tracknumber, uint8_t column) {
-          
-    m_memcpy(&SeqPatternNotes, &ExtPatternNotes[tracknumber], sizeof(SeqPatternNotes));
-    SeqPatternResolution = ExtPatternResolution[tracknumber];
 
-    SeqLockMask = ExtLockMasks[tracknumber];
-    SeqPatternLength = ExtPatternLengths[tracknumber];
-    m_memcpy(&Seqconditional_timing, &Extconditional_timing[tracknumber], sizeof(Seqconditional_timing));
+      m_memcpy(&SeqPatternNotes, &ExtPatternNotes[tracknumber], sizeof(SeqPatternNotes));
+      SeqPatternResolution = ExtPatternResolution[tracknumber];
 
-    active = A4_TRACK_TYPE;
-      
+      SeqLockMask = ExtLockMasks[tracknumber];
+      SeqPatternLength = ExtPatternLengths[tracknumber];
+      m_memcpy(&Seqconditional_timing, &Extconditional_timing[tracknumber], sizeof(Seqconditional_timing));
+
+      active = A4_TRACK_TYPE;
+
     }
-  bool placeTrack(int tracknumber, uint8_t column, A4Sound *analogfour_sound) {
+    bool placeTrack(int tracknumber, uint8_t column, A4Sound *analogfour_sound) {
       if (active == A4_TRACK_TYPE) {
-       m_memcpy(analogfour_sound, &sound, sizeof(A4Sound));
+        m_memcpy(analogfour_sound, &sound, sizeof(A4Sound));
 
-    m_memcpy(&ExtPatternNotes[tracknumber], &SeqPatternNotes, sizeof(SeqPatternNotes));
-    
+        m_memcpy(&ExtPatternNotes[tracknumber], &SeqPatternNotes, sizeof(SeqPatternNotes));
 
-    ExtLockMasks[tracknumber] = SeqLockMask;
-    ExtPatternLengths[tracknumber] = SeqPatternLength;
 
-    ExtPatternResolution[tracknumber] = SeqPatternResolution;
+        ExtLockMasks[tracknumber] = SeqLockMask;
+        ExtPatternLengths[tracknumber] = SeqPatternLength;
 
-    m_memcpy(&Extconditional_timing[tracknumber], &Seqconditional_timing, sizeof(Seqconditional_timing));
-      return true;
+        ExtPatternResolution[tracknumber] = SeqPatternResolution;
+
+        m_memcpy(&Extconditional_timing[tracknumber], &Seqconditional_timing, sizeof(Seqconditional_timing));
+        return true;
       }
       else {
-      return false;
+        return false;
       }
-  }
+    }
 };
 
 
@@ -613,7 +615,7 @@ class MDTrack {
         PatternMasks[tracknumber] = SeqPatternMask;
         LockMasks[tracknumber] = SeqLockMask;
         PatternLengths[tracknumber] = SeqPatternLegnth;
-        
+
         m_memcpy(&conditional_timing[tracknumber], SeqConditional_timing, sizeof(SeqConditional_timing));
 
 
@@ -699,7 +701,7 @@ Project project_header;
 
 */
 void sd_load_init() {
- 
+
   if (SDCard.init() != 0) {
     GUI.flash_strings_fill("SD CARD ERROR", "");
   }
@@ -954,18 +956,18 @@ bool load_track(int32_t column, int32_t row, int m, A4Track* temp_track) {
   file.seek(&offset, FAT_SEEK_SET);
 
   if (column < 16) {
-      len = (sizeof(MDTrack) - sizeof(temptrack.kitextra) - (LOCK_AMOUNT * 3));
+    len = (sizeof(MDTrack) - sizeof(temptrack.kitextra) - (LOCK_AMOUNT * 3));
 
-  //len = (sizeof(MDTrack)  - (LOCK_AMOUNT * 3));
-  file.read(( uint8_t*) & (temptrack), len);
-  if (m == 0) {
+    //len = (sizeof(MDTrack)  - (LOCK_AMOUNT * 3));
+    file.read(( uint8_t*) & (temptrack), len);
+    if (m == 0) {
 
 
-    file.read(( uint8_t*) & (temptrack.kitextra), sizeof(temptrack.kitextra));
-    file.read(( uint8_t*) & (temptrack.param_number[0]), temptrack.arraysize);
-    file.read(( uint8_t*) & (temptrack.value[0]), temptrack.arraysize);
-    file.read(( uint8_t*) & (temptrack.step[0]), temptrack.arraysize);
-  }
+      file.read(( uint8_t*) & (temptrack.kitextra), sizeof(temptrack.kitextra));
+      file.read(( uint8_t*) & (temptrack.param_number[0]), temptrack.arraysize);
+      file.read(( uint8_t*) & (temptrack.value[0]), temptrack.arraysize);
+      file.read(( uint8_t*) & (temptrack.step[0]), temptrack.arraysize);
+    }
   }
   else {
     if (Analog4.connected) {
@@ -998,40 +1000,40 @@ bool store_track_inGrid(int track, int32_t column, int32_t row, A4Track *analogf
   file.seek(&offset, FAT_SEEK_SET);
   if (column < 16) {
 
-  temptrack2->copyTrack(track, column);
-  //  if (!SDCard.isInit) { setLed(); }
+    temptrack2->copyTrack(track, column);
+    //  if (!SDCard.isInit) { setLed(); }
 
-  // SDCard.deleteFile("/valertest.mcl");
-  //  MDTrack temp;
+    // SDCard.deleteFile("/valertest.mcl");
+    //  MDTrack temp;
 
 
-  // int32_t offset = (column + (row * (int32_t) 16)) *  (int32_t) sizeof(MDTrack);
+    // int32_t offset = (column + (row * (int32_t) 16)) *  (int32_t) sizeof(MDTrack);
 
-  len = sizeof(MDTrack) - (LOCK_AMOUNT * 3);
+    len = sizeof(MDTrack) - (LOCK_AMOUNT * 3);
 
-  file.write(( uint8_t*)  (temptrack2), len);
+    file.write(( uint8_t*)  (temptrack2), len);
 
-  file.write(( uint8_t*)  (temptrack2->param_number[0]), temptrack2->arraysize);
-  file.write(( uint8_t*)  (temptrack2->value[0]), temptrack2->arraysize);
-  file.write(( uint8_t*)  (temptrack2->step[0]), temptrack2->arraysize);
+    file.write(( uint8_t*)  (temptrack2->param_number[0]), temptrack2->arraysize);
+    file.write(( uint8_t*)  (temptrack2->value[0]), temptrack2->arraysize);
+    file.write(( uint8_t*)  (temptrack2->step[0]), temptrack2->arraysize);
     return true;
 
   }
-/*analog 4 tracks*/
+  /*analog 4 tracks*/
   else {
-  if (Analog4.connected) {
-  analogfour_track->copyTrack(track - 16, column - 16);
-  file.write(( uint8_t*)  (analogfour_track), sizeof(A4Track));
-  }
-  else {
+    if (Analog4.connected) {
+      analogfour_track->copyTrack(track - 16, column - 16);
+      file.write(( uint8_t*)  (analogfour_track), sizeof(A4Track));
+    }
+    else {
       ExtSeqTrack track_buf;
       track_buf.copyTrack(track - 16, column - 16);
       file.write(( uint8_t*) & (track_buf), sizeof(ExtSeqTrack));
-  }
+    }
     return true;
 
   }
-     return false;
+  return false;
 
 }
 
@@ -1101,29 +1103,32 @@ void load_the_damnkit(uint8_t pattern) {
 }
 void load_seq_step_page(uint8_t track) {
 
-    cur_col = track;
-    trackinfo_param3.cur = PatternLengths[track];
-    trackinfo_param2.cur = 6;
-    trackinfo_param2.max = 11;
-    curpage = SEQ_STEP_PAGE;
+  cur_col = track;
+  trackinfo_param3.cur = PatternLengths[track];
+  trackinfo_param2.cur = 6;
+  trackinfo_param2.max = 11;
+  curpage = SEQ_STEP_PAGE;
 }
 
 
 void load_seq_extstep_page(uint8_t track) {
-   if (ExtPatternResolution[last_extseq_track] == 1) {     trackinfo_param2.cur = 3; trackinfo_param2.max = 5; }
-   else {
-        trackinfo_param2.cur = 6;
-   trackinfo_param2.max = 11;
-   }
-   last_extseq_track = track;
-   trackinfo_param3.cur = ExtPatternLengths[track];
-   cur_col = track + 16;
-   curpage = SEQ_EXTSTEP_PAGE;
-                                 
+  if (ExtPatternResolution[last_extseq_track] == 1) {
+    trackinfo_param2.cur = 3;
+    trackinfo_param2.max = 5;
+  }
+  else {
+    trackinfo_param2.cur = 6;
+    trackinfo_param2.max = 11;
+  }
+  last_extseq_track = track;
+  trackinfo_param3.cur = ExtPatternLengths[track];
+  cur_col = track + 16;
+  curpage = SEQ_EXTSTEP_PAGE;
+
 }
 void clear_seq_conditional(uint8_t i) {
   for (uint8_t c = 0; c < 64; c++) {
-conditional_timing[i][c] = 0; 
+    conditional_timing[i][c] = 0;
   }
 }
 void clear_seq_locks(uint8_t i) {
@@ -1133,13 +1138,13 @@ void clear_seq_locks(uint8_t i) {
     }
     PatternLocksParams[i][c] = 0;
   }
-    LockMasks[i] = 0;
+  LockMasks[i] = 0;
 
 }
 
 void clear_extseq_conditional(uint8_t i) {
   for (uint8_t c = 0; c < 64; c++) {
-Extconditional_timing[i][c] = 0; 
+    Extconditional_timing[i][c] = 0;
   }
 }
 void clear_extseq_locks(uint8_t i) {
@@ -1147,7 +1152,7 @@ void clear_extseq_locks(uint8_t i) {
     for (uint8_t x = 0; x < 128; x++) {
       ExtPatternNotes[i][c][x] = 0;
     }
-   // ExtPatternNotesParams[i][c] = 0;
+    // ExtPatternNotesParams[i][c] = 0;
   }
 }
 
@@ -1159,7 +1164,7 @@ void clear_seq_track(uint8_t i) {
   //for (c=0; c < 4; c++) {
   //uint8_t PatternLengths[i] = 16;
   //}
-    clear_seq_conditional(i);
+  clear_seq_conditional(i);
 
   clear_seq_locks(i);
 
@@ -1170,23 +1175,25 @@ void clear_seq_track(uint8_t i) {
 
 void clear_extseq_track(uint8_t i) {
   uint8_t c;
-  if (i > 16) { return; }
+  if (i > 16) {
+    return;
+  }
   //for (c=0; c < 4; c++) {
   //uint8_t PatternLengths[i] = 16;
   //}
-    //        GUI.flash_string("clearing");
-//GUI.flash_put_value(0,i);
+  //        GUI.flash_string("clearing");
+  //GUI.flash_put_value(0,i);
 
-  clear_extseq_locks(i);  
+  clear_extseq_locks(i);
   clear_extseq_conditional(i);
-seq_buffer_notesoff(i);
+  seq_buffer_notesoff(i);
   ExtLockMasks[i] = 0;
 
 
 }
 
 uint8_t euclid_randomScalePitch(const scale_t *scale, uint8_t octaves, uint8_t offset) {
-    uint8_t pitch = scale->pitches[random(scale->size)];
+  uint8_t pitch = scale->pitches[random(scale->size)];
   if (octaves == 0) {
     return pitch + offset;
   } else {
@@ -1205,45 +1212,47 @@ void setEuclid( uint8_t track, uint8_t pulses, uint8_t len, uint8_t offset, uint
   uint8_t cnt = len;
   for (uint8_t i = 0; i < len; i++) {
     if (i < (len - 1)) {
-            PatternMasks[track] <<= 1;
-        }   
-    
+      PatternMasks[track] <<= 1;
+    }
+
     if (cnt >= len) {
-      SET_BIT64(PatternMasks[track], 0); 
+      SET_BIT64(PatternMasks[track], 0);
       cnt -= len;
-    }   
+    }
     cnt += pulses;
   }
   PatternMasks[track] <<= offset;
 
   if (scale > 0) {
 
-  PatternLocksParams[track][0] = 1;
-      for (uint8_t x=0; x < PatternLengths[track]; x++) {
+    PatternLocksParams[track][0] = 1;
+    for (uint8_t x = 0; x < PatternLengths[track]; x++) {
       if (IS_BIT_SET64(PatternMasks[track], x )) {
-        
-      
-      SET_BIT64(LockMasks[track], x );
-      PatternLocks[track][0][x] = euclid_randomScalePitch(scales[scale], octave, root); ;
+
+
+        SET_BIT64(LockMasks[track], x );
+        PatternLocks[track][0][x] = euclid_randomScalePitch(scales[scale], octave, root); ;
       }
-      }
+    }
   }
 }
 void random_pattern(uint8_t pulses, uint8_t len, uint8_t offset, uint8_t scale, uint8_t root) {
 
-  for (uint8_t i=0; i< 16; i++) {
-      setEuclid(i, random(0,random(0,pulses)), len, random(0,offset),scale,root);
-       
-      }
+  for (uint8_t i = 0; i < 16; i++) {
+    setEuclid(i, random(0, random(0, pulses)), len, random(0, offset), scale, root);
 
-  
-  
+  }
+
+
+
 }
 void parameter_locks(uint8_t i, uint8_t step_count) {
   uint8_t c;
   if (IS_BIT_SET64(LockMasks[i], step_count )) {
     for (c = 0; c < 4; c++) {
-            if (PatternLocks[i][c][step_count] > 0) {setTrackParam(i, PatternLocksParams[i][c] - 1, PatternLocks[i][c][step_count] - 1); }
+      if (PatternLocks[i][c][step_count] > 0) {
+        setTrackParam(i, PatternLocksParams[i][c] - 1, PatternLocks[i][c][step_count] - 1);
+      }
 
     }
   }
@@ -1251,16 +1260,19 @@ void parameter_locks(uint8_t i, uint8_t step_count) {
 
     for (c = 0; c < 4; c++) {
 
-          setTrackParam(i, PatternLocksParams[i][c] - 1, MD.kit.params[i][PatternLocksParams[i][c] - 1]);
+      setTrackParam(i, PatternLocksParams[i][c] - 1, MD.kit.params[i][PatternLocksParams[i][c] - 1]);
 
     }
-  
+
   }
 }
 void seq_buffer_notesoff(uint8_t track) {
   for (uint8_t c = 0; c < SEQ_NOTEBUF_SIZE; c++) {
-  if (ExtPatternNoteBuffer[track][c] > 0) { MidiUart2.sendNoteOff(track, ExtPatternNoteBuffer[track][c], 0); ExtPatternNoteBuffer[track][c]= 0; }
-  
+    if (ExtPatternNoteBuffer[track][c] > 0) {
+      MidiUart2.sendNoteOff(track, ExtPatternNoteBuffer[track][c], 0);
+      ExtPatternNoteBuffer[track][c] = 0;
+    }
+
   }
 }
 void seq_note_on(uint8_t track, uint8_t note) {
@@ -1271,57 +1283,57 @@ void seq_note_on(uint8_t track, uint8_t note) {
       ExtPatternNoteBuffer[track][c] = note;
       return;
     }
-  
+
   }
 }
 void seq_note_off(uint8_t track, uint8_t note) {
-MidiUart2.sendNoteOff(track, note, 0);
+  MidiUart2.sendNoteOff(track, note, 0);
 
   for (uint8_t i = 0; i < SEQ_NOTEBUF_SIZE; i++) {
     if (ExtPatternNoteBuffer[track][i] == note) {
       ExtPatternNoteBuffer[track][i] = 0;
       return;
     }
-  
+
   }
 }
 
 
 void noteon_conditional(uint8_t condition, uint8_t track, uint8_t note) {
 
-    if ((condition == 0)) {
-seq_note_on(track, note);
+  if ((condition == 0)) {
+    seq_note_on(track, note);
   }
 
   else if (condition <= 8) {
-  //  if ((((MidiClock.div32th_counter / ExtPatternResolution[track]) - pattern_start_clock32th * ExtPatternResolution[track] / 2) + PatternLengths[i]) / PatternLengths[i]) % ( (condition)) == 0) {
-     // if ((((MidiClock.div32th_counter / ExtPatternResolution[track]) - (pattern_start_clock32th / ExtPatternResolution[track]) + PatternLengths[track] * (2 / ExtPatternResolution[track])) / PatternLengths[track] * (2 / ExtPatternResolution[track])) % ( (condition)) == 0) {
+    //  if ((((MidiClock.div32th_counter / ExtPatternResolution[track]) - pattern_start_clock32th * ExtPatternResolution[track] / 2) + PatternLengths[i]) / PatternLengths[i]) % ( (condition)) == 0) {
+    // if ((((MidiClock.div32th_counter / ExtPatternResolution[track]) - (pattern_start_clock32th / ExtPatternResolution[track]) + PatternLengths[track] * (2 / ExtPatternResolution[track])) / PatternLengths[track] * (2 / ExtPatternResolution[track])) % ( (condition)) == 0) {
 
-   if (ExtPatternResolution[track] == 2) {
-    if (((MidiClock.div16th_counter - pattern_start_clock32th / 2 + PatternLengths[track]) / PatternLengths[track]) % ( (condition)) == 0) {
-   seq_note_on(track, note);
+    if (ExtPatternResolution[track] == 2) {
+      if (((MidiClock.div16th_counter - pattern_start_clock32th / 2 + PatternLengths[track]) / PatternLengths[track]) % ( (condition)) == 0) {
+        seq_note_on(track, note);
+      }
     }
-  }
-  else {
+    else {
       if (((MidiClock.div32th_counter - pattern_start_clock32th  + PatternLengths[track]) / PatternLengths[track]) % ( (condition)) == 0) {
-   seq_note_on(track, note);
+        seq_note_on(track, note);
+      }
     }
-  }
   }
   else if ((condition == 9) && (random(100) <= 10)) {
-seq_note_on(track, note);
+    seq_note_on(track, note);
   }
   else if ((condition == 10) && (random(100) <= 25)) {
-seq_note_on(track, note);
+    seq_note_on(track, note);
   }
   else if ((condition == 11) && (random(100) <= 50)) {
-seq_note_on(track, note);
+    seq_note_on(track, note);
   }
   else if ((condition == 12) && (random(100) <= 75)) {
-seq_note_on(track, note);
+    seq_note_on(track, note);
   }
   else if ((condition == 13) && (random(100) <= 90)) {
-seq_note_on(track, note);
+    seq_note_on(track, note);
   }
 }
 
@@ -1351,20 +1363,20 @@ void trig_conditional(uint8_t condition, uint8_t i) {
   }
 }
 class TrigInterface: public ClockCallback {
-public:
+  public:
 
     void setup() {
-         MidiClock.addOnMidiStartCallback(this, (midi_clock_callback_ptr_t)&TrigInterface::onMidiStartCallback);
+      MidiClock.addOnMidiStartCallback(this, (midi_clock_callback_ptr_t)&TrigInterface::onMidiStartCallback);
       MidiClock.addOnMidiContinueCallback(this, (midi_clock_callback_ptr_t)&TrigInterface::onMidiStartCallback);
 
-      
+
     };
-     void onMidiStartCallback() {
-   //     if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
-    exploit_start_clock = slowclock;
-    noteproceed = 0;
- // }
-  pattern_start_clock32th = 0;
+    void onMidiStartCallback() {
+      //     if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
+      exploit_start_clock = slowclock;
+      noteproceed = 0;
+      // }
+      pattern_start_clock32th = 0;
     }
 };
 class MDSequencer : public ClockCallback {
@@ -1372,129 +1384,149 @@ class MDSequencer : public ClockCallback {
 
     void setup() {
       for (uint8_t i = 0; i < 16; i++) {
-          PatternLengths[i] = 16;
-       }
-        for (uint8_t i = 0; i < 6; i++) {
-          ExtPatternLengths[i] = 16;
-          ExtPatternResolution[i] = 1;
-          ExtPatternMutes[i] = SEQ_MUTE_OFF;
-       }
-      MidiClock.addOnClockCallback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSetup);
+        PatternLengths[i] = 16;
+      }
+      for (uint8_t i = 0; i < 6; i++) {
+        ExtPatternLengths[i] = 16;
+        ExtPatternResolution[i] = 1;
+        ExtPatternMutes[i] = SEQ_MUTE_OFF;
+      }
+      //   MidiClock.addOnClockCallback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSetup);
       MidiClock.addOn96Callback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSequencerCallback);
       MidiClock.addOnMidiStopCallback(this, (midi_clock_callback_ptr_t)&MDSequencer::onMidiStopCallback);
 
-   
-    
+
+
     };
-    void MDSetup() {
-      if (MD.connected == false) { md_setup(); }
-    }
+    //   void MDSetup() {
+    //      if (MD.connected == false) { md_setup(); }
+    //   }
     void onMidiStopCallback() {
       for (uint8_t i = 0; i < 6; i++) {
-      seq_buffer_notesoff(i);
+        seq_buffer_notesoff(i);
       }
     }
     void MDSequencerCallback() {
       // if (IS_BIT_SET8(UCSR1A, RXC1)) { isr_usart1(1); }
       uint8_t next_step;
-     
+
       //   setTrackParam(1,0,random(127));
       if (in_sysex == 0) {
-      
-      for (uint8_t i = 0; i < 16; i++) {
-       // isr_usart1(1); 
-        //if (MidiClock.mod6_counter == 0) { MD.triggerTrack(i, 127); }
-        uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[i] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[i]));
 
-        int8_t timing = conditional_timing[i][step_count] >> 4; //upper
-        uint8_t condition = conditional_timing[i][step_count] & 0x0F; //lower
+        for (uint8_t i = 0; i < 16; i++) {
+          // isr_usart1(1);
+          //if (MidiClock.mod6_counter == 0) { MD.triggerTrack(i, 127); }
+          uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[i] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[i]));
 
-        if (step_count == (PatternLengths[i] - 1)) { next_step = 0; }
-        else { next_step = step_count + 1; }
+          int8_t timing = conditional_timing[i][step_count] >> 4; //upper
+          uint8_t condition = conditional_timing[i][step_count] & 0x0F; //lower
 
-        int8_t timing_next = conditional_timing[i][next_step] >> 4; //upper
-        uint8_t condition_next = conditional_timing[i][next_step] & 0x0F; //lower
-
-        //-5 -4 -3 -2 -1  0  1 2 3 4 5
-        //   0 1  2  3  4  5  6  7 8 9 10 11
-        ///  0  1  2  3  4  5  0  1 2 3 4 5
-
-
-        if ((timing >= 6) && (timing - 6 == (int8_t)MidiClock.mod6_counter)) {
-
-          parameter_locks(i, step_count);
-
-          if (IS_BIT_SET64(PatternMasks[i], step_count )) {
-            trig_conditional(condition, i);
+          if (step_count == (PatternLengths[i] - 1)) {
+            next_step = 0;
+          }
+          else {
+            next_step = step_count + 1;
           }
 
-        }
+          int8_t timing_next = conditional_timing[i][next_step] >> 4; //upper
+          uint8_t condition_next = conditional_timing[i][next_step] & 0x0F; //lower
 
-        if ((timing_next < 6) && ((timing_next) == (int8_t) MidiClock.mod6_counter)) {
+          //-5 -4 -3 -2 -1  0  1 2 3 4 5
+          //   0 1  2  3  4  5  6  7 8 9 10 11
+          ///  0  1  2  3  4  5  0  1 2 3 4 5
 
-          parameter_locks(i, next_step);
 
-          if (IS_BIT_SET64(PatternMasks[i], next_step)) {
-            trig_conditional(condition_next, i);
+          if ((timing >= 6) && (timing - 6 == (int8_t)MidiClock.mod6_counter)) {
+
+            parameter_locks(i, step_count);
+
+            if (IS_BIT_SET64(PatternMasks[i], step_count )) {
+              trig_conditional(condition, i);
+            }
+
           }
 
+          if ((timing_next < 6) && ((timing_next) == (int8_t) MidiClock.mod6_counter)) {
+
+            parameter_locks(i, next_step);
+
+            if (IS_BIT_SET64(PatternMasks[i], next_step)) {
+              trig_conditional(condition_next, i);
+            }
+
+          }
         }
       }
-      }
-            for (uint8_t i = 0; i < 4; i++) {
-          //  isr_usart1(1); 
-       
-     //   uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter * ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
-      //  uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[i] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[i]));
+      for (uint8_t i = 0; i < 4; i++) {
+        //  isr_usart1(1);
 
-   //     uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th * ExtPatternResolution[i] / 2)) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th * ExtPatternResolution[i] / 2)) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
-       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
-       
-       
-         uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i])));
+        //   uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter * ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
+        //  uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[i] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[i]));
+
+        //     uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th * ExtPatternResolution[i] / 2)) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th * ExtPatternResolution[i] / 2)) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
+        // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]))));
+
+
+        uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[i]) - (pattern_start_clock32th / ExtPatternResolution[i])) - (ExtPatternLengths[i] * ((MidiClock.div32th_counter / ExtPatternResolution[i] - (pattern_start_clock32th / ExtPatternResolution[i])) / (ExtPatternLengths[i])));
 
         int8_t timing = Extconditional_timing[i][step_count] >> 4; //upper
         uint8_t condition = Extconditional_timing[i][step_count] & 0x0F; //lower
 
-        if (step_count == (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) - 1)) { next_step = 0; }
-        else { next_step = step_count + 1; }
+        if (step_count == (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) - 1)) {
+          next_step = 0;
+        }
+        else {
+          next_step = step_count + 1;
+        }
 
         int8_t timing_next = Extconditional_timing[i][next_step] >> 4; //upper
         uint8_t condition_next = Extconditional_timing[i][next_step] & 0x0F; //lower
-               if (!in_sysex2) { 
+        if (!in_sysex2) {
 
-       int8_t timing_counter = MidiClock.mod6_counter;
+          int8_t timing_counter = MidiClock.mod6_counter;
 
-       if (ExtPatternResolution[i] == 1) {
-        timing_counter = MidiClock.mod3_counter;
-       }
-      
+          if (ExtPatternResolution[i] == 1) {
+            timing_counter = MidiClock.mod3_counter;
+          }
 
-       
-        if ((timing >= (3 * ExtPatternResolution[i])) && (timing - (3 * ExtPatternResolution[i]) == (int8_t)timing_counter)) {
 
-        for (uint8_t c = 0; c < 4; c++) {
-           if (ExtPatternNotes[i][c][step_count] < 0) { seq_note_off(i, abs(ExtPatternNotes[i][c][step_count]) - 1);  }
-             
-           else if (ExtPatternNotes[i][c][step_count] > 0) { if ((ExtPatternMutes[i] == SEQ_MUTE_OFF)) { noteon_conditional(condition, i, abs(ExtPatternNotes[i][c][step_count]) - 1);  } }
-           }
 
-        }
+          if ((timing >= (3 * ExtPatternResolution[i])) && (timing - (3 * ExtPatternResolution[i]) == (int8_t)timing_counter)) {
 
-        if ((timing_next < (3 * ExtPatternResolution[i])) && ((timing_next) == (int8_t) timing_counter)) {
+            for (uint8_t c = 0; c < 4; c++) {
+              if (ExtPatternNotes[i][c][step_count] < 0) {
+                seq_note_off(i, abs(ExtPatternNotes[i][c][step_count]) - 1);
+              }
 
-             for (uint8_t c = 0; c < 4; c++) {
-
-         if (ExtPatternNotes[i][c][step_count + 1] < 0) { seq_note_off(i, abs(ExtPatternNotes[i][c][next_step]) - 1);  }
-         else if (ExtPatternNotes[i][c][step_count + 1] > 0) { if (ExtPatternMutes[i] == SEQ_MUTE_OFF) { noteon_conditional(condition, i, abs(ExtPatternNotes[i][c][next_step]) - 1); } }
+              else if (ExtPatternNotes[i][c][step_count] > 0) {
+                if ((ExtPatternMutes[i] == SEQ_MUTE_OFF)) {
+                  noteon_conditional(condition, i, abs(ExtPatternNotes[i][c][step_count]) - 1);
+                }
+              }
+            }
 
           }
+
+          if ((timing_next < (3 * ExtPatternResolution[i])) && ((timing_next) == (int8_t) timing_counter)) {
+
+            for (uint8_t c = 0; c < 4; c++) {
+
+              if (ExtPatternNotes[i][c][step_count + 1] < 0) {
+                seq_note_off(i, abs(ExtPatternNotes[i][c][next_step]) - 1);
+              }
+              else if (ExtPatternNotes[i][c][step_count + 1] > 0) {
+                if (ExtPatternMutes[i] == SEQ_MUTE_OFF) {
+                  noteon_conditional(condition, i, abs(ExtPatternNotes[i][c][next_step]) - 1);
+                }
+              }
+
+            }
+          }
         }
-               }
-              
+
+      }
     }
-    }
-    
+
 };
 uint8_t globalbasechannel_to_channel(uint8_t b) {
   // -- 0
@@ -1515,288 +1547,308 @@ void encoder_param2_handle(Encoder *enc) {
 }
 
 uint8_t note_to_track_map(uint8_t note) {
-            uint8_t note_to_track_map[7] = { 0, 2, 4, 5, 7, 9, 11 };
-            for (uint8_t i = 0; i < 7; i++) {
-              if (note_to_track_map[i] == (note - (note / 12) * 12)) {
-                return i + 16;
-              }
-            }
+  uint8_t note_to_track_map[7] = { 0, 2, 4, 5, 7, 9, 11 };
+  for (uint8_t i = 0; i < 7; i++) {
+    if (note_to_track_map[i] == (note - (note / 12) * 12)) {
+      return i + 16;
+    }
+  }
 }
 void trigger_noteoff_interface(uint8_t *msg, uint8_t device) {
-          uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
+  uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
 
-     uint8_t note_num;
-      if (device == DEVICE_MD) {
+  uint8_t note_num;
+  if (device == DEVICE_MD) {
 
-        for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
-              if (msg[1] == MD.global.drumMapping[i]) {
-                note_num = i;
-            }
-        }
+    for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+      if (msg[1] == MD.global.drumMapping[i]) {
+        note_num = i;
       }
-      else {
-                    note_num = note_to_track_map(msg[1]);
-       }
-   notes[note_num] = 3;
-   
-   if (note_num > 20) { return; }
- 
-   else if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE)) {
-          int i;
-          draw_notes(0);
-          uint8_t all_notes_off = 0;
-          uint8_t a = 0;
-          uint8_t b = 0;
-          for (i = 0; i < 20; i++) {
-            if (notes[i] == 1) {
-              a++;
-            }
-            if (notes[i] == 3) {
-              b++;
-            }
-          }
+    }
+  }
+  else {
+    note_num = note_to_track_map(msg[1]);
+  }
+  notes[note_num] = 3;
 
-          if ((a == 0) && (b > 0)) {
-            all_notes_off = 1;
-          }
+  if (note_num > 20) {
+    return;
+  }
 
-          if (all_notes_off == 1) {
-            if (curpage == S_PAGE)  {
-              exploit_off();
-              store_tracks_in_mem( 0, param2.getValue(), STORE_IN_PLACE);
-              GUI.setPage(&page);
-              curpage = 0;
-            }
-            if (curpage == W_PAGE) {
-              exploit_off();
-              write_tracks_to_md( 0, param2.getValue(), 0);
-              GUI.setPage(&page);
-              curpage = 0;
-            }
-            if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() > 0) && (b > 1)) {
-              toggle_cues_batch();
-              send_globals();
-              exploit_off();
-              GUI.setPage(&page);
-              curpage = 0;
-            }
-          }
+  else if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE)) {
+    int i;
+    draw_notes(0);
+    uint8_t all_notes_off = 0;
+    uint8_t a = 0;
+    uint8_t b = 0;
+    for (i = 0; i < 20; i++) {
+      if (notes[i] == 1) {
+        a++;
+      }
+      if (notes[i] == 3) {
+        b++;
+      }
+    }
 
-        }
+    if ((a == 0) && (b > 0)) {
+      all_notes_off = 1;
+    }
+
+    if (all_notes_off == 1) {
+      if (curpage == S_PAGE)  {
+        exploit_off();
+        store_tracks_in_mem( 0, param2.getValue(), STORE_IN_PLACE);
+        GUI.setPage(&page);
+        curpage = 0;
+      }
+      if (curpage == W_PAGE) {
+        exploit_off();
+        write_tracks_to_md( 0, param2.getValue(), 0);
+        GUI.setPage(&page);
+        curpage = 0;
+      }
+      if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() > 0) && (b > 1)) {
+        toggle_cues_batch();
+        send_globals();
+        exploit_off();
+        GUI.setPage(&page);
+        curpage = 0;
+      }
+    }
+
+  }
 
 }
 
 
 void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
-        uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
+  uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
 
   uint8_t note_num = 0;
   uint16_t current_clock = slowclock;
-     if (device == DEVICE_MD) {
+  if (device == DEVICE_MD) {
 
-        for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
-              if (msg[1] == MD.global.drumMapping[i]) {
-                note_num = i;
-            }
-        }
+    for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+      if (msg[1] == MD.global.drumMapping[i]) {
+        note_num = i;
+      }
+    }
+  }
+  else {
+    note_num = note_to_track_map(msg[1]);
+
+  }
+
+  if (note_num > 20) {
+    return;
+  }
+
+  if (notes[note_num] == 0) {
+    notes[note_num] = 1;
+  }
+
+  if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() == 0)) {
+    toggle_cue(note_num); send_globals();
+  }
+
+  if ((curpage == SEQ_STEP_PAGE) && (device == DEVICE_A4)) {
+
+    load_seq_extstep_page(channel);
+    return;
+  }
+  if ((device == DEVICE_A4) && (curpage == SEQ_EXTSTEP_PAGE)) {
+    //curpage = SEQ_EXTSTEP_PAGE;
+    load_seq_extstep_page(channel);
+    return;
+  }
+
+
+  if ((curpage == SEQ_EXTSTEP_PAGE) && (device == DEVICE_MD)) {
+    note_hold = current_clock;
+
+    if ((note_num + (page_select * 16)) >= ExtPatternLengths[last_extseq_track]) {
+      notes[note_num] = 0;
+      return;
+    }
+
+    int8_t timing = Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] >> 4; //upper
+    uint8_t condition = Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] & 0x0F; //lower
+    trackinfo_param1.cur = condition;
+    //Micro
+    if (timing == 0) {
+      if (ExtPatternResolution[last_extseq_track] == 1) {
+        timing = 3;
+        trackinfo_param2.max = 5;
       }
       else {
-            note_num = note_to_track_map(msg[1]);
+        trackinfo_param2.max = 11;
+        timing = 6;
+      }
+    }
+    trackinfo_param2.cur = timing;
 
-       }
-
-            if (note_num > 20) { return; }
-
-              if (notes[note_num] == 0) {
-                notes[note_num] = 1;
-              }
-
-              if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() == 0)) {
-                toggle_cue(note_num); send_globals();
-              }
-                  
-                  if ((curpage == SEQ_STEP_PAGE) && (device == DEVICE_A4)) {
-                       
-                                 load_seq_extstep_page(channel);
-                    return;
-               }
-                if ((device == DEVICE_A4) && (curpage == SEQ_EXTSTEP_PAGE)) {
-                 //curpage = SEQ_EXTSTEP_PAGE;
-                                                  load_seq_extstep_page(channel);
-                 return;
-                 }
-
-             
-               if ((curpage == SEQ_EXTSTEP_PAGE) && (device == DEVICE_MD)) {
-                                note_hold = current_clock;
-
-                            if ((note_num + (page_select * 16)) >= ExtPatternLengths[last_extseq_track]) { notes[note_num] = 0; return; }
-
-                int8_t timing = Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] >> 4; //upper
-                uint8_t condition = Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] & 0x0F; //lower
-             trackinfo_param1.cur = condition;
-                //Micro
-                if (timing == 0) {
-                  if (ExtPatternResolution[last_extseq_track] == 1) { timing = 3; trackinfo_param2.max = 5; }
-                  else {
-                    trackinfo_param2.max = 11;
-                  timing = 6;
-                  }
-                }
-                trackinfo_param2.cur = timing;
-
-                gui_last_trig_press = note_num;
-               }
-            
-
-              if (curpage == SEQ_STEP_PAGE) {
-
-               if ((note_num + (page_select * 16)) >= PatternLengths[cur_col]) { notes[note_num] = 0; return; }
-
-              trackinfo_param2.max = 11;
-                note_hold = current_clock;
-                int8_t timing = conditional_timing[cur_col][(note_num + (page_select * 16))] >> 4; //upper
-                uint8_t condition = conditional_timing[cur_col][(note_num + (page_select * 16))] & 0x0F; //lower
+    gui_last_trig_press = note_num;
+  }
 
 
-                //Cond
-                trackinfo_param1.cur = condition;
-                //Micro
-                if (timing == 0) {
-                  timing = 6;
-                }
-                trackinfo_param2.cur = timing;
-              }
+  if (curpage == SEQ_STEP_PAGE) {
 
-              else if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
-                note_hold = current_clock;
-                uint8_t param_offset;
-                if (curpage == SEQ_PARAM_A_PAGE) {
-                  param_offset = 0;
-                }
-                else {
-                  param_offset = 2;
-                }
-                trackinfo_param1.cur = PatternLocksParams[last_md_track][param_offset];
-                trackinfo_param3.cur = PatternLocksParams[last_md_track][param_offset + 1];
+    if ((note_num + (page_select * 16)) >= PatternLengths[cur_col]) {
+      notes[note_num] = 0;
+      return;
+    }
 
-                trackinfo_param2.cur = PatternLocks[last_md_track][param_offset][(note_num + (page_select * 16))];
-                trackinfo_param4.cur = PatternLocks[last_md_track][param_offset + 1][(note_num + (page_select * 16))];
-                notes[note_num] = 1;
+    trackinfo_param2.max = 11;
+    note_hold = current_clock;
+    int8_t timing = conditional_timing[cur_col][(note_num + (page_select * 16))] >> 4; //upper
+    uint8_t condition = conditional_timing[cur_col][(note_num + (page_select * 16))] & 0x0F; //lower
 
 
-              }
-              else {
-               // draw_notes(0);
-              }
+    //Cond
+    trackinfo_param1.cur = condition;
+    //Micro
+    if (timing == 0) {
+      timing = 6;
+    }
+    trackinfo_param2.cur = timing;
+  }
+
+  else if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
+    note_hold = current_clock;
+    uint8_t param_offset;
+    if (curpage == SEQ_PARAM_A_PAGE) {
+      param_offset = 0;
+    }
+    else {
+      param_offset = 2;
+    }
+    trackinfo_param1.cur = PatternLocksParams[last_md_track][param_offset];
+    trackinfo_param3.cur = PatternLocksParams[last_md_track][param_offset + 1];
+
+    trackinfo_param2.cur = PatternLocks[last_md_track][param_offset][(note_num + (page_select * 16))];
+    trackinfo_param4.cur = PatternLocks[last_md_track][param_offset + 1][(note_num + (page_select * 16))];
+    notes[note_num] = 1;
+
+
+  }
+  else {
+    // draw_notes(0);
+  }
 
 
 }
 /*For a specific Track located in Grid curtrack, store it in a pattern to be sent via sysex*/
-      /** Unmute the given track. **/
+/** Unmute the given track. **/
 
 
 bool place_track_inpattern(int curtrack, int column, int row, A4Sound *analogfour_sound) {
   //       if (Grids[encodervaluer] != NULL) {
-  
- if (column < 16) {
-     A4Track track_buf;
 
-  if (load_track(column, row, 0, (A4Track*)&track_buf)) {
-    temptrack.placeTrack(curtrack, column);
-  }
- }
- else {
-   if (Analog4.connected) {
-       A4Track track_buf;
+  if (column < 16) {
+    A4Track track_buf;
 
-   load_track(column, row, 0, (A4Track*)&track_buf);
-   return track_buf.placeTrack(curtrack, column, analogfour_sound);
+    if (load_track(column, row, 0, (A4Track*)&track_buf)) {
+      temptrack.placeTrack(curtrack, column);
+    }
   }
   else {
-           ExtSeqTrack track_buf;
+    if (Analog4.connected) {
+      A4Track track_buf;
 
-   load_track(column, row, 0, (A4Track*)&track_buf);
-   return track_buf.placeTrack(curtrack, column);
+      load_track(column, row, 0, (A4Track*)&track_buf);
+      return track_buf.placeTrack(curtrack, column, analogfour_sound);
+    }
+    else {
+      ExtSeqTrack track_buf;
+
+      load_track(column, row, 0, (A4Track*)&track_buf);
+      return track_buf.placeTrack(curtrack, column);
+    }
   }
- }
 
-      
+
 }
 uint8_t seq_ext_pitch(uint8_t note_num) {
-      uint8_t note_orig = note_num;
-      uint8_t pitch;
+  uint8_t note_orig = note_num;
+  uint8_t pitch;
 
-         uint8_t root_note = (note_num / 12) * 12;
-         uint8_t pos = note_num - root_note;
-         uint8_t oct = note_num / 12;
-        //if (pos >= scales[trackinfo_param4.cur]->size) {
-          oct += pos / scales[trackinfo_param4.cur]->size;
-          pos = pos - scales[trackinfo_param4.cur]->size * ( pos / scales[trackinfo_param4.cur]->size );
-        // }
+  uint8_t root_note = (note_num / 12) * 12;
+  uint8_t pos = note_num - root_note;
+  uint8_t oct = note_num / 12;
+  //if (pos >= scales[trackinfo_param4.cur]->size) {
+  oct += pos / scales[trackinfo_param4.cur]->size;
+  pos = pos - scales[trackinfo_param4.cur]->size * ( pos / scales[trackinfo_param4.cur]->size );
+  // }
 
-              
 
-        //  if (trackinfo_param4.getValue() > 0) {
-          pitch = trackinfo_param1.getValue() * 12  + scales[trackinfo_param4.cur]->pitches[pos] + oct * 12;
-       //   }
-          
-          return pitch;
+
+  //  if (trackinfo_param4.getValue() > 0) {
+  pitch = trackinfo_param1.getValue() * 12  + scales[trackinfo_param4.cur]->pitches[pos] + oct * 12;
+  //   }
+
+  return pitch;
 }
 void a4_setup() {
-          MidiUart.setSpeed(31250,2);
+  MidiUart.setSpeed(31250, 2);
+  delay(100);
+  if (Analog4.getBlockingSettings(0)) {
+    GUI.flash_strings_fill("A4", "CONNECTED");
 
-   if (Analog4.getBlockingSettings(0)) {
-          GUI.flash_strings_fill("A4", "CONNECTED");
+    Analog4.connected = true;
+    uart2_device = DEVICE_A4;
+    turboSetSpeed(4, 2);
+  }
+  else {
+    //If sysex not receiverd assume generic midi device;
+    uart2_device = DEVICE_MIDI;
+    GUI.flash_strings_fill("MIDI DEVICE", "CONNECTED");
 
-          Analog4.connected = true;
-          turboSetSpeed(4, 2);
-        }
+  }
 }
 void md_setup() {
 
-            MD.connected = true;
+  MD.connected = true;
 
-        MidiUart.setSpeed(31250,1);
+  MidiUart.setSpeed(31250, 1);
 
-        delay(100);
-         if (MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,CALLBACK_TIMEOUT)) {
-       
-          turboSetSpeed(4, 1);
-          delay(100);
-          
-          switchGlobal(7);
-          MD.resetMidiMap();
-          MD.global.baseChannel = 9;
-          
-          if (!MD.getBlockingGlobal(7)) {
-            MD.connected = false;
-            return;
-          }
-          if (!global_one.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
-            GUI.flash_strings_fill("GLOBAL", "ERROR");
-            MD.connected = false;
-            return;
-          }
-          if (rec_global != 1) {
+  delay(100);
+  if (MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST, CALLBACK_TIMEOUT)) {
 
-            rec_global = 1;
-            send_globals();
-          }
-          switchGlobal(7);
-          uint8_t curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
-          for (uint8_t x = 0; x < 2; x++) {
-            for (uint8_t y = 0; y < 16; y++) {
-              MD.setStatus(0x22, y);
+    turboSetSpeed(4, 1);
+    delay(100);
 
-            }
-          }
-          MD.setStatus(0x22, curtrack);
-          GUI.flash_strings_fill("MD", "CONNECTED");
+    switchGlobal(7);
+    MD.resetMidiMap();
+    MD.global.baseChannel = 9;
 
-          return;
-        }
-        MD.connected = false;
+    if (!MD.getBlockingGlobal(7)) {
+      MD.connected = false;
+      return;
+    }
+    if (!global_one.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
+      GUI.flash_strings_fill("GLOBAL", "ERROR");
+      MD.connected = false;
+      return;
+    }
+    if (rec_global != 1) {
+
+      rec_global = 1;
+      send_globals();
+    }
+    switchGlobal(7);
+    uint8_t curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
+    for (uint8_t x = 0; x < 2; x++) {
+      for (uint8_t y = 0; y < 16; y++) {
+        MD.setStatus(0x22, y);
+
+      }
+    }
+    MD.setStatus(0x22, curtrack);
+    GUI.flash_strings_fill("MD", "CONNECTED");
+
+    return;
+  }
+  MD.connected = false;
 }
 class MCLMidiEvents : public MidiCallback {
 
@@ -1804,15 +1856,15 @@ class MCLMidiEvents : public MidiCallback {
   public:
 
     void setup() {
-     // MidiUart.addOnRecvActiveSenseCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onRecvActiveSenseCallbackUartx);
-    //  MidiUart2.addOnRecvActiveSenseCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onRecvActiveSenseCallbackUart2);
+      // MidiUart.addOnRecvActiveSenseCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onRecvActiveSenseCallbackUartx);
+      //  MidiUart2.addOnRecvActiveSenseCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onRecvActiveSenseCallbackUart2);
       Midi.addOnControlChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onMDStartup);
-//      MidiUart2.addOnProgramChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onRecvActiveSenseCallbackUart2);
-  
+      //      MidiUart2.addOnProgramChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onRecvActiveSenseCallbackUart2);
+
       Midi.addOnProgramChangeCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onProgramChangeCallback);
       Midi.addOnNoteOnCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOnCallback);
       Midi.addOnNoteOffCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOffCallback);
-      
+
       Midi2.addOnNoteOnCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOnCallback_Midi2);
       Midi2.addOnNoteOffCallback(this, (midi_callback_ptr_t)&MCLMidiEvents::onNoteOffCallback_Midi2);
 
@@ -1821,282 +1873,296 @@ class MCLMidiEvents : public MidiCallback {
 
     };
     void onA4Startup(uint8_t *msg) {
-     
-    }
-void onMDStartup(uint8_t *msg) {
 
- //     uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
- //     uint8_t param = msg[1];
- //     uint8_t value = msg[2];
-  //     if ((channel != 15) || (param != 0x7B)) {
-  //      return;
-   //   }
-      
-       
-      
+    }
+    void onMDStartup(uint8_t *msg) {
+
+      //     uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
+      //     uint8_t param = msg[1];
+      //     uint8_t value = msg[2];
+      //     if ((channel != 15) || (param != 0x7B)) {
+      //      return;
+      //   }
+
+
+
     };
 
     void onRecvActiveSenseCallbackUart2(uint8_t *msg) {
-   //   if (Analog4.connected == false) {
-       
-   //   }
+      //   if (Analog4.connected == false) {
+
+      //   }
 
     };
-  void onControlChangeCallback_Midi2(uint8_t *msg) {
+    void onControlChangeCallback_Midi2(uint8_t *msg) {
       uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
       uint8_t param = msg[1];
       uint8_t value = msg[2];
       if (param == 0x5E) {
         ExtPatternMutes[channel] = value;
-      }    
-     
       }
+
+    }
 
     void onNoteOnCallback_Midi2(uint8_t *msg) {
       uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
 
 
-          uint8_t realPitch;
-          uint8_t note_num = msg[1];
-          uint8_t pitch = msg[1];
-                            
-      
+      uint8_t realPitch;
+      uint8_t note_num = msg[1];
+      uint8_t pitch = msg[1];
 
-          
-   if (curpage == SEQ_EXTSTEP_PAGE) {
-                        trackinfo_param3.cur = ExtPatternLengths[channel];
 
-                    last_extseq_track = channel;
-                 cur_col = 16 + channel;
-          
-                for (uint8_t i = 0; i < 16; i++) {
-                  uint8_t match = 255;
-                  if (notes[i] == 1) {
-                     for (uint8_t c = 0; c < 4 && match == 255; c++) {
-                        if (ExtPatternNotes[channel][c][i + page_select * 16] ==  -(1 * (msg[1] + 1))) {
-                        ExtPatternNotes[channel][c][i + page_select * 16] = 0;
-                        seq_buffer_notesoff(channel);
-                       match = c;
-                      }
-                      if (ExtPatternNotes[channel][c][i + page_select * 16] ==  (1 * (msg[1] + 1))) {
-                        ExtPatternNotes[channel][c][i + page_select * 16] =  (-1 * (msg[1] + 1));
-                        match = c;
-                      }
+
+
+      if (curpage == SEQ_EXTSTEP_PAGE) {
+        trackinfo_param3.cur = ExtPatternLengths[channel];
+
+        last_extseq_track = channel;
+        cur_col = 16 + channel;
+
+        for (uint8_t i = 0; i < 16; i++) {
+          uint8_t match = 255;
+          if (notes[i] == 1) {
+            for (uint8_t c = 0; c < 4 && match == 255; c++) {
+              if (ExtPatternNotes[channel][c][i + page_select * 16] ==  -(1 * (msg[1] + 1))) {
+                ExtPatternNotes[channel][c][i + page_select * 16] = 0;
+                seq_buffer_notesoff(channel);
+                match = c;
+              }
+              if (ExtPatternNotes[channel][c][i + page_select * 16] ==  (1 * (msg[1] + 1))) {
+                ExtPatternNotes[channel][c][i + page_select * 16] =  (-1 * (msg[1] + 1));
+                match = c;
+              }
+            }
+            for (uint8_t c = 0; c < 4 && match == 255; c++) {
+              if (ExtPatternNotes[channel][c][i + page_select * 16] == 0) {
+                match = c;
+                int8_t ons_and_offs = 0;
+                //Check to see if we have same number of note offs as note ons.
+                //If there are more note ons for given note, the next note entered should be a note off.
+                for (uint8_t a = 0; a < 64; a++) {
+                  for (uint8_t b = 0; b < 4; b++) {
+                    if (ExtPatternNotes[channel][b][a] ==  -(1 * (msg[1] + 1))) {
+                      ons_and_offs -= 1;
                     }
-                    for (uint8_t c = 0; c < 4 && match == 255; c++) {
-                      if (ExtPatternNotes[channel][c][i + page_select * 16] == 0) {
-                        match = c;
-                        int8_t ons_and_offs = 0;
-                        //Check to see if we have same number of note offs as note ons.
-                        //If there are more note ons for given note, the next note entered should be a note off.
-                        for (uint8_t a = 0; a < 64; a++) {
-                          for (uint8_t b = 0; b < 4; b++) {
-                            if (ExtPatternNotes[channel][b][a] ==  -(1 * (msg[1] + 1))) { ons_and_offs -= 1; }
-                            if (ExtPatternNotes[channel][b][a] == (1 * (msg[1] + 1))) { ons_and_offs += 1; }
-                          }
-                        }
-                        if (ons_and_offs <= 0) { ExtPatternNotes[channel][c][i + page_select * 16] = (msg[1] + 1); }
-                        else { ExtPatternNotes[channel][c][i + page_select * 16] = -1 * (msg[1] + 1); }
-                      }
+                    if (ExtPatternNotes[channel][b][a] == (1 * (msg[1] + 1))) {
+                      ons_and_offs += 1;
                     }
                   }
                 }
-                return;
-               }
-                        trigger_noteon_interface(msg, DEVICE_A4);
-   trackinfo_param3.cur = ExtPatternLengths[channel];
-
-
-          cur_col = 16 + channel;
-          last_extseq_track = channel;
-            trackinfo_param3.max = 128;
-         
-           
-         if ((curpage != SEQ_RTRK_PAGE) && (curpage != SEQ_PTC_PAGE) && (curpage != SEQ_RPTC_PAGE) ) {
-  //   (curpage == SEQ_EXT_PTC_PAGE)) {
-           return;
+                if (ons_and_offs <= 0) {
+                  ExtPatternNotes[channel][c][i + page_select * 16] = (msg[1] + 1);
+                }
+                else {
+                  ExtPatternNotes[channel][c][i + page_select * 16] = -1 * (msg[1] + 1);
+                }
+              }
+            }
           }
+        }
+        return;
+      }
+      trigger_noteon_interface(msg, DEVICE_A4);
+      trackinfo_param3.cur = ExtPatternLengths[channel];
 
-        
-          
-          pitch = seq_ext_pitch(note_num);
 
-           
-                    MidiUart2.sendNoteOn(channel, pitch, msg[2]);
-          if ((curpage != SEQ_RPTC_PAGE) || (MidiClock.state != 2)) { return; }
+      cur_col = 16 + channel;
+      last_extseq_track = channel;
+      trackinfo_param3.max = 128;
+
+
+      if ((curpage != SEQ_RTRK_PAGE) && (curpage != SEQ_PTC_PAGE) && (curpage != SEQ_RPTC_PAGE) ) {
+        //   (curpage == SEQ_EXT_PTC_PAGE)) {
+        return;
+      }
+
+
+
+      pitch = seq_ext_pitch(note_num);
+
+
+      MidiUart2.sendNoteOn(channel, pitch, msg[2]);
+      if ((curpage != SEQ_RPTC_PAGE) || (MidiClock.state != 2)) {
+        return;
+      }
 
       //  uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel]) ) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * (((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
-       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
-         uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
+      // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+      uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
 
-        uint8_t timing = (MidiClock.mod3_counter + 3)  << 4;
+      uint8_t timing = (MidiClock.mod3_counter + 3)  << 4;
 
-         if (ExtPatternResolution[channel] > 1) {
-            timing = (MidiClock.mod6_counter + 6)  << 4;
-         }
+      if (ExtPatternResolution[channel] > 1) {
+        timing = (MidiClock.mod6_counter + 6)  << 4;
+      }
 
-         
-          uint8_t condition = 0 & 0x0F;
-          //  cur_col = note_num;
-          //  timing = 3;
-          //condition = 3;
 
-          uint8_t match = 255;
-          uint8_t c = 0;
-          //Let's try and find an existing param
-        
-        for (c = 0; c < 4 && match == 255; c++)  {
-           if (ExtPatternNotes[channel][c][step_count] == pitch + 1) {
-             match = c;
-            }
-        }     
-        /*
+      uint8_t condition = 0 & 0x0F;
+      //  cur_col = note_num;
+      //  timing = 3;
+      //condition = 3;
+
+      uint8_t match = 255;
+      uint8_t c = 0;
+      //Let's try and find an existing param
+
+      for (c = 0; c < 4 && match == 255; c++)  {
+        if (ExtPatternNotes[channel][c][step_count] == pitch + 1) {
+          match = c;
+        }
+      }
+      /*
         //If we find a match, then let's try and push the event to the next note
         if (match != 255) {
-          timing = timing - 3;
-          if (step_count == ExtPatternLengths[channel]) { step_count = 0; }
-          else { step_count +=; }
-          
-             for (c = 0; c < 4 && match == 255; c++)  {
-           if (ExtPatternNotes[channel][c][step_count] == pitch + 1) {
-             match = c;
-            }
-        }     
+        timing = timing - 3;
+        if (step_count == ExtPatternLengths[channel]) { step_count = 0; }
+        else { step_count +=; }
+
+           for (c = 0; c < 4 && match == 255; c++)  {
+         if (ExtPatternNotes[channel][c][step_count] == pitch + 1) {
+           match = c;
+          }
         }
-        */
-          for (c = 0; c < 4 && match == 255; c++)  {
-            if (ExtPatternNotes[channel][c][step_count] == 0) {
-              match = c;
-            }
-          }
-         
-          if (match != 255) {
+        }
+      */
+      for (c = 0; c < 4 && match == 255; c++)  {
+        if (ExtPatternNotes[channel][c][step_count] == 0) {
+          match = c;
+        }
+      }
 
-                      //We dont want to record steps if note off mask is set
+      if (match != 255) {
 
-          //  if (ExtPatternNotes[channel][match][step_count] < 0) { return; }
+        //We dont want to record steps if note off mask is set
 
-            ExtPatternNotes[channel][match][step_count] = pitch + 1;
-           // SET_BIT64(ExtLockMasks[channel], step_count);
-           
-          Extconditional_timing[channel][step_count] = timing | condition;
+        //  if (ExtPatternNotes[channel][match][step_count] < 0) { return; }
 
-          }
+        ExtPatternNotes[channel][match][step_count] = pitch + 1;
+        // SET_BIT64(ExtLockMasks[channel], step_count);
+
+        Extconditional_timing[channel][step_count] = timing | condition;
+
+      }
 
 
- //       }
-      
-   //   }
+      //       }
+
+      //   }
 
     };
 
     void onNoteOffCallback_Midi2(uint8_t *msg) {
-           uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
-      
-    //  if ((curpage == SEQ_RTRK_EXTERN_PAGE) && 
-   //   if ((channel <= 4)) {
-    //  MidiUart2.m_putc(0xF8);
+      uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
+
+      //  if ((curpage == SEQ_RTRK_EXTERN_PAGE) &&
+      //   if ((channel <= 4)) {
+      //  MidiUart2.m_putc(0xF8);
 
 
-//  if ((curpage == SEQ_EXT_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) ) {
-
-       
-     
-          uint8_t realPitch;
-          uint8_t note_num = msg[1];
-          uint8_t pitch = msg[1];
-                            
-     
-            if ((curpage == SEQ_EXTSTEP_PAGE)) {
-                last_extseq_track = channel;
-                /*
-                for (uint8_t i = 0; i < 16; i++) {
-                  uint8_t match = 255;
-                  if (notes[i] == 1) { 
-                     for (uint8_t c = 0; c < 4 && match == 255; c++) {
-                      if (abs(ExtPatternNotes[channel][c][i + page_select * 16]) ==  (1 * (msg[1] + 1))) {
-                        ExtPatternNotes[channel][c][i + page_select * 16] = 0;
-                        match = c;
-                      }
-                    }
-                    for (uint8_t c = 0; c < 4 && match == 255; c++) {
-                      if (ExtPatternNotes[channel][c][i + page_select * 16] == 0) {
-                        match = c;
-                        ExtPatternNotes[channel][c][i + page_select * 16] = -1 * (msg[1] + 1);
-                      }
-                    }
-                  }
-                }
-                */
-                return;
-               }
-                  trigger_noteoff_interface(msg, DEVICE_A4);
-
-
-         if  ((curpage != SEQ_RTRK_PAGE) && (curpage != SEQ_PTC_PAGE) && (curpage != SEQ_RPTC_PAGE) ) {
-          //| (curpage == SEQ_EXT_PTC_PAGE))
-          
-           return;
-         }
-                   cur_col = 16 + channel;
-                             last_extseq_track = channel;
+      //  if ((curpage == SEQ_EXT_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) ) {
 
 
 
-          pitch = seq_ext_pitch(note_num);
-               
-           MidiUart2.sendNoteOff(channel, pitch, 0);
+      uint8_t realPitch;
+      uint8_t note_num = msg[1];
+      uint8_t pitch = msg[1];
 
-          if ((curpage != SEQ_RPTC_PAGE) || (MidiClock.state != 2)) { return; }
-          
 
-       // uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * (((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
-       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
-       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
-         uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
-
-           uint8_t timing = (MidiClock.mod3_counter + 3)  << 4;
-
-         if (ExtPatternResolution[channel] > 1) {
-            timing = (MidiClock.mod6_counter + 6)  << 4;
-         }
-            uint8_t condition = 0 & 0x0F;
-          //  cur_col = note_num;
-          //  timing = 3;
-          //condition = 3;
-
+      if ((curpage == SEQ_EXTSTEP_PAGE)) {
+        last_extseq_track = channel;
+        /*
+          for (uint8_t i = 0; i < 16; i++) {
           uint8_t match = 255;
-          uint8_t c = 0;
-       
-    for (c = 0; c < 4 && match == 255; c++)  {
-           if (abs(ExtPatternNotes[channel][c][step_count]) == pitch + 1) {
-             match = c;
-              if (ExtPatternNotes[channel][c][step_count] < 0) {
-              step_count = step_count + 1;
-              if (step_count > ExtPatternLengths[channel]) { step_count = 0; } 
-              timing = MidiClock.mod6_counter << 4;
-              //timing = 0;
+          if (notes[i] == 1) {
+             for (uint8_t c = 0; c < 4 && match == 255; c++) {
+              if (abs(ExtPatternNotes[channel][c][i + page_select * 16]) ==  (1 * (msg[1] + 1))) {
+                ExtPatternNotes[channel][c][i + page_select * 16] = 0;
+                match = c;
               }
             }
-    }
-     for (c = 0; c < 4 && match == 255; c++)  {
-            if (ExtPatternNotes[channel][c][step_count] == 0) {
-              match = c;
+            for (uint8_t c = 0; c < 4 && match == 255; c++) {
+              if (ExtPatternNotes[channel][c][i + page_select * 16] == 0) {
+                match = c;
+                ExtPatternNotes[channel][c][i + page_select * 16] = -1 * (msg[1] + 1);
+              }
             }
           }
-         
-          if (match != 255) {
-            ExtPatternNotes[channel][match][step_count] = -1 *(pitch + 1);
-           // SET_BIT64(ExtLockMasks[channel], step_count);
           }
-          Extconditional_timing[channel][step_count] = timing | condition;
+        */
+        return;
+      }
+      trigger_noteoff_interface(msg, DEVICE_A4);
+
+
+      if  ((curpage != SEQ_RTRK_PAGE) && (curpage != SEQ_PTC_PAGE) && (curpage != SEQ_RPTC_PAGE) ) {
+        //| (curpage == SEQ_EXT_PTC_PAGE))
+
+        return;
+      }
+      cur_col = 16 + channel;
+      last_extseq_track = channel;
 
 
 
- //       }
-      
-   //   }
+      pitch = seq_ext_pitch(note_num);
+
+      MidiUart2.sendNoteOff(channel, pitch, 0);
+
+      if ((curpage != SEQ_RPTC_PAGE) || (MidiClock.state != 2)) {
+        return;
+      }
+
+
+      // uint8_t step_count = ((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * (((MidiClock.div32th_counter * ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+      // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th * ExtPatternResolution[channel] / 2)) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+      // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
+      uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
+
+      uint8_t timing = (MidiClock.mod3_counter + 3)  << 4;
+
+      if (ExtPatternResolution[channel] > 1) {
+        timing = (MidiClock.mod6_counter + 6)  << 4;
+      }
+      uint8_t condition = 0 & 0x0F;
+      //  cur_col = note_num;
+      //  timing = 3;
+      //condition = 3;
+
+      uint8_t match = 255;
+      uint8_t c = 0;
+
+      for (c = 0; c < 4 && match == 255; c++)  {
+        if (abs(ExtPatternNotes[channel][c][step_count]) == pitch + 1) {
+          match = c;
+          if (ExtPatternNotes[channel][c][step_count] < 0) {
+            step_count = step_count + 1;
+            if (step_count > ExtPatternLengths[channel]) {
+              step_count = 0;
+            }
+            timing = MidiClock.mod6_counter << 4;
+            //timing = 0;
+          }
+        }
+      }
+      for (c = 0; c < 4 && match == 255; c++)  {
+        if (ExtPatternNotes[channel][c][step_count] == 0) {
+          match = c;
+        }
+      }
+
+      if (match != 255) {
+        ExtPatternNotes[channel][match][step_count] = -1 * (pitch + 1);
+        // SET_BIT64(ExtLockMasks[channel], step_count);
+      }
+      Extconditional_timing[channel][step_count] = timing | condition;
+
+
+
+      //       }
+
+      //   }
     };
     void onControlChangeCallback(uint8_t *msg) {
       uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
@@ -2220,11 +2286,11 @@ void onMDStartup(uint8_t *msg) {
 
       if ((collect_notes) && (msg[0] == 153) && (noteproceed == 1))  {
 
-    for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
-        if (msg[1] == MD.global.drumMapping[i]) {
-          note_num = i;
+        for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
+          if (msg[1] == MD.global.drumMapping[i]) {
+            note_num = i;
+          }
         }
-      }
         if (note_num < 16) {
 
           if (notes[note_num] == 1)  {
@@ -2234,32 +2300,38 @@ void onMDStartup(uint8_t *msg) {
             else if  (curpage == SEQ_EXTSTEP_PAGE) {
               uint8_t timing = (trackinfo_param2.cur + 0) << 4;
               uint8_t condition = trackinfo_param1.cur & 0x0F;
-              if ((note_num + (page_select * 16)) >= ExtPatternLengths[last_extseq_track]) { return; }
+              if ((note_num + (page_select * 16)) >= ExtPatternLengths[last_extseq_track]) {
+                return;
+              }
 
               //  timing = 3;
               //condition = 3;
-                if ((current_clock - note_hold) < TRIG_HOLD_TIME) {
-                     for (uint8_t c = 0; c < 4; c++) {
-                        if (ExtPatternNotes[last_extseq_track][c][note_num + page_select * 16] > 0) { MidiUart2.sendNoteOff(last_extseq_track, abs(ExtPatternNotes[last_extseq_track][c][note_num + page_select * 16]) - 1,0); }
-                        ExtPatternNotes[last_extseq_track][c][note_num + page_select * 16] = 0;
-                      }
-                        Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] = 0;
-                    }
-                
-                else {
-                 Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] = timing | condition; //upper
-
+              if ((current_clock - note_hold) < TRIG_HOLD_TIME) {
+                for (uint8_t c = 0; c < 4; c++) {
+                  if (ExtPatternNotes[last_extseq_track][c][note_num + page_select * 16] > 0) {
+                    MidiUart2.sendNoteOff(last_extseq_track, abs(ExtPatternNotes[last_extseq_track][c][note_num + page_select * 16]) - 1, 0);
+                  }
+                  ExtPatternNotes[last_extseq_track][c][note_num + page_select * 16] = 0;
                 }
-                               notes[note_num] = 0;
+                Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] = 0;
+              }
+
+              else {
+                Extconditional_timing[last_extseq_track][(note_num + (page_select * 16))] = timing | condition; //upper
+
+              }
+              notes[note_num] = 0;
 
               return;
             }
             else if ((curpage == SEQ_STEP_PAGE))  {
               notes[note_num] = 0;
-              if ((note_num + (page_select * 16)) >= PatternLengths[cur_col]) { return; }
+              if ((note_num + (page_select * 16)) >= PatternLengths[cur_col]) {
+                return;
+              }
               uint8_t timing = (trackinfo_param2.cur + 0) << 4;
               uint8_t condition = trackinfo_param1.cur & 0x0F;
-            
+
 
               //  timing = 3;
               //condition = 3;
@@ -2327,7 +2399,7 @@ void onMDStartup(uint8_t *msg) {
         }
         //If we're on track read/write page then check to see
 
-               // notes[note_num] = 0;
+        // notes[note_num] = 0;
       }
       // removeNote(msg[1]);
       //   clearLed();
@@ -2342,7 +2414,7 @@ void onMDStartup(uint8_t *msg) {
       int note_num;
       uint8_t channel = MIDI_NOTE_ON & msg[0];
 
-  
+
       if ((curpage == SEQ_RTRK_PAGE) && (msg[0] == 153)) {
 
         if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
@@ -2390,16 +2462,16 @@ void onMDStartup(uint8_t *msg) {
           //Notes 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
           //Oct
 
-          
-          
+
+
 
           tuning_t const *tuning = MD.getModelTuning(MD.kit.models[last_md_track]);
-          
-          
+
+
           uint8_t size = scales[trackinfo_param4.cur]->size;
           uint8_t oct = note_num / size;
           note_num = note_num - oct * size;
-          
+
           note_num = scales[trackinfo_param4.cur]->pitches[note_num];
 
           uint8_t pitch = trackinfo_param1.getValue() * 12  + oct * 12 + note_num;
@@ -2414,22 +2486,22 @@ void onMDStartup(uint8_t *msg) {
           }
 
           realPitch = pgm_read_byte(&tuning->tuning[pitch]) + trackinfo_param2.getValue() - 32;
-        //            setTrackParam(last_md_track, 1, 0);
+          //            setTrackParam(last_md_track, 1, 0);
 
           setTrackParam(last_md_track, 0, realPitch);
-//delay(25);
+          //delay(25);
 
-      //              setTrackParam(last_md_track, 1, MD.kit.params[last_md_track][1]);
+          //              setTrackParam(last_md_track, 1, MD.kit.params[last_md_track][1]);
           MD.triggerTrack(last_md_track, 127);
 
-         trackinfo_param3.cur = PatternLengths[last_md_track];
+          trackinfo_param3.cur = PatternLengths[last_md_track];
 
 
           cur_col = last_md_track;
           last_extseq_track = last_md_track;
-          
-        trackinfo_param3.max = 64;
-           
+
+          trackinfo_param3.max = 64;
+
 
           if ((MidiClock.state != 2) || (curpage == SEQ_PTC_PAGE)) {
             return;
@@ -2485,7 +2557,7 @@ void onMDStartup(uint8_t *msg) {
         if (noteproceed == 1) {
           if ((collect_notes) && (msg[0] == 153)) {
             trigger_noteon_interface(msg, DEVICE_MD);
-          
+
           }
 
         }
@@ -2512,9 +2584,9 @@ void onMDStartup(uint8_t *msg) {
 void switchGlobal (uint8_t global_page) {
 
   uint8_t data[] = { 0x56, (uint8_t)global_page & 0x7F };
-        in_sysex = 1;
+  in_sysex = 1;
   MD.sendSysex(data, countof(data));
-      in_sysex = 0;
+  in_sysex = 0;
 
 }
 class MDHandler2 : public MDCallback {
@@ -2544,7 +2616,7 @@ class MDHandler2 : public MDCallback {
         case MD_CURRENT_PATTERN_REQUEST:
           MD.currentPattern = value;
           break;
-         
+
       }
     }
 
@@ -2560,7 +2632,7 @@ class MDHandler2 : public MDCallback {
       }
 
       if (patternswitch == PATTERN_STORE) {
-      
+
       }
 
       /*Patternswitch == 6, store pattern in memory*/
@@ -2840,7 +2912,7 @@ class MDHandler2 : public MDCallback {
       else  if (patternswitch == 1) {
 
         /*Retrieve the pattern from the Sysex buffer and store it in the pattern_rec object. The MD header is 5 bytes long, hence the offset and length change*/
-     
+
         // else { GUI.flash_strings_fill("SYSEX", "ERROR"); }
 
       }
@@ -2966,7 +3038,7 @@ void setTrackParam(uint8_t track, uint8_t param, uint8_t value) {
 
 */
 void tick_frames() {
-    uint16_t current_clock = slowclock;
+  uint16_t current_clock = slowclock;
 
   frames += 1;
   if (clock_diff(frames_startclock, current_clock) >= 400) {
@@ -3127,76 +3199,82 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
   bool save_a4_tracks = false;
   uint8_t i = 0;
   for (i = 0; i < 16; i++) {
-          if (notes[i] == 3) {
-            save_md_tracks = true;
-          }
-   }
-   for (i=16; i<20; i++) {
-          if (notes[i] == 3) {
-            save_a4_tracks = true;
-          }
-   }
+    if (notes[i] == 3) {
+      save_md_tracks = true;
+    }
+  }
+  for (i = 16; i < 20; i++) {
+    if (notes[i] == 3) {
+      save_a4_tracks = true;
+    }
+  }
 
   if (save_md_tracks) {
-  if (!MD.getBlockingPattern(readpattern)) { return; }
-  
-  int curkit;
-  if (readpattern != MD.currentPattern) {
-    curkit = pattern_rec.kit;
-  }
-  else {
-    curkit = last_md_track;
-    //MD.getCurrentKit(CALLBACK_TIMEOUT);
-    MD.saveCurrentKit(curkit);
+    if (!MD.getBlockingPattern(readpattern)) {
+      return;
+    }
 
-  }
+    int curkit;
+    if (readpattern != MD.currentPattern) {
+      curkit = pattern_rec.kit;
+    }
+    else {
+      curkit = last_md_track;
+      //MD.getCurrentKit(CALLBACK_TIMEOUT);
+      MD.saveCurrentKit(curkit);
 
-  if (!MD.getBlockingKit(curkit)) { return; }
+    }
+
+    if (!MD.getBlockingKit(curkit)) {
+      return;
+    }
   }
 
   A4Track analogfour_track;
   MDTrack temptrack2;
 
-        bool n;
-        /*Send a quick sysex message to get the current selected track of the MD*/
+  bool n;
+  /*Send a quick sysex message to get the current selected track of the MD*/
 
-        //       int curtrack = 0;
-        
-        uint8_t first_note = 254;
+  //       int curtrack = 0;
 
-        int curtrack = 0;
-        if (store_behaviour == STORE_AT_SPECIFIC) {
-          curtrack = last_md_track;
-          //MD.getCurrentTrack(CALLBACK_TIMEOUT);
-        }
-        uint8_t max_notes = 20;
-        if (!Analog4.connected) { max_notes = 16; }
-        for (i = 0; i < max_notes; i++) {
-          if (notes[i] == 3) {
-            if (first_note == 254) {
-              first_note = i;
-            }
-        
-            if (store_behaviour == STORE_IN_PLACE) {
-            if (Analog4.connected) {
-                 if ((i >= 16) && (i < 20)) { 
-                  Analog4.getBlockingSoundX(i - 16);
-                  analogfour_track.sound.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8);
-                  } 
-            }
-              n = store_track_inGrid(i, i, cur_row, (A4Track*) &analogfour_track, (MDTrack*) &temptrack2);
-            }
-            
-            if ((store_behaviour == STORE_AT_SPECIFIC) && (i < 16)) {
-              n = store_track_inGrid(curtrack + (i - first_note), i, cur_row, (A4Track*) &analogfour_track, (MDTrack*) &temptrack2);
-            }
-            //CLEAR_BIT32(notes, i);
+  uint8_t first_note = 254;
+
+  int curtrack = 0;
+  if (store_behaviour == STORE_AT_SPECIFIC) {
+    curtrack = last_md_track;
+    //MD.getCurrentTrack(CALLBACK_TIMEOUT);
+  }
+  uint8_t max_notes = 20;
+  if (!Analog4.connected) {
+    max_notes = 16;
+  }
+  for (i = 0; i < max_notes; i++) {
+    if (notes[i] == 3) {
+      if (first_note == 254) {
+        first_note = i;
+      }
+
+      if (store_behaviour == STORE_IN_PLACE) {
+        if (Analog4.connected) {
+          if ((i >= 16) && (i < 20)) {
+            Analog4.getBlockingSoundX(i - 16);
+            analogfour_track.sound.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8);
           }
         }
+        n = store_track_inGrid(i, i, cur_row, (A4Track*) &analogfour_track, (MDTrack*) &temptrack2);
+      }
 
-  
-        /*Update the encoder page to show current Grids*/
-        page.display();
+      if ((store_behaviour == STORE_AT_SPECIFIC) && (i < 16)) {
+        n = store_track_inGrid(curtrack + (i - first_note), i, cur_row, (A4Track*) &analogfour_track, (MDTrack*) &temptrack2);
+      }
+      //CLEAR_BIT32(notes, i);
+    }
+  }
+
+
+  /*Update the encoder page to show current Grids*/
+  page.display();
   //  int curkit = MD.getBlockingStatus(MD_CURRENT_KIT_REQUEST, CALLBACK_TIMEOUT);
 
 
@@ -3251,15 +3329,17 @@ void write_tracks_to_md( int column, int row, int b) {
   // currentkit_temp = MD.getCufrrentKit(CALLBACK_TIMEOUT);
   //    MD.saveCurrentKit(currentkit_temp);
   //   MD.getBlockingKit(currentkit_temp);
-  if (!MD.getBlockingPattern(MD.currentPattern)) { return; }
-   
-   if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
+  if (!MD.getBlockingPattern(MD.currentPattern)) {
+    return;
+  }
 
-          send_pattern_kit_to_md();
-          patternswitch = PATTERN_UDEF;
-    }
+  if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
 
-    
+    send_pattern_kit_to_md();
+    patternswitch = PATTERN_UDEF;
+  }
+
+
   //  }
 
   //clearLed();
@@ -3267,9 +3347,9 @@ void write_tracks_to_md( int column, int row, int b) {
 }
 
 void send_pattern_kit_to_md() {
-  
+
   A4Track *track_buf;
-  
+
   MD.getBlockingKit(currentkit_temp);
   load_track(0, cur_row, 0, track_buf);
   //if (!Analog4.getBlockingKitX(0)) { return; }
@@ -3277,7 +3357,7 @@ void send_pattern_kit_to_md() {
 
   /*Send a quick sysex message to get the current selected track of the MD*/
   int curtrack = last_md_track;
- // MD.getCurrentTrack(CALLBACK_TIMEOUT);
+  // MD.getCurrentTrack(CALLBACK_TIMEOUT);
 
   uint8_t reload = 1;
   uint16_t quantize_mute = 0;
@@ -3352,37 +3432,50 @@ void send_pattern_kit_to_md() {
       //  if (cur_col > 0) {
       if (store_behaviour == STORE_IN_PLACE) {
         track = i;
-   
-        
-      if (i < 16) { place_track_inpattern(track, i + cur_col, cur_row,  (A4Sound*) &sound_array[0]); }
-      else {
-        track = track - 16; 
-           seq_buffer_notesoff(track);
+
+
+        if (i < 16) {
+          place_track_inpattern(track, i + cur_col, cur_row,  (A4Sound*) &sound_array[0]);
+        }
+        else {
+          track = track - 16;
+          seq_buffer_notesoff(track);
           if (place_track_inpattern(track, i + cur_col, cur_row, (A4Sound*) &sound_array[track])) {
-             if (Analog4.connected) { sound_array[track].workSpace = true; a4_send[track] = 1; }
+            if (Analog4.connected) {
+              sound_array[track].workSpace = true;
+              a4_send[track] = 1;
+            }
           }
-          
-          
-      }
+
+
+        }
       }
 
-     
+
       else if ((cur_col + (i - first_note) < 16) && (i < 16)) {
         track = cur_col + (i - first_note);
         place_track_inpattern(track,  i, cur_row, &sound_array[0]);
 
       }
-       
+
       if (patternload_param4.getValue() == 8) {
-        if (i < 16) { MD.kit.levels[track] = 0; }
-        else if (Analog4.connected) { Analog4.setLevel(i - 16, 0);}
+        if (i < 16) {
+          MD.kit.levels[track] = 0;
+        }
+        else if (Analog4.connected) {
+          Analog4.setLevel(i - 16, 0);
+        }
       }
       //   }
 
       note_count++;
       if ((quantize_mute > 0) && (patternload_param4.getValue() < 8)) {
-       if (i < 16) { MD.muteTrack(track, true); }
-       else { ExtPatternMutes[i - 16] = SEQ_MUTE_ON; }
+        if (i < 16) {
+          MD.muteTrack(track, true);
+        }
+        else {
+          ExtPatternMutes[i - 16] = SEQ_MUTE_ON;
+        }
       }
     }
     i++;
@@ -3507,31 +3600,33 @@ void send_pattern_kit_to_md() {
   // }
   //          delay(100);
   //Midiclock start hack
-  
-   //Send Analog4
-   if (Analog4.connected) {
+
+  //Send Analog4
+  if (Analog4.connected) {
     uint8_t a4_kit_send = 0;
-   //if (write_original == 1) {
-             in_sysex2 = 1;
-             for (i = 0; i < 4; i++) {
-  if (a4_send[i] == 1) {  sound_array[i].toSysex(); }
-             }
-           in_sysex2 = 0;
-
-   //}
-   /*
-   else {
+    //if (write_original == 1) {
+    in_sysex2 = 1;
     for (i = 0; i < 4; i++) {
-             in_sysex2 = 1;
-
-    if (a4_send[i] == 1) { analog4_kit.sounds[i].workSpace = true; analog4_kit.sounds[i].origPosition = i; analog4_kit.sounds[i].toSysex(); }
-           in_sysex2 = 0;
-
+      if (a4_send[i] == 1) {
+        sound_array[i].toSysex();
+      }
     }
-   }
-   */
-   }
-   
+    in_sysex2 = 0;
+
+    //}
+    /*
+      else {
+      for (i = 0; i < 4; i++) {
+              in_sysex2 = 1;
+
+      if (a4_send[i] == 1) { analog4_kit.sounds[i].workSpace = true; analog4_kit.sounds[i].origPosition = i; analog4_kit.sounds[i].toSysex(); }
+            in_sysex2 = 0;
+
+      }
+      }
+    */
+  }
+
   if (pattern_start_clock32th > MidiClock.div32th_counter) {
     pattern_start_clock32th = 0;
   }
@@ -3559,9 +3654,11 @@ void send_pattern_kit_to_md() {
               MD.setTrackRouting(i, 5);
             }
             if (i < 16) {
-                          MD.muteTrack(i, false);
+              MD.muteTrack(i, false);
             }
-            else { ExtPatternMutes[i - 16] = SEQ_MUTE_OFF; }
+            else {
+              ExtPatternMutes[i - 16] = SEQ_MUTE_OFF;
+            }
           }
         }
       }
@@ -3571,7 +3668,7 @@ void send_pattern_kit_to_md() {
     }
   }
 
-   
+
   in_sysex = 0;
 
   clearLed();
@@ -3645,54 +3742,54 @@ void octave_handler(Encoder *enc) {
   }
 }
 void pattern_len_handler(Encoder *enc) {
-  
-    if  (curpage == SEQ_EXTSTEP_PAGE) {
-       if (BUTTON_DOWN(Buttons.BUTTON3)) {
+
+  if  (curpage == SEQ_EXTSTEP_PAGE) {
+    if (BUTTON_DOWN(Buttons.BUTTON3)) {
       for (uint8_t c = 0; c < 6; c++) {
-      ExtPatternLengths[c] = trackinfo_param3.getValue();
-    }
+        ExtPatternLengths[c] = trackinfo_param3.getValue();
       }
-       ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
     }
-    else if ((curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_STEP_PAGE)) {
-      if (cur_col < 16) {
+    ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
+  }
+  else if ((curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_STEP_PAGE)) {
+    if (cur_col < 16) {
       PatternLengths[cur_col] = trackinfo_param3.getValue();
-  if (BUTTON_DOWN(Buttons.BUTTON3)) {
-    for (uint8_t c = 0; c < 16; c++) {
-      PatternLengths[c] = trackinfo_param3.getValue();
-    }
+      if (BUTTON_DOWN(Buttons.BUTTON3)) {
+        for (uint8_t c = 0; c < 16; c++) {
+          PatternLengths[c] = trackinfo_param3.getValue();
+        }
       }
-      
-      }
-      else {
-         if (BUTTON_DOWN(Buttons.BUTTON3)) {
-      for (uint8_t c = 0; c < 6; c++) {
-      ExtPatternLengths[c] = trackinfo_param3.getValue();
+
     }
+    else {
+      if (BUTTON_DOWN(Buttons.BUTTON3)) {
+        for (uint8_t c = 0; c < 6; c++) {
+          ExtPatternLengths[c] = trackinfo_param3.getValue();
+        }
       }
       ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
-      }
     }
-    else if ((curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) {
-      if (cur_col < 16) {
-         if (BUTTON_DOWN(Buttons.BUTTON3)) {
-    for (uint8_t c = 0; c < 16; c++) {
-      PatternLengths[c] = trackinfo_param3.getValue();
-    }
+  }
+  else if ((curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) {
+    if (cur_col < 16) {
+      if (BUTTON_DOWN(Buttons.BUTTON3)) {
+        for (uint8_t c = 0; c < 16; c++) {
+          PatternLengths[c] = trackinfo_param3.getValue();
+        }
       }
       PatternLengths[last_md_track] = trackinfo_param3.getValue();
-      }
-     else {
-       if (BUTTON_DOWN(Buttons.BUTTON3)) {
-      for (uint8_t c = 0; c < 6; c++) {
-      ExtPatternLengths[c] = trackinfo_param3.getValue();
     }
+    else {
+      if (BUTTON_DOWN(Buttons.BUTTON3)) {
+        for (uint8_t c = 0; c < 6; c++) {
+          ExtPatternLengths[c] = trackinfo_param3.getValue();
+        }
       }
       ExtPatternLengths[last_extseq_track] = trackinfo_param3.getValue();
-      }
     }
-init_notes();
   }
+  init_notes();
+}
 
 void encoder_fx_handle(Encoder *enc) {
   GridEncoder *mdEnc = (GridEncoder *)enc;
@@ -3745,19 +3842,19 @@ void modify_track(int looptrack_) {
 void loadtrackinfo_page(uint8_t i) {
   // if (MidiClock.state == 2) {
   // while (MidiClock.mod6_counter != 0);
-    
+
   // }
   trackinfo_param2.min = 0;
 
- 
-    currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
-    MD.getCurrentTrack(CALLBACK_TIMEOUT);
 
-    if (MidiClock.state != 2) {
-      MD.saveCurrentKit(currentkit_temp);
-    }
-    MD.getBlockingKit(currentkit_temp);
-     
+  currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
+  MD.getCurrentTrack(CALLBACK_TIMEOUT);
+
+  if (MidiClock.state != 2) {
+    MD.saveCurrentKit(currentkit_temp);
+  }
+  MD.getBlockingKit(currentkit_temp);
+
   if (i == 0) {
     curpage = SEQ_STEP_PAGE;
 
@@ -3815,10 +3912,18 @@ void loadtrackinfo_page(uint8_t i) {
   }
 
   GUI.setPage(&trackinfo_page);
-    if (i == 0) { curpage = SEQ_STEP_PAGE; }
-  else if (i == 1) { curpage = SEQ_RTRK_PAGE; }
-  else if (i == 2) { curpage = SEQ_PARAM_A_PAGE; }
-  else if (i == 3) { curpage = SEQ_PTC_PAGE; }
+  if (i == 0) {
+    curpage = SEQ_STEP_PAGE;
+  }
+  else if (i == 1) {
+    curpage = SEQ_RTRK_PAGE;
+  }
+  else if (i == 2) {
+    curpage = SEQ_PARAM_A_PAGE;
+  }
+  else if (i == 3) {
+    curpage = SEQ_PTC_PAGE;
+  }
   //Len
   cur_col = last_md_track;
   cur_row = param2.getValue();
@@ -4026,7 +4131,7 @@ void setup() {
   //set_midinote_totrack_mapping();
 
   //Initalise the  Effects Ecnodres
-  
+
   param2.handler = encoder_param2_handle;
   param3.handler = encoder_fx_handle;
   param3.effect = MD_FX_ECHO;
@@ -4035,11 +4140,11 @@ void setup() {
   param4.effect = MD_FX_ECHO;
   param4.fxparam = MD_ECHO_FB;
 
-trackinfo_param4.handler = octave_handler;
+  trackinfo_param4.handler = octave_handler;
   mixer_param1.handler = encoder_level_handle;
   mixer_param2.handler = encoder_level_handle;
   trackinfo_param3.handler = pattern_len_handler;
-trackinfo_param2.handler = ptc_root_handler;
+  trackinfo_param2.handler = ptc_root_handler;
   //mixer_param2.handler = encoder_filter_handle;
   //Setup Turbo Midi
   frames_startclock = slowclock;
@@ -4068,9 +4173,9 @@ trackinfo_param2.handler = ptc_root_handler;
   A4SysexListener.setup();
 
   sei();
-    //md_setup();
+  //md_setup();
 
-  
+
 }
 
 
@@ -4099,16 +4204,16 @@ uint64_t getPatternMask(int column, int row, uint8_t j, bool load) {
     }
   }
   if (column < 16) {
-  if (temptrack.active == EMPTY_TRACK_TYPE) {
-    return (uint64_t) 0;
-  }
+    if (temptrack.active == EMPTY_TRACK_TYPE) {
+      return (uint64_t) 0;
+    }
   }
   else {
-  if (track_buf.active == EMPTY_TRACK_TYPE) {
-    return (uint64_t) 0;
+    if (track_buf.active == EMPTY_TRACK_TYPE) {
+      return (uint64_t) 0;
+    }
   }
-  }
-  
+
   if (j == 1) {
     return temptrack.swingPattern;
   }
@@ -4155,7 +4260,7 @@ uint32_t getGridModel(int column, int row, bool load, A4Track *track_buf) {
       return NULL;
     }
   }
-  
+
   if (column < 16) {
     if (temptrack.active == EMPTY_TRACK_TYPE) {
       return NULL;
@@ -4166,10 +4271,10 @@ uint32_t getGridModel(int column, int row, bool load, A4Track *track_buf) {
   }
   else {
     return track_buf->active;
-  
-  
+
+
   }
-  
+
 }
 
 /*
@@ -4225,10 +4330,10 @@ char *getTrackKit(int column, int row, bool load, bool scroll) {
       for (uint8_t a = 0; a < 16; a++) {
         row_name[a] = temptrack.kitName[a];
       }
-            row_name[16] = '\0';
+      row_name[16] = '\0';
 
     }
-    
+
     return row_name;
   }
 }
@@ -4290,7 +4395,7 @@ void OptionsPage::display() {
       merge = options_param2.getValue();
     }
   }
-   else if (options_param1.getValue() == 4) {
+  else if (options_param1.getValue() == 4) {
 
 
     if (options_param1.hasChanged()) {
@@ -4516,7 +4621,7 @@ void TrackInfoPage::display()  {
 
   else if ((curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_RLCK_PAGE)) {
     GUI.setLine(GUI.LINE1);
-              GUI.put_value_at1(15, page_select + 1);
+    GUI.put_value_at1(15, page_select + 1);
 
     if (curpage == SEQ_RLCK_PAGE) {
       GUI.put_string_at(0, "RLCK");
@@ -4530,19 +4635,19 @@ void TrackInfoPage::display()  {
     const char *str1 = getMachineNameShort(MD.kit.models[cur_col], 1);
     const char *str2 = getMachineNameShort(MD.kit.models[cur_col], 2);
     if (cur_col < 16) {
-    GUI.put_p_string_at(9, str1);
-    GUI.put_p_string_at(11, str2);
-        GUI.put_value_at(5, trackinfo_param3.getValue());
+      GUI.put_p_string_at(9, str1);
+      GUI.put_p_string_at(11, str2);
+      GUI.put_value_at(5, trackinfo_param3.getValue());
     }
     else {
-                    GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
-    if (Analog4.connected) {
-      GUI.put_string_at(9, "A4T");
-    }
-     else { 
-      GUI.put_string_at(9, "MID");
-    }
-    GUI.put_value_at1(12, cur_col - 16 + 1);
+      GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
+      if (Analog4.connected) {
+        GUI.put_string_at(9, "A4T");
+      }
+      else {
+        GUI.put_string_at(9, "MID");
+      }
+      GUI.put_value_at1(12, cur_col - 16 + 1);
     }
 
     if (curpage == SEQ_RLCK_PAGE) {
@@ -4551,7 +4656,7 @@ void TrackInfoPage::display()  {
 
     } if (curpage == SEQ_RTRK_PAGE) {
 
-      draw_patternmask(page_select * 16,DEVICE_MD);
+      draw_patternmask(page_select * 16, DEVICE_MD);
 
     }
 
@@ -4564,44 +4669,44 @@ void TrackInfoPage::display()  {
     const char *str1 = getMachineNameShort(MD.kit.models[cur_col], 1);
     const char *str2 = getMachineNameShort(MD.kit.models[cur_col], 2);
     GUI.setLine(GUI.LINE1);
-if ((curpage == SEQ_RPTC_PAGE)) {
-    GUI.put_string_at(0, "RPTC");
-}
-else {
-     GUI.put_string_at(0, "PTC");
-
-}
-    if (cur_col < 16) {
-          GUI.put_value_at(5, trackinfo_param3.getValue());
-    GUI.put_p_string_at(9, str1);
-    GUI.put_p_string_at(11, str2);
+    if ((curpage == SEQ_RPTC_PAGE)) {
+      GUI.put_string_at(0, "RPTC");
     }
     else {
-              GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
-if (Analog4.connected) {
-      GUI.put_string_at(9, "A4T");
+      GUI.put_string_at(0, "PTC");
+
     }
-     else { 
-      GUI.put_string_at(9, "MID");
-    }   
-    GUI.put_value_at1(12, cur_col - 16 + 1);
+    if (cur_col < 16) {
+      GUI.put_value_at(5, trackinfo_param3.getValue());
+      GUI.put_p_string_at(9, str1);
+      GUI.put_p_string_at(11, str2);
+    }
+    else {
+      GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
+      if (Analog4.connected) {
+        GUI.put_string_at(9, "A4T");
+      }
+      else {
+        GUI.put_string_at(9, "MID");
+      }
+      GUI.put_value_at1(12, cur_col - 16 + 1);
     }
     GUI.setLine(GUI.LINE2);
     GUI.put_string_at(0, "OC:");
     GUI.put_value_at2(3, trackinfo_param1.getValue());
 
     if (trackinfo_param2.getValue() < 32) {
-    GUI.put_string_at(6, "F:-");
-    GUI.put_value_at2(9, 32 - trackinfo_param2.getValue());
+      GUI.put_string_at(6, "F:-");
+      GUI.put_value_at2(9, 32 - trackinfo_param2.getValue());
 
     }
     else if (trackinfo_param2.getValue() > 32) {
-    GUI.put_string_at(6, "F:+");
-        GUI.put_value_at2(9, trackinfo_param2.getValue() - 32);
+      GUI.put_string_at(6, "F:+");
+      GUI.put_value_at2(9, trackinfo_param2.getValue() - 32);
 
     }
     else {
-    GUI.put_string_at(6, "F: 0"); 
+      GUI.put_string_at(6, "F: 0");
     }
 
     GUI.put_string_at(12, "S:");
@@ -4625,7 +4730,7 @@ if (Analog4.connected) {
       PGM_P modelname = NULL;
       modelname = model_param_name(MD.kit.models[last_md_track], trackinfo_param1.getValue() - 1);
       if (modelname != NULL) {
-      m_strncpy_p(myName, modelname, 4);
+        m_strncpy_p(myName, modelname, 4);
       }
       GUI.put_string_at(0, myName);
     }
@@ -4634,8 +4739,8 @@ if (Analog4.connected) {
       GUI.put_string_at(7, "--");
     }
     else {
-       PGM_P modelname = NULL;
-       modelname = model_param_name(MD.kit.models[last_md_track], trackinfo_param3.getValue() - 1) ;
+      PGM_P modelname = NULL;
+      modelname = model_param_name(MD.kit.models[last_md_track], trackinfo_param3.getValue() - 1) ;
       if (modelname != NULL) {
         m_strncpy_p(myName2, modelname, 4);
       }
@@ -4657,41 +4762,41 @@ if (Analog4.connected) {
   }
   else {
     GUI.setLine(GUI.LINE1);
-      GUI.put_value_at1(15, page_select + 1);
+    GUI.put_value_at1(15, page_select + 1);
 
     if (curpage == SEQ_EUC_PAGE) {
-            GUI.put_string_at(0, "E     ");
+      GUI.put_string_at(0, "E     ");
 
       GUI.put_value_at2(2, trackinfo_param1.getValue());
 
-            GUI.put_value_at2(5, trackinfo_param2.getValue());
+      GUI.put_value_at2(5, trackinfo_param2.getValue());
 
-          GUI.put_value_at2(8, trackinfo_param3.getValue());
+      GUI.put_value_at2(8, trackinfo_param3.getValue());
 
-          if (BUTTON_DOWN(Buttons.BUTTON2)) {
-          GUI.put_value_at2(11, euclid_root[last_md_track]);
-          }
-          else {
-          GUI.put_value_at2(11, trackinfo_param4.getValue());
-          }
+      if (BUTTON_DOWN(Buttons.BUTTON2)) {
+        GUI.put_value_at2(11, euclid_root[last_md_track]);
+      }
+      else {
+        GUI.put_value_at2(11, trackinfo_param4.getValue());
+      }
       draw_patternmask((page_select * 16), DEVICE_MD);
 
     }
     if ((curpage == SEQ_STEP_PAGE) || (curpage == SEQ_EXTSTEP_PAGE)) {
-  GUI.put_string_at(0, "                ");
+      GUI.put_string_at(0, "                ");
 
       const char *str1 = getMachineNameShort(MD.kit.models[last_md_track], 1);
-    const char *str2 = getMachineNameShort(MD.kit.models[last_md_track], 2);
-  
-       char c[3] = "--";
+      const char *str2 = getMachineNameShort(MD.kit.models[last_md_track], 2);
 
-           
+      char c[3] = "--";
+
+
       if (trackinfo_param1.getValue() == 0) {
         GUI.put_string_at(0, "L1");
 
       }
       else if (trackinfo_param1.getValue() <= 8) {
-                GUI.put_string_at(0, "L");
+        GUI.put_string_at(0, "L");
 
         GUI.put_value_at1(1, trackinfo_param1.getValue());
 
@@ -4709,111 +4814,113 @@ if (Analog4.connected) {
       //0  1   2  3  4  5  6  7  8  9  10  11
       //  -5  -4 -3 -2 -1 0
       if ( (curpage == SEQ_EXTSTEP_PAGE) && (ExtPatternResolution[last_extseq_track] == 1)) {
-         if (trackinfo_param2.getValue() == 0) {
-        GUI.put_string_at(2, "--");
-      }
-      else if ((trackinfo_param2.getValue() < 3) && (trackinfo_param2.getValue() != 0))  {
-        GUI.put_string_at(2, "-");
-        GUI.put_value_at1(3, 3 - trackinfo_param2.getValue());
+        if (trackinfo_param2.getValue() == 0) {
+          GUI.put_string_at(2, "--");
+        }
+        else if ((trackinfo_param2.getValue() < 3) && (trackinfo_param2.getValue() != 0))  {
+          GUI.put_string_at(2, "-");
+          GUI.put_value_at1(3, 3 - trackinfo_param2.getValue());
 
+        }
+        else {
+          GUI.put_string_at(2, "+");
+          GUI.put_value_at1(3, trackinfo_param2.getValue() - 3);
+        }
       }
       else {
-        GUI.put_string_at(2, "+");
-        GUI.put_value_at1(3, trackinfo_param2.getValue() - 3);
-      }
-      }
-      else {
-      if (trackinfo_param2.getValue() == 0) {
-        GUI.put_string_at(2, "--");
-      }
-      else if ((trackinfo_param2.getValue() < 6) && (trackinfo_param2.getValue() != 0))  {
-        GUI.put_string_at(2, "-");
-        GUI.put_value_at1(3, 6 - trackinfo_param2.getValue());
+        if (trackinfo_param2.getValue() == 0) {
+          GUI.put_string_at(2, "--");
+        }
+        else if ((trackinfo_param2.getValue() < 6) && (trackinfo_param2.getValue() != 0))  {
+          GUI.put_string_at(2, "-");
+          GUI.put_value_at1(3, 6 - trackinfo_param2.getValue());
 
+        }
+        else {
+          GUI.put_string_at(2, "+");
+          GUI.put_value_at1(3, trackinfo_param2.getValue() - 6);
+        }
       }
-      else {
-        GUI.put_string_at(2, "+");
-        GUI.put_value_at1(3, trackinfo_param2.getValue() - 6);
-      }
-      }
-    
-    if (curpage == SEQ_EXTSTEP_PAGE) {
 
-   //   GUI.put_value_at2(5, trackinfo_param3.getValue());
-               
-                    
+      if (curpage == SEQ_EXTSTEP_PAGE) {
+
+        //   GUI.put_value_at2(5, trackinfo_param3.getValue());
 
 
 
-      //Cond
-      //    GUI.put_value_at2(0, trackinfo_param1.getValue());
-      //Pos
-      //0  1   2  3  4  5  6  7  8  9  10  11
-      //  -5  -4 -3 -2 -1 0
-     
-       struct musical_notes number_to_note;
-       uint8_t notenum;
-     uint8_t notes_held = 0;
-     uint8_t i;
-      for (i = 0; i < 16; i++) {
-        if (notes[i] == 1) { notes_held += 1; }
-      }
 
-      if (notes_held > 0)  {
-      for ( i = 0; i < 4; i++) {
-         
-         notenum = abs(ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + page_select * 16]);
-         if (notenum != 0) {
-          notenum = notenum - 1;
-         uint8_t oct =  notenum / 12;
-         uint8_t note = notenum - 12 * (notenum / 12);
-         if (ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + page_select * 16] > 0) {
-           
-            GUI.put_string_at(4 + i * 3, number_to_note.notes_upper[note]);
-        GUI.put_value_at1(4 + i * 3 + 2, oct);
-     
-         }
-         else {
-            GUI.put_string_at(4 + i * 3, number_to_note.notes_lower[note]);
-        GUI.put_value_at1(4 + i * 3 + 2, oct);
-        
-         
-         }
-         }
-      }
-      } 
-      else {
-               GUI.put_value_at1(15, page_select + 1);
-           GUI.put_value_at(5, trackinfo_param3.getValue());
 
-             if (cur_col < 16) {
-    GUI.put_p_string_at(9, str1);
-    GUI.put_p_string_at(11, str2);
-    }
-    else {
-          GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
- if (Analog4.connected) {
-      GUI.put_string_at(9, "A4T");
-    }
-     else { 
-      GUI.put_string_at(9, "MID");
-    }   
-    GUI.put_value_at1(12, last_extseq_track + 1);
-    }
-      }
-      //PatternLengths[cur_col] = trackinfo_param3.getValue();
-      draw_patternmask((page_select * 16), DEVICE_A4);
-      
-    }
-     if (curpage == SEQ_STEP_PAGE) {
-      GUI.put_p_string_at(9, str1);
-      GUI.put_p_string_at(11, str2);
-      GUI.put_value_at(5, trackinfo_param3.getValue());
-      GUI.put_value_at1(15, page_select + 1);
-      GUI.put_value_at2(6, trackinfo_param3.getValue());
-      draw_patternmask((page_select * 16), DEVICE_MD);
+        //Cond
+        //    GUI.put_value_at2(0, trackinfo_param1.getValue());
+        //Pos
+        //0  1   2  3  4  5  6  7  8  9  10  11
+        //  -5  -4 -3 -2 -1 0
 
-    }
+        struct musical_notes number_to_note;
+        uint8_t notenum;
+        uint8_t notes_held = 0;
+        uint8_t i;
+        for (i = 0; i < 16; i++) {
+          if (notes[i] == 1) {
+            notes_held += 1;
+          }
+        }
+
+        if (notes_held > 0)  {
+          for ( i = 0; i < 4; i++) {
+
+            notenum = abs(ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + page_select * 16]);
+            if (notenum != 0) {
+              notenum = notenum - 1;
+              uint8_t oct =  notenum / 12;
+              uint8_t note = notenum - 12 * (notenum / 12);
+              if (ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + page_select * 16] > 0) {
+
+                GUI.put_string_at(4 + i * 3, number_to_note.notes_upper[note]);
+                GUI.put_value_at1(4 + i * 3 + 2, oct);
+
+              }
+              else {
+                GUI.put_string_at(4 + i * 3, number_to_note.notes_lower[note]);
+                GUI.put_value_at1(4 + i * 3 + 2, oct);
+
+
+              }
+            }
+          }
+        }
+        else {
+          GUI.put_value_at1(15, page_select + 1);
+          GUI.put_value_at(5, trackinfo_param3.getValue());
+
+          if (cur_col < 16) {
+            GUI.put_p_string_at(9, str1);
+            GUI.put_p_string_at(11, str2);
+          }
+          else {
+            GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
+            if (Analog4.connected) {
+              GUI.put_string_at(9, "A4T");
+            }
+            else {
+              GUI.put_string_at(9, "MID");
+            }
+            GUI.put_value_at1(12, last_extseq_track + 1);
+          }
+        }
+        //PatternLengths[cur_col] = trackinfo_param3.getValue();
+        draw_patternmask((page_select * 16), DEVICE_A4);
+
+      }
+      if (curpage == SEQ_STEP_PAGE) {
+        GUI.put_p_string_at(9, str1);
+        GUI.put_p_string_at(11, str2);
+        GUI.put_value_at(5, trackinfo_param3.getValue());
+        GUI.put_value_at1(15, page_select + 1);
+        GUI.put_value_at2(6, trackinfo_param3.getValue());
+        draw_patternmask((page_select * 16), DEVICE_MD);
+
+      }
     }
 
     /*              PatternLengths[cur_col] = trackinfo_param2.getValue();
@@ -4840,38 +4947,38 @@ void draw_lockmask(uint8_t offset) {
   GUI.setLine(GUI.LINE2);
 
   char str[17] = "----------------";
-    uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[cur_col] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[cur_col]));
+  uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[cur_col] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[cur_col]));
 
   for (int i = 0; i < 16; i++) {
 
     if (i + offset >= PatternLengths[cur_col]) {
-            str[i] = ' ';
+      str[i] = ' ';
     }
     else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
-                  str[i] = ' ';
+      str[i] = ' ';
     }
     else {
-    if  (IS_BIT_SET64(LockMasks[cur_col], i + offset) ) {
-      str[i] = 'x';
+      if  (IS_BIT_SET64(LockMasks[cur_col], i + offset) ) {
+        str[i] = 'x';
 
-    }
-    if  (IS_BIT_SET64(PatternMasks[cur_col], i + offset) && !IS_BIT_SET64(LockMasks[cur_col], i + offset) ) {
+      }
+      if  (IS_BIT_SET64(PatternMasks[cur_col], i + offset) && !IS_BIT_SET64(LockMasks[cur_col], i + offset) ) {
 
-      str[i] = (char) 165;
+        str[i] = (char) 165;
 
-    }
-    if (IS_BIT_SET64(PatternMasks[cur_col], i + offset) && IS_BIT_SET64(LockMasks[cur_col], i + offset) )  {
+      }
+      if (IS_BIT_SET64(PatternMasks[cur_col], i + offset) && IS_BIT_SET64(LockMasks[cur_col], i + offset) )  {
 
-      str[i] = (char) 219;
+        str[i] = (char) 219;
 
-    }
-    
-    if (notes[i] > 0)  {
-      /*If the bit is set, there is a cue at this position. We'd like to display it as [] on screen*/
-      /*Char 219 on the minicommand LCD is a []*/
+      }
 
-      str[i] = (char) 255;
-    }
+      if (notes[i] > 0)  {
+        /*If the bit is set, there is a cue at this position. We'd like to display it as [] on screen*/
+        /*Char 219 on the minicommand LCD is a []*/
+
+        str[i] = (char) 255;
+      }
     }
   }
   GUI.put_string_at(0, str);
@@ -4888,42 +4995,42 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
   /*Get the Pattern bit mask for the selected track*/
   //    uint64_t patternmask = getPatternMask(cur_col, cur_row , 3, false);
   uint64_t patternmask = PatternMasks[cur_col];
-  
-  
+
+
   /*Display 16 steps on screen, starting at an offset set by the encoder1 value*/
   /*The encoder offset allows you to scroll through the 4 pages of the 16 step sequencer triggers that make up a 64 step pattern*/
 
   /*For 16 steps check to see if there is a trigger at pattern position i + (encoder_offset * 16) */
   for (int i = 0; i < 16; i++) {
     if (device == DEVICE_MD) {
-    uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[cur_col] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[cur_col]));
+      uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[cur_col] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[cur_col]));
 
-    
-    if (i + offset >= PatternLengths[cur_col]) {
-            mystr[i] = ' ';
-    }
-    else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
-                  mystr[i] = ' ';
-    }
-    else if (IS_BIT_SET64(patternmask, i + offset) ) {
-      /*If the bit is set, there is a trigger at this position. We'd like to display it as [] on screen*/
-      /*Char 219 on the minicommand LCD is a []*/
-      mystr[i] = (char) 219;
-    }
+
+      if (i + offset >= PatternLengths[cur_col]) {
+        mystr[i] = ' ';
+      }
+      else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
+        mystr[i] = ' ';
+      }
+      else if (IS_BIT_SET64(patternmask, i + offset) ) {
+        /*If the bit is set, there is a trigger at this position. We'd like to display it as [] on screen*/
+        /*Char 219 on the minicommand LCD is a []*/
+        mystr[i] = (char) 219;
+      }
     }
     else {
-        uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track]) - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) - (ExtPatternLengths[last_extseq_track] * ((MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track] - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) / (ExtPatternLengths[last_extseq_track])));
+      uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track]) - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) - (ExtPatternLengths[last_extseq_track] * ((MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track] - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) / (ExtPatternLengths[last_extseq_track])));
 
       for (uint8_t a = 0; a < 4; a++) {
-        
+
         if (i + offset >= ExtPatternLengths[last_extseq_track]) {
-            mystr[i] = ' ';
-    }
-     else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
-                  mystr[i] = ' ';
-    }
+          mystr[i] = ' ';
+        }
+        else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
+          mystr[i] = ' ';
+        }
         else if (ExtPatternNotes[last_extseq_track][a][i + offset] != 0) {
-                mystr[i] = (char) 219;
+          mystr[i] = (char) 219;
 
         }
       }
@@ -4960,15 +5067,15 @@ int GridEncoder::update(encoder_t *enc) {
   int inc = enc->normal + (pressmode ? 0 : (scroll_fastmode ? 4 * enc->button : enc->button));
   //int inc = 4 + (pressmode ? 0 : (fastmode ? 5 * enc->button : enc->button));
 
-    rot_counter +=  enc->normal;
-    if (rot_counter > rot_res) { 
-      cur = limit_value(cur, inc, min, max);
-      rot_counter = 0;
-    }   
-    else if (rot_counter < 0)  {
-      cur = limit_value(cur, inc, min, max);
-      rot_counter = rot_res;
-    }   
+  rot_counter +=  enc->normal;
+  if (rot_counter > rot_res) {
+    cur = limit_value(cur, inc, min, max);
+    rot_counter = 0;
+  }
+  else if (rot_counter < 0)  {
+    cur = limit_value(cur, inc, min, max);
+    rot_counter = rot_res;
+  }
 
 
 
@@ -4977,37 +5084,39 @@ int GridEncoder::update(encoder_t *enc) {
 }
 
 void GridEncoderPage::loop() {
-     if (MD.connected == true) {
-     if ((MidiUart.recvActiveSenseTimer > 300) && (MidiUart.speed > 1))  {
-    //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      turboSetSpeed(1,1);
+  if (MD.connected == true) {
+    if ((MidiUart.recvActiveSenseTimer > 300) && (MidiUart.speed > 1))  {
+      //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
+      turboSetSpeed(1, 1);
       MD.connected = false;
       GUI.flash_strings_fill("MD", "DISCONNECTED");
-   //   }
-     }
-     }
-   if (MD.connected == false) {
+      //   }
+    }
+  }
+  if (MD.connected == false) {
     if (MidiUart.recvActiveSenseTimer < 100) {
       md_setup();
-       if (Analog4.connected == false) { a4_setup(); }
+      // if (Analog4.connected == false) { a4_setup(); }
     }
-     }
+  }
 
-    if (Analog4.connected == true) {
-     if ((MidiUart2.recvActiveSenseTimer > 300) && (MidiUart2.speed > 1))  {
-    //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      turboSetSpeed(1,2);
+  if (Analog4.connected == true) {
+    if ((MidiUart2.recvActiveSenseTimer > 300) && (MidiUart2.speed > 1))  {
+      //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
+      turboSetSpeed(1, 2);
       Analog4.connected = false;
+      uart2_device = DEVICE_NULL;
       GUI.flash_strings_fill("A4", "DISCONNECTED");
-   //   }
-     }
-     }
-   if (Analog4.connected == false) {
+      //   }
+    }
+  }
+  if ((Analog4.connected == false) && (uart2_device == DEVICE_NULL)) {
     if (MidiUart2.recvActiveSenseTimer < 100) {
+      delay(1500);
       a4_setup();
     }
-   }
-     
+  }
+
 }
 
 /*
@@ -5039,23 +5148,23 @@ void GridEncoderPage::display() {
   if (BUTTON_DOWN(Buttons.ENCODER4) && (param4.hasChanged())) {
     toggle_fx2();
   }
-uint8_t display_name = 0;
- if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
-      display_name = 1;
-    }
-    else {
-  /*For each of the 4 encoder objects, ie 4 Grids to be displayed on screen*/
-  for (uint8_t i = 0; i < 4; i++) {
-
-    /*Display the encoder, ie the Grid i*/
-    encoders[i]->displayAt(i);
-    /*Display the scroll animation. (Scroll animation draws a || at every 4 Grids in a row, making it easier to separate and visualise the track Grids)*/
-    displayScroll(i);
-    /*value = the grid position of the left most Grid (displayed on screen).*/
-
-
+  uint8_t display_name = 0;
+  if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
+    display_name = 1;
   }
+  else {
+    /*For each of the 4 encoder objects, ie 4 Grids to be displayed on screen*/
+    for (uint8_t i = 0; i < 4; i++) {
+
+      /*Display the encoder, ie the Grid i*/
+      encoders[i]->displayAt(i);
+      /*Display the scroll animation. (Scroll animation draws a || at every 4 Grids in a row, making it easier to separate and visualise the track Grids)*/
+      displayScroll(i);
+      /*value = the grid position of the left most Grid (displayed on screen).*/
+
+
     }
+  }
   // int value = encoders[0]->getValue() + (encoders[1]->getValue() * 16);
 
 
@@ -5100,28 +5209,28 @@ uint8_t display_name = 0;
   else {
     GUI.setLine(GUI.LINE1);
     /*Displays the kit name of the left most Grid on the first line at position 12*/
-   if (display_name == 1) {
-            GUI.put_string_at(0,"                ");
+    if (display_name == 1) {
+      GUI.put_string_at(0, "                ");
 
-     GUI.put_string_at(0, getTrackKit(encoders[0]->cur, encoders[1]->cur, true, false ));
-                    GUI.setLine(GUI.LINE2);
+      GUI.put_string_at(0, getTrackKit(encoders[0]->cur, encoders[1]->cur, true, false ));
+      GUI.setLine(GUI.LINE2);
 
-                GUI.put_string_at(0,"                ");
-   // temptrack.patternOrigPosition;
- char str[5];
+      GUI.put_string_at(0, "                ");
+      // temptrack.patternOrigPosition;
+      char str[5];
 
 
-  if (patternload_param1.getValue() < 8) {
-    if (temptrack.active != EMPTY_TRACK_TYPE) {
-    MD.getPatternName(temptrack.patternOrigPosition , str);
-    GUI.put_string_at(0, str);
+      if (patternload_param1.getValue() < 8) {
+        if (temptrack.active != EMPTY_TRACK_TYPE) {
+          MD.getPatternName(temptrack.patternOrigPosition , str);
+          GUI.put_string_at(0, str);
+        }
+      }
     }
-  }
-   }
-   else {
+    else {
 
-    GUI.put_string_at(12, getTrackKit(encoders[0]->getValue(), encoders[1]->getValue(), true, true ));
-   }
+      GUI.put_string_at(12, getTrackKit(encoders[0]->getValue(), encoders[1]->getValue(), true, true ));
+    }
     GUI.setLine(GUI.LINE2);
 
     /*Displays the value of the current Row on the screen.*/
@@ -5149,63 +5258,71 @@ uint8_t display_name = 0;
 
 void GridEncoder::displayAt(int i) {
 
-const char *str;
+  const char *str;
   /*Calculate the position of the Grid to be displayed based on the Current Row, Column and Encoder*/
   //int value = displayx + (displayy * 16) + i;
 
   GUI.setLine(GUI.LINE1);
-  
+
   char a4_name2[2] = "TK";
-  
+
   char strn[3] = "--";
   A4Track track_buf;
-       uint8_t model = getGridModel(param1.getValue() + i, param2.getValue(), true, (A4Track*) &track_buf);
+  uint8_t model = getGridModel(param1.getValue() + i, param2.getValue(), true, (A4Track*) &track_buf);
 
   /*Retrieve the first 2 characters of Maching Name associated with the Track at the current Grid. First obtain the Model object from the Track object, then convert the MachineType into a string*/
- if (param1.getValue() + i < 16) {
-  str = getMachineNameShort(model, 1);
-  
-  if (str == NULL) { GUI.put_string_at((0 + (i * 3)), strn); }
-  else { GUI.put_p_string_at((0 + (i * 3)), str); }
- }
- else {
-       if (model == EMPTY_TRACK_TYPE) { GUI.put_string_at((0 + (i * 3)), strn); }
-       else { 
-        if (model == A4_TRACK_TYPE) {
-          char a4_name1[2] = "A4";
-           GUI.put_string_at((0 + (i * 3)), a4_name1); 
+  if (param1.getValue() + i < 16) {
+    str = getMachineNameShort(model, 1);
 
-        }
-        if (model == EXT_TRACK_TYPE) {
-          char ex_name1[2] = "EX";
-          GUI.put_string_at((0 + (i * 3)), ex_name1); 
-        }
-        }
- }
- 
+    if (str == NULL) {
+      GUI.put_string_at((0 + (i * 3)), strn);
+    }
+    else {
+      GUI.put_p_string_at((0 + (i * 3)), str);
+    }
+  }
+  else {
+    if (model == EMPTY_TRACK_TYPE) {
+      GUI.put_string_at((0 + (i * 3)), strn);
+    }
+    else {
+      if (model == A4_TRACK_TYPE) {
+        char a4_name1[2] = "A4";
+        GUI.put_string_at((0 + (i * 3)), a4_name1);
+
+      }
+      if (model == EXT_TRACK_TYPE) {
+        char ex_name1[2] = "EX";
+        GUI.put_string_at((0 + (i * 3)), ex_name1);
+      }
+    }
+  }
+
   GUI.setLine(GUI.LINE2);
   str = NULL;
-  
-   if (param1.getValue() + i < 16) {
 
-  str = getMachineNameShort(model, 2);
-  
-  if (str == NULL) { GUI.put_string_at((0 + (i * 3)), strn);  }
-  else {
+  if (param1.getValue() + i < 16) {
+
+    str = getMachineNameShort(model, 2);
+
+    if (str == NULL) {
+      GUI.put_string_at((0 + (i * 3)), strn);
+    }
+    else {
       GUI.put_p_string_at((0 + (i * 3)), str);
+    }
   }
-   }
-   
-   else {
-       if (model == EMPTY_TRACK_TYPE) {
-         GUI.put_string_at((0 + (i * 3)), strn);
-       }
-       else {
-         GUI.put_string_at((0 + (i * 3)), a4_name2);
-         GUI.put_value_at1(1 + (i * 3),param1.getValue() + i - 15);
 
-       }
-   }
+  else {
+    if (model == EMPTY_TRACK_TYPE) {
+      GUI.put_string_at((0 + (i * 3)), strn);
+    }
+    else {
+      GUI.put_string_at((0 + (i * 3)), a4_name2);
+      GUI.put_value_at1(1 + (i * 3), param1.getValue() + i - 15);
+
+    }
+  }
   redisplay = false;
 
 }
@@ -5283,7 +5400,7 @@ void init_notes() {
   }
 */
 void exploit_on() {
- // in_sysex = 1;
+  // in_sysex = 1;
   exploit = 1;
   //last_md_track = MD.getCurrentTrack(CALLBACK_TIMEOUT);
   last_md_track = MD.currentTrack;
@@ -5329,17 +5446,17 @@ void exploit_on() {
   //    }
   //  MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,200);
   collect_notes = true;
-//in_sysex = 0;
+  //in_sysex = 0;
 }
 
 
 void exploit_off() {
- // in_sysex = 1;
+  // in_sysex = 1;
   exploit = 0;
   collect_notes = false;
 
   //
-//  global_new.tempo = MidiClock.tempo;
+  //  global_new.tempo = MidiClock.tempo;
   //   global_new.baseChannel = 3;
   //    ElektronDataToSysexEncoder encoder(&MidiUart);
   //   global_new.toSysex(encoder);
@@ -5360,13 +5477,13 @@ void exploit_off() {
   }
   //   }
   if (cur_col < 16) {
-      MD.setStatus(0x22, cur_col);
+    MD.setStatus(0x22, cur_col);
 
   }
   else {
-  MD.setStatus(0x22, last_md_track);
+    MD.setStatus(0x22, last_md_track);
   }
-//in_sysex = 0;
+  //in_sysex = 0;
 }
 static uint8_t turbomidi_sysex_header[] = {
   0xF0, 0x00, 0x20, 0x3c, 0x00, 0x00
@@ -5392,9 +5509,13 @@ void sendTurbomidiHeader(uint8_t cmd, MidiUartClass *MidiUart_) {
 
 void turboSetSpeed(uint8_t speed, uint8_t port) {
   MidiUartClass *MidiUart_;
-  
-  if (port == 1) { MidiUart_ = (MidiUartClass*) &MidiUart; }
-  else { MidiUart_ =(MidiUartClass*) &MidiUart2; }
+
+  if (port == 1) {
+    MidiUart_ = (MidiUartClass*) &MidiUart;
+  }
+  else {
+    MidiUart_ = (MidiUartClass*) &MidiUart2;
+  }
 
   USE_LOCK();
   SET_LOCK();
@@ -5402,10 +5523,10 @@ void turboSetSpeed(uint8_t speed, uint8_t port) {
   sendTurbomidiHeader(0x20, MidiUart_);
   MidiUart_->m_putc(speed );
   MidiUart_->m_putc(0xF7);
-      CLEAR_LOCK();
+  CLEAR_LOCK();
 
   delay(10);
-  MidiUart_->setSpeed(tmSpeeds[speed ],port);
+  MidiUart_->setSpeed(tmSpeeds[speed ], port);
   MidiUart_->setActiveSenseTimer(290);
   MidiUart_->speed = speed;
 }
@@ -5478,27 +5599,27 @@ bool handleEvent(gui_event_t *evt) {
   }
   if ((curpage > 10) || (curpage == SEQ_STEP_PAGE)) {
     if ((EVENT_PRESSED(evt, Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON4)) || (EVENT_PRESSED(evt, Buttons.BUTTON4) && BUTTON_DOWN(Buttons.BUTTON3) )) {
-     
-      
-        if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_EXTSTEP_PAGE)) {
-  for (uint8_t n = 0; n < 6; n++) {
-        clear_extseq_track(n);
+
+
+      if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_EXTSTEP_PAGE)) {
+        for (uint8_t n = 0; n < 6; n++) {
+          clear_extseq_track(n);
+        }
       }
+      else {
+        if ((curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
+
+          for (uint8_t n = 0; n < 16; n++) {
+            clear_seq_locks(n);
+          }
         }
         else {
-          if ((curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
-     
-                for (uint8_t n = 0; n < 16; n++) {
-            clear_seq_locks(n);
-      }
-          }
-          else {
-           for (uint8_t n = 0; n < 16; n++) {
-        clear_seq_track(n);
-      }
+          for (uint8_t n = 0; n < 16; n++) {
+            clear_seq_track(n);
           }
         }
-      
+      }
+
     }
 
   }
@@ -5527,35 +5648,40 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
-  
+
   if ((curpage == SEQ_RTRK_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
     if (cur_col < 16) {
-    clear_seq_track(cur_col);
+      clear_seq_track(cur_col);
     }
     else {
-    clear_extseq_track(cur_col - 16);
+      clear_extseq_track(cur_col - 16);
     }
     return true;
 
   }
-   if (((curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) && ( BUTTON_DOWN(Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3))) {
-   //((EVENT_RELEASED(evt, Buttons.BUTTON3) && BUTTON_DOWN(Buttons.BUTTON2)) || (EVENT_RELEASED(evt, Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3)))) {
-   //if (cur_col < 16) {
-   if (ExtPatternResolution[last_extseq_track] == 1) { 
-    ExtPatternResolution[last_extseq_track] = 2;
-    if (curpage == SEQ_EXTSTEP_PAGE) {  load_seq_extstep_page(last_extseq_track); }
+  if (((curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) && ( BUTTON_DOWN(Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3))) {
+    //((EVENT_RELEASED(evt, Buttons.BUTTON3) && BUTTON_DOWN(Buttons.BUTTON2)) || (EVENT_RELEASED(evt, Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3)))) {
+    //if (cur_col < 16) {
+    if (ExtPatternResolution[last_extseq_track] == 1) {
+      ExtPatternResolution[last_extseq_track] = 2;
+      if (curpage == SEQ_EXTSTEP_PAGE) {
+        load_seq_extstep_page(last_extseq_track);
+      }
 
     }
-   else { ExtPatternResolution[last_extseq_track] = 1; 
-    if (curpage == SEQ_EXTSTEP_PAGE) {  load_seq_extstep_page(last_extseq_track); }
-   }
- //  }
+    else {
+      ExtPatternResolution[last_extseq_track] = 1;
+      if (curpage == SEQ_EXTSTEP_PAGE) {
+        load_seq_extstep_page(last_extseq_track);
+      }
+    }
+    //  }
     return true;
-   }
-   
-   if ((curpage == SEQ_EXTSTEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
-   clear_extseq_track(last_extseq_track);
-   return true;
+  }
+
+  if ((curpage == SEQ_EXTSTEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
+    clear_extseq_track(last_extseq_track);
+    return true;
   }
 
   if ((curpage == SEQ_STEP_PAGE)  && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
@@ -5563,42 +5689,46 @@ bool handleEvent(gui_event_t *evt) {
     return true;
   }
   if (((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
-    
-    if (cur_col < 16) { clear_seq_track(last_md_track); }
-    else { clear_extseq_track(last_extseq_track); }
+
+    if (cur_col < 16) {
+      clear_seq_track(last_md_track);
+    }
+    else {
+      clear_extseq_track(last_extseq_track);
+    }
     return true;
 
   }
-   if (((curpage == SEQ_EXTSTEP_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
+  if (((curpage == SEQ_EXTSTEP_PAGE)) && EVENT_RELEASED(evt, Buttons.BUTTON4)) {
     clear_extseq_track(last_extseq_track);
     return true;
 
   }
-  
-    if ((curpage == SEQ_STEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
-     load_seq_extstep_page(last_extseq_track);
 
+  if ((curpage == SEQ_STEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
+    load_seq_extstep_page(last_extseq_track);
+
+    return true;
+    /*
+      trackinfo_param1.max = 64;
+      trackinfo_param2.max = 64;
+      trackinfo_param2.min = 0;
+      trackinfo_param2.cur = 0;
+      trackinfo_param3.max = 96;
+      trackinfo_param4.max = 36;
+      curpage = SEQ_EUC_PAGE;
       return true;
-   /*
-    trackinfo_param1.max = 64;
-    trackinfo_param2.max = 64;
-    trackinfo_param2.min = 0;
-    trackinfo_param2.cur = 0;
-    trackinfo_param3.max = 96;
-    trackinfo_param4.max = 36;
-    curpage = SEQ_EUC_PAGE;
-    return true;
     */
-    
- 
-    }
-    if ((curpage == SEQ_EXTSTEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
-        
-      load_seq_step_page(last_md_track);
+
+
+  }
+  if ((curpage == SEQ_EXTSTEP_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
+
+    load_seq_step_page(last_md_track);
 
     return true;
-    }
-    if ((curpage == SEQ_EUC_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
+  }
+  if ((curpage == SEQ_EUC_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
     trackinfo_param1.max = 13;
     trackinfo_param2.max = 11;
     trackinfo_param2.min = 1;
@@ -5607,14 +5737,14 @@ bool handleEvent(gui_event_t *evt) {
     trackinfo_param4.max = 16;
     curpage = SEQ_STEP_PAGE;
     return true;
- 
-    }
+
+  }
   if ((curpage == SEQ_PTC_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
     curpage = SEQ_RPTC_PAGE;
     return true;
 
   }
-    if ((curpage == SEQ_RPTC_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
+  if ((curpage == SEQ_RPTC_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
     curpage = SEQ_PTC_PAGE;
     return true;
 
@@ -5631,7 +5761,7 @@ bool handleEvent(gui_event_t *evt) {
     curpage = SEQ_RTRK_PAGE;
     return true;
 
-  } 
+  }
   if ((curpage == SEQ_RTRK_PAGE) && EVENT_RELEASED(evt, Buttons.ENCODER1))  {
     exploit_off();
 
@@ -5641,15 +5771,15 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
-       if (( (curpage == SEQ_EUC_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) && BUTTON_DOWN(Buttons.BUTTON3) ) {
-            random_pattern( trackinfo_param1.cur, PatternLengths[last_md_track], trackinfo_param2.cur,trackinfo_param4.cur,trackinfo_param3.cur);
+  if (( (curpage == SEQ_EUC_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) && BUTTON_DOWN(Buttons.BUTTON3) ) {
+    random_pattern( trackinfo_param1.cur, PatternLengths[last_md_track], trackinfo_param2.cur, trackinfo_param4.cur, trackinfo_param3.cur);
 
-  
+
     return true;
   }
- if (( (curpage == SEQ_EUC_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
-  
-    setEuclid(last_md_track, trackinfo_param1.cur, PatternLengths[last_md_track], trackinfo_param2.cur,trackinfo_param4.cur,trackinfo_param3.cur);
+  if (( (curpage == SEQ_EUC_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
+
+    setEuclid(last_md_track, trackinfo_param1.cur, PatternLengths[last_md_track], trackinfo_param2.cur, trackinfo_param4.cur, trackinfo_param3.cur);
     return true;
   }
 
@@ -5658,13 +5788,13 @@ bool handleEvent(gui_event_t *evt) {
     return true;
   }
 
-  if (( (curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_RPTC_PAGE) ||  (curpage == SEQ_EXTSTEP_PAGE)|| (curpage == SEQ_STEP_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON2) ) {
+  if (( (curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_RPTC_PAGE) ||  (curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_STEP_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON2) ) {
     uint8_t pagemax = 4;
     page_select += 1;
-    
+
     if (cur_col > 15) {
-        pagemax = 8;
-      
+      pagemax = 8;
+
     }
     if (page_select >= pagemax) {
       page_select = 0;
@@ -5748,7 +5878,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
     if  ((EVENT_RELEASED(evt, Buttons.ENCODER1) || EVENT_RELEASED(evt, Buttons.ENCODER2) || EVENT_RELEASED(evt, Buttons.ENCODER3) || EVENT_RELEASED(evt, Buttons.ENCODER4))
-        && ( BUTTON_UP(Buttons.ENCODER1) && BUTTON_UP(Buttons.ENCODER2) && BUTTON_UP(Buttons.ENCODER3) && BUTTON_UP(Buttons.ENCODER4) ))
+         && ( BUTTON_UP(Buttons.ENCODER1) && BUTTON_UP(Buttons.ENCODER2) && BUTTON_UP(Buttons.ENCODER3) && BUTTON_UP(Buttons.ENCODER4) ))
     {
       if (curpage == W_PAGE) {
         // MD.getCurrentTrack(CALLBACK_TIMEOUT);
@@ -5811,7 +5941,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
       MidiClock.stop();
-       if (clockout == 1) {
+      if (clockout == 1) {
         MidiClock.transmit_uart2 = true;
       }
       else {
@@ -5828,7 +5958,7 @@ bool handleEvent(gui_event_t *evt) {
         MidiClock.transmit_uart2 = false;
         MidiClock.mode = MidiClock.EXTERNAL_UART2;
       }
-     
+
       MidiClock.start();
       send_globals();
       delay(100);
@@ -5836,7 +5966,7 @@ bool handleEvent(gui_event_t *evt) {
       switchGlobal(7);
       if (turbo == 0) {
         //   if (turbo_state != 1) {
-        turboSetSpeed(1,1);
+        turboSetSpeed(1, 1);
         //  }
       }
       if (turbo == 1) {
@@ -5844,7 +5974,7 @@ bool handleEvent(gui_event_t *evt) {
 
         if (turbo_state != 4)  {
           //  TurboMidi.startTurboMidi();
-          turboSetSpeed(4,1);
+          turboSetSpeed(4, 1);
           //     }
           turbo_state = 4;
         }
@@ -5853,7 +5983,7 @@ bool handleEvent(gui_event_t *evt) {
       }
       if (turbo == 2) {
         //       if (turbo_state != 7) {
-        turboSetSpeed(7,1);
+        turboSetSpeed(7, 1);
         //    }
       }
       GUI.setPage(&page);
