@@ -16,21 +16,24 @@
 #include "PatternLoadPage.h"
 #include "OptionPage.h"
 #include <MidiClockPage.h>
-//#include <TurboMidi.hh>
+//#include <cfg.uart1_turboMidi.hh>
 #include <SDCard.h>
 #include <string.h>
 #include <midi-common.hh>
 //#include <SimpleFS.hh>
 //#include <TrigCapture.h>
 //RELEASE 1 BYTE/STABLE-BETA 1 BYTE /REVISION 2 BYTES
-#define VERSION 2011
+#define VERSION 2012
+#define CONFIG_VERSION 2012
 #define LOCK_AMOUNT 256
 #define GRID_LENGTH 130
 #define GRID_WIDTH 22
 #define GRID_SLOT_BYTES 4096
 #define CALLBACK_TIMEOUT 500
+#define GUI_NAME_TIMEOUT 800
 
 #define CUE_PAGE 5
+#define NEW_PROJECT_PAGE 7
 #define MIXER_PAGE 10
 #define S_PAGE 3
 #define W_PAGE 4
@@ -74,7 +77,8 @@
 //Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
 uint8_t uart1_device = DEVICE_NULL;
 uint8_t uart2_device = DEVICE_NULL;
-
+uint8_t cur_col = 0;
+uint8_t cur_row = 0;
 /*MDKit and Pattern objects must be defined outside of Classes and Methods otherwise the Minicommand freezes.*/
 MDPattern pattern_rec;
 //MDKit MD.kit;
@@ -85,7 +89,7 @@ uint8_t rec_global = 0;
 /*Current Loaded project file, set to test.mcl as initial name*/
 SDCardFile file("/test.mcl");
 /*Configuration file used to store settings when Minicommand is turned off*/
-SDCardFile configfile("/config.mcls");
+SDCardFile cfgfile("/config.mcls");
 
 int numProjects = 0;
 int curProject = 0;
@@ -94,7 +98,6 @@ int global_page = 0;
 uint8_t notes_off_counter = 0;
 
 uint8_t currentkit_temp = 0;
-uint32_t cue1 = 0;
 uint8_t notes[28];
 uint8_t notecount = 0;
 uint8_t firstnote = 0;
@@ -109,7 +112,6 @@ uint8_t fx_tm = 0;
 uint8_t level_pressmode = 0;
 //GUI switch, used to identify what level of the GUI we are currently in.
 uint8_t curpage = 0;
-uint8_t turbo_state = 0;
 
 uint8_t write_original = 0;
 //ProjectName string
@@ -130,6 +132,7 @@ float frames_fps = 10;
 uint16_t frames = 0;
 uint16_t frames_startclock;
 uint16_t grid_lastclock = 0;
+uint16_t cfg_save_lastclock = 0;
 
 uint32_t pattern_start_clock32th = 0;
 
@@ -139,8 +142,7 @@ uint32_t note_hold = 0;
 /*Temporary register for storeing the value of the encoder position or grid/Grid position for a callback*/
 uint8_t load_the_damn_kit = 255;
 int encodervalue = NULL;
-int cur_col = 0;
-int cur_row = 0;
+
 int countx = 0;
 bool collect_notes = false;
 //Instantiating GUI Objects.
@@ -194,8 +196,8 @@ PatternLoadPage patternload_page(&patternload_param1, &patternload_param2, &patt
 //OptionsEncoder options_param1(0, 3);
 //OptionsEncoder  options_param2(0, 2);
 
-TrackInfoEncoder options_param1(0, 4, ENCODER_RES_SYS);
-TrackInfoEncoder  options_param2(0, 2, ENCODER_RES_SYS);
+TrackInfoEncoder options_param1(0, 5, ENCODER_RES_SYS);
+TrackInfoEncoder  options_param2(0, 3, ENCODER_RES_SYS);
 OptionsPage options_page(&options_param1, &options_param2);
 
 // TrackInfoEncoder proj_param1(1, 10);
@@ -248,7 +250,6 @@ void clear_step_locks(int curtrack, int i) ;
 #define STORE_IN_PLACE 0
 #define STORE_AT_SPECIFIC 254
 
-#define GUI_NAME_TIMEOUT 800
 
 uint8_t patternswitch = PATTERN_UDEF;
 
@@ -659,27 +660,32 @@ class ParameterLock {
 
 class Config {
   public:
+    uint32_t version;
     char project[16];
-    uint8_t turbomidi;
-    uint8_t merge;
+    uint8_t number_projects;
+    uint8_t uart1_turbo;
+    uint8_t uart2_turbo;
+    uint8_t clock_send;
+    uint8_t clock_rec;
+    uint8_t drumRouting[16];
     uint8_t cue_output;
     uint32_t cues;
     uint8_t cur_row;
     uint8_t cur_col;
-    uint8_t number_projects;
-    uint32_t version;
+   
 };
-Config config;
+Config cfg;
 
 
 class Project {
   public:
     uint32_t version;
-    Config config;
     uint8_t reserved[16];
     uint32_t hash;
+    Config cfg;
 };
 Project project_header;
+
 
 
 
@@ -695,9 +701,9 @@ Project project_header;
 
   First it checks to see if the card can be read with the .init method.
 
-  If the card can be read it then attempts to read the config file.
-  If the config file does not exist, a new project is created and the config file is written.
-  If the config file does exist then the last used project is loaded.
+  If the card can be read it then attempts to read the cfg file.
+  If the cfg file does not exist, a new project is created and the cfg file is written.
+  If the cfg file does exist then the last used project is loaded.
 
 */
 void sd_load_init() {
@@ -707,17 +713,24 @@ void sd_load_init() {
   }
 
   else {
-    if (configfile.open(true)) {
-      if (configfile.read(( uint8_t*)&config, sizeof(Config))) {
-        configfile.close();
-        if (config.project != NULL) {
+    if (cfgfile.open(true)) {
+      if (cfgfile.read(( uint8_t*)&cfg, sizeof(Config))) {
+        cfgfile.close();
 
-          if (!sd_load_project(config.project)) {
+        if (cfg.version != CONFIG_VERSION) {
+
+         cfg_init();
+         new_project_page();
+        }
+
+        else if (cfg.number_projects != 0) {
+
+          if (!sd_load_project(cfg.project)) {
             new_project_page();
           }
         }
         else {
-          load_project_page();
+        new_project_page();
         }
       }
       else {
@@ -765,22 +778,37 @@ void load_project_page() {
   Loads the GUI for the new project page.
 
 */
-
-void new_project_page() {
-  if (config.version != 2000) {
-    config.version = 2000;
-    config.number_projects = 0;
+void cfg_init() {
+    cfgfile.open(true);
+    fat_resize_file(cfgfile.fd, (uint32_t) GRID_SLOT_BYTES);
+  
+    cfg.version = CONFIG_VERSION;
+    cfg.number_projects = 0;
+    cfg.clock_send = 0;
+    cfg.clock_rec = 0;
+    cfg.uart1_turbo = 2;
+    cfg.uart2_turbo = 2;
+    cur_row = 0;
+    cur_col = 0;
+    cfg.cues = 0;
+    cfgfile.write(( uint8_t*)&cfg, sizeof(Config));
+    cfgfile.close();
   }
+void new_project_page() {
+// if (cfg.version != CONFIG_VERSION) {
+  //            cfg_init();
+  
+ // }
 
 
   char my_string[16] = "/project___.mcl";
 
-  my_string[8] = (config.number_projects % 1000) / 100 + '0';
-  my_string[8 + 1] = (config.number_projects % 100) / 10 + '0';
-  my_string[8 + 2] = (config.number_projects % 10) + '0';
+  my_string[8] = (cfg.number_projects % 1000) / 100 + '0';
+  my_string[8 + 1] = (cfg.number_projects % 100) / 10 + '0';
+  my_string[8 + 2] = (cfg.number_projects % 10) + '0';
 
   m_strncpy(newprj, my_string, 16);
-  curpage = 7;
+  curpage = NEW_PROJECT_PAGE;
 
 
   update_prjpage_char();
@@ -799,13 +827,13 @@ void new_project_page() {
 */
 void write_project_header() {
   project_header.version = VERSION;
-  //  Config config;
+  //  Config cfg;
   //  uint8_t reserved[16];
   project_header.hash = 0;
   file.seek(0, FAT_SEEK_SET);
   file.write(( uint8_t*)&project_header, sizeof(project_header));
   /* file.write(( uint8_t*)&project_header.version, sizeof(project_header.version));
-    file.write(( uint8_t*)&config, sizeof(project_header.config));
+    file.write(( uint8_t*)&cfg, sizeof(project_header.cfg));
     file.write(( uint8_t*)&project_header.reserved, sizeof(project_header.reserved));
     file.write(( uint8_t*)&project_header.hash, sizeof(project_header.hash));*/
 }
@@ -825,13 +853,14 @@ bool sd_new_project(char *projectname) {
   file.open(true);
 
   //Make sure the file is large enough for the entire GRID
-  uint8_t exitcode = fat_resize_file(file.fd, (uint32_t) sizeof(project_header) + (uint32_t) GRID_SLOT_BYTES * (uint32_t) GRID_LENGTH * (uint32_t) GRID_WIDTH);
+  uint8_t exitcode = fat_resize_file(file.fd, (uint32_t) GRID_SLOT_BYTES + (uint32_t) GRID_SLOT_BYTES * (uint32_t) GRID_LENGTH * (uint32_t) GRID_WIDTH);
   if (exitcode == 0) {
     file.close();
     return false;
   }
 
   write_project_header();
+  
   uint8_t ledstatus = 0;
   //Initialise the project file by filling the grid with blank data.
   for (int32_t i = 0; i < GRID_LENGTH * GRID_WIDTH; i++) {
@@ -871,10 +900,10 @@ bool sd_new_project(char *projectname) {
   clearLed2();
   file.close();
   file.open(true);
-  m_strncpy(config.project, projectname, 16);
+  m_strncpy(cfg.project, projectname, 16);
 
-  config.number_projects++;
-  write_config();
+  cfg.number_projects++;
+  write_cfg();
   return true;
 }
 
@@ -888,17 +917,21 @@ bool sd_new_project(char *projectname) {
 */
 
 bool sd_load_project(char *projectname) {
-
   file.close();
   file.setPath(projectname);
-  file.open(true);
+  if (!file.open(true)) {
+    return false;
+  }
+ 
   if (!check_project_version()) {
     file.close();
     return false;
   }
-
-  m_strncpy(config.project, projectname, 15);
-  write_config();
+ 
+  m_strncpy(cfg.project, projectname, 15);
+  write_cfg();
+  //
+  
   return true;
 
 }
@@ -906,7 +939,7 @@ bool sd_load_project(char *projectname) {
 bool check_project_version() {
   file.seek(0, FAT_SEEK_SET);
   file.read(( uint8_t*) & (project_header), sizeof(project_header));
-  //  file.read(( uint8_t*)&(project_header.config),sizeof(project_header.config));
+  //  file.read(( uint8_t*)&(project_header.cfg),sizeof(project_header.cfg));
   if (project_header.version >= VERSION) {
     return true;
   }
@@ -916,20 +949,21 @@ bool check_project_version() {
 }
 /*
   ================
-  function: write_config()
+  function: write_cfg()
   ================
 
-  Write the configuration file
-  The configuration file is used to remember settings on power off, such as current project.
+  Write the cfguration file
+  The cfguration file is used to remember settings on power off, such as current project.
 
 */
 
-void write_config() {
-  configfile.open(true);
+void write_cfg() {
+  cfgfile.open(true);
 
-  configfile.write(( uint8_t*)&config, sizeof(Config));
+  cfgfile.write(( uint8_t*)&cfg, sizeof(Config));
 
-  configfile.close();
+  cfgfile.close();
+  cfg_save_lastclock = slowclock;
 }
 
 
@@ -948,7 +982,7 @@ bool load_track(int32_t column, int32_t row, int m, A4Track* temp_track) {
   //         get_trackfilename(projectfile, 0, 0);
 
 
-  int32_t offset = (int32_t) sizeof(Project) + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
+  int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
 
   int32_t len;
 
@@ -996,7 +1030,7 @@ bool store_track_inGrid(int track, int32_t column, int32_t row, A4Track *analogf
   /*Extraact track data from received pattern and kit and store in track object*/
 
   int32_t len;
-  int32_t offset = (int32_t) sizeof(Project) + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
+  int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
   file.seek(&offset, FAT_SEEK_SET);
   if (column < 16) {
 
@@ -1071,7 +1105,7 @@ void draw_notes(uint8_t line_number) {
   for (int i = 0; i < 16; i++) {
     if (curpage == CUE_PAGE) {
 
-      if  (IS_BIT_SET32(cue1, i)) {
+      if  (IS_BIT_SET32(cfg.cues, i)) {
         str[i] = 'X';
       }
     }
@@ -1788,8 +1822,23 @@ uint8_t seq_ext_pitch(uint8_t note_num) {
 
   return pitch;
 }
+uint8_t cfg_speed_to_turbo(uint8_t speed) {
+  switch (speed) {
+  case 0:
+  return 1; 
+  
+  case 1:
+  return 2;
+  
+  case 2:
+  return 4; 
+  
+  case 3:
+  return 7;
+  }
+}
 void a4_setup() {
-  MidiUart.setSpeed(31250, 2);
+  MidiUart2.setSpeed(31250);
   for (uint8_t x = 0;  x < 3 && Analog4.connected == false; x++) {
   delay(300);
   if (Analog4.getBlockingSettings(0)) {
@@ -1797,7 +1846,7 @@ void a4_setup() {
 
     Analog4.connected = true;
     uart2_device = DEVICE_A4;
-    turboSetSpeed(4, 2);
+    turboSetSpeed(cfg_speed_to_turbo(cfg.uart2_turbo), 2);
   }
   }
   if (Analog4.connected == false) {
@@ -1808,14 +1857,15 @@ void a4_setup() {
   }
 }
 void md_setup() {
-  MidiUart.setSpeed(31250, 1);
+  MidiUart.setSpeed((uint32_t)31250);
 
 for (uint8_t x = 0;  x < 3 && MD.connected == false; x++) {
 
   delay(300);
   if (MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST, CALLBACK_TIMEOUT)) {
 
-    turboSetSpeed(4, 1);
+    turboSetSpeed(cfg_speed_to_turbo(cfg.uart1_turbo), 1);
+    
     delay(100);
 
     switchGlobal(7);
@@ -3057,8 +3107,8 @@ void tick_frames() {
 }
 void splashscreen() {
 
-  char str1[17] = "MINICOMMAND LIVE";
-  char str2[17] = "V2.0";
+  char str1[17] = "MEGACOMMAND LIVE";
+  char str2[17] = "V2.x.x";
   str1[16] = '\0';
   LCD.goLine(0);
   LCD.puts(str1);
@@ -3563,7 +3613,7 @@ void send_pattern_kit_to_md() {
   pattern_rec.toSysex(encoder);
   in_sysex = 1;
 
-  //    if (turbo_state == 1) {
+  //    if (cfg.uart1_turbo_state == 1) {
   // delay(50);
   //  }
   //    while (MidiClock.mod6_counter != 0);
@@ -3572,7 +3622,7 @@ void send_pattern_kit_to_md() {
   md_setsysex_recpos(4, MD.kit.origPosition);
   MD.kit.toSysex(encoder2);
   //        MidiUart.sendActiveSenseTimer = 290;
-  //    if (turbo_state == 1) {
+  //    if (cfg.uart1_turbo_state == 1) {
   //   delay(25);
   //   }
   //  pattern_rec.setPosition(pattern_rec.origPosition);
@@ -3653,7 +3703,7 @@ void send_pattern_kit_to_md() {
           //If we're in cue mode, send the track to cue before unmuting
           if ((notes[i] > 1)) {
             if ((patternload_param4.getValue() == 7) && (i < 16)) {
-              SET_BIT32(cue1, i);
+              SET_BIT32(cfg.cues, i);
               MD.setTrackRouting(i, 5);
             }
             if (i < 16) {
@@ -3685,17 +3735,17 @@ void send_pattern_kit_to_md() {
   ================
   function: toggle_cue(int i)
   ================
-  Toggles the individual bits of the Bitmask "cue1" that symbolises the tracks that have been routed to the Cue Output.
+  Toggles the individual bits of the Bitmask "cfg.cues" that symbolises the tracks that have been routed to the Cue Output.
 */
 
 void toggle_cue(int i) {
 
-  if (IS_BIT_SET32(cue1, i)) {
-    CLEAR_BIT32(cue1, i);
+  if (IS_BIT_SET32(cfg.cues, i)) {
+    CLEAR_BIT32(cfg.cues, i);
     MD.setTrackRouting(i, 6);
   }
   else {
-    SET_BIT32(cue1, i);
+    SET_BIT32(cfg.cues, i);
     MD.setTrackRouting(i, 5);
   }
 
@@ -3938,7 +3988,7 @@ void clear_row (int row) {
 }
 void clear_Grid(int i) {
   temptrack.active = EMPTY_TRACK_TYPE;
-  int32_t offset = (int32_t) sizeof(project_header) + (int32_t) i * (int32_t) GRID_SLOT_BYTES;
+  int32_t offset = (int32_t) GRID_SLOT_BYTES + (int32_t) i * (int32_t) GRID_SLOT_BYTES;
   file.seek(&offset, FAT_SEEK_SET);
   file.write(( uint8_t*) & (temptrack.active), sizeof(temptrack.active));
 }
@@ -4029,7 +4079,7 @@ void setup_global(int global_num) {
 
 
   for (uint8_t track_n = 0; track_n < 16; track_n++) {
-    if (IS_BIT_SET32(cue1, track_n)) {
+    if (IS_BIT_SET32(cfg.cues, track_n)) {
       global_one.drumRouting[track_n] = 5;
     }
     else {
@@ -4149,12 +4199,12 @@ void setup() {
   trackinfo_param3.handler = pattern_len_handler;
   trackinfo_param2.handler = ptc_root_handler;
   //mixer_param2.handler = encoder_filter_handle;
-  //Setup Turbo Midi
+  //Setup cfg.uart1_turbo Midi
   frames_startclock = slowclock;
-  //TurboMidi.setup();
+  //cfg.uart1_turboMidi.setup();
   //Start the SD Card Initialisation.
   sd_load_init();
-  MidiClock.mode = MidiClock.EXTERNAL_MIDI;
+ // MidiClock.mode = MidiClock.EXTERNAL_MIDI;
 
 
   MCLMidiEvents trigger;
@@ -4164,20 +4214,21 @@ void setup() {
 
   //      GUI.flash_strings_fill("MIDI CLOCK SRC", "MIDI PORT 2");
   trig_interface.setup();
-  MidiClock.start();
   //   MidiUart.setActiveSenseTimer(290);
 
 
   // patternswitch = 7;
-  //     int curkit = MD.getCurrentKit(CALLBACK_TIMEOUT);
+  //     int curkit = MD.getCurrentKift(CALLBACK_TIMEOUT);
   //      MD.getBlockingKit(curkit);
   md_seq.setup();
 
   A4SysexListener.setup();
 
   sei();
+  cfg_midi_ports();
   //md_setup();
-
+  param1.cur = cfg.cur_col;
+  param2.cur = cfg.cur_row;
 
 }
 
@@ -4371,17 +4422,17 @@ void OptionsPage::display() {
 
   GUI.setLine(GUI.LINE1);
   GUI.put_string_at_fill(0, "Name:");
-  GUI.put_string_at(6, &config.project[1]);
+  GUI.put_string_at(6, &cfg.project[1]);
   GUI.setLine(GUI.LINE2);
 
 
 
-  if (options_param1.getValue() == 3) {
+  if (options_param1.getValue() == 4) {
 
 
     if (options_param1.hasChanged()) {
       options_param1.old = options_param1.cur;
-      options_param2.setValue(merge);
+      options_param2.setValue(cfg.clock_rec);
     }
     GUI.put_string_at_fill(0, "CLK REC:");
 
@@ -4395,15 +4446,15 @@ void OptionsPage::display() {
       if (options_param2.getValue() > 1) {
         options_param2.cur = 1;
       }
-      merge = options_param2.getValue();
+      cfg.clock_rec = options_param2.getValue();
     }
   }
-  else if (options_param1.getValue() == 4) {
+  else if (options_param1.getValue() == 5) {
 
 
     if (options_param1.hasChanged()) {
       options_param1.old = options_param1.cur;
-      options_param2.setValue(clockout);
+      options_param2.setValue(cfg.clock_send);
     }
     GUI.put_string_at_fill(0, "CLK SEND:");
 
@@ -4417,35 +4468,64 @@ void OptionsPage::display() {
       if (options_param2.getValue() > 1) {
         options_param2.cur = 1;
       }
-      clockout = options_param2.getValue();
+      cfg.clock_send = options_param2.getValue();
     }
   }
   else if (options_param1.getValue() == 2) {
 
     if (options_param1.hasChanged()) {
       options_param1.old = options_param1.cur;
-      options_param2.setValue(turbo);
+      options_param2.setValue(cfg.uart1_turbo);
     }
-    GUI.put_string_at_fill(0, "TURBO");
+    GUI.put_string_at_fill(0, "TURBO 1:");
 
     if (options_param2.getValue() == 0) {
 
       GUI.put_string_at_fill(10, "1x");
     }
     if (options_param2.getValue() == 1) {
-      GUI.put_string_at_fill(10, "4x");
+      GUI.put_string_at_fill(10, "2x");
     }
     if (options_param2.getValue() == 2) {
+      GUI.put_string_at_fill(10, "4x");
+    }
+    if (options_param2.getValue() == 3) {
       GUI.put_string_at_fill(10, "8x");
     }
     if (options_param2.hasChanged()) {
-
-      turbo = options_param2.getValue();
+      options_param2.old = options_param2.cur;
+      cfg.uart1_turbo = options_param2.getValue();
     }
 
   }
 
+  else if (options_param1.getValue() == 3) {
 
+    if (options_param1.hasChanged()) {
+      options_param1.old = options_param1.cur;
+      options_param2.setValue(cfg.uart2_turbo);
+    }
+    GUI.put_string_at_fill(0, "TURBO 2:");
+
+    if (options_param2.getValue() == 0) {
+
+      GUI.put_string_at_fill(10, "1x");
+    }
+    if (options_param2.getValue() == 1) {
+      GUI.put_string_at_fill(10, "2x");
+    }
+   if (options_param2.getValue() == 2) {
+      GUI.put_string_at_fill(10, "4x");
+    }
+    if (options_param2.getValue() == 3) {
+      GUI.put_string_at_fill(10, "8x");
+    }
+    if (options_param2.hasChanged()) {
+      options_param2.old = options_param2.cur;
+      cfg.uart2_turbo = options_param2.getValue();
+    }
+
+  }
   else if (options_param1.getValue() == 0) {
     GUI.put_string_at_fill(0, "Load Project");
   }
@@ -4574,7 +4654,7 @@ void TrackInfoPage::display()  {
 
   }
 
-  else if (curpage == 7) {
+  else if (curpage == NEW_PROJECT_PAGE) {
     if (proj_param1.hasChanged()) {
       update_prjpage_char();
 
@@ -5079,10 +5159,7 @@ int GridEncoder::update(encoder_t *enc) {
     cur = limit_value(cur, inc, min, max);
     rot_counter = rot_res;
   }
-
-
-
-
+  
   return cur;
 }
 
@@ -5090,7 +5167,7 @@ void GridEncoderPage::loop() {
   if (MD.connected == true) {
     if ((MidiUart.recvActiveSenseTimer > 300) && (MidiUart.speed > 1))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      MidiUart.setSpeed(31250, 1);
+      MidiUart.setSpeed((uint32_t)31250);
       MD.connected = false;
       GUI.flash_strings_fill("MD", "DISCONNECTED");
       //   }
@@ -5106,7 +5183,7 @@ void GridEncoderPage::loop() {
   if (Analog4.connected == true) {
     if ((MidiUart2.recvActiveSenseTimer > 300) && (MidiUart2.speed > 1))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      MidiUart.setSpeed(31250, 2);
+      MidiUart2.setSpeed(31250);
       Analog4.connected = false;
       uart2_device = DEVICE_NULL;
       GUI.flash_strings_fill("A4", "DISCONNECTED");
@@ -5154,6 +5231,11 @@ void GridEncoderPage::display() {
   uint8_t display_name = 0;
   if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
+       if (slowclock - cfg_save_lastclock > GUI_NAME_TIMEOUT) {
+       cfg.cur_col = param1.cur;
+       cfg.cur_row = param2.cur;
+      write_cfg();
+    }
   }
   else {
     /*For each of the 4 encoder objects, ie 4 Grids to be displayed on screen*/
@@ -5402,6 +5484,41 @@ void init_notes() {
     }
   }
 */
+
+void cfg_midi_ports() {
+   MidiClock.stop();
+      if (cfg.clock_send == 1) {
+        MidiClock.transmit_uart2 = true;
+      }
+      else {
+        MidiClock.transmit_uart2 = false;
+      }
+      if (cfg.clock_rec == 0) {
+        MidiClock.mode = MidiClock.EXTERNAL_MIDI;
+        MidiClock.transmit_uart1 = false;
+
+      }
+      else {
+        MidiClock.transmit_uart1 = true;
+        MidiClock.transmit_uart2 = false;
+        MidiClock.mode = MidiClock.EXTERNAL_UART2;
+      }
+      MidiClock.start();
+      if (MD.connected) {
+      send_globals();
+     
+      delay(100);
+
+      switchGlobal(7);
+       }
+      if (MD.connected) {
+        turboSetSpeed(cfg_speed_to_turbo(cfg.uart1_turbo), 1);
+      }
+      if (Analog4.connected) {
+      turboSetSpeed(cfg_speed_to_turbo(cfg.uart2_turbo), 2);
+      }
+}
+
 void exploit_on() {
   // in_sysex = 1;
   exploit = 1;
@@ -5505,7 +5622,7 @@ uint32_t tmSpeeds[12] = {
   500000,
   625000
 };
-void sendTurbomidiHeader(uint8_t cmd, MidiUartClass *MidiUart_) {
+void sendturbomidiHeader(uint8_t cmd, MidiUartClass *MidiUart_) {
   MidiUart_->puts(turbomidi_sysex_header, sizeof(turbomidi_sysex_header));
   MidiUart_->m_putc(cmd);
 }
@@ -5520,18 +5637,23 @@ void turboSetSpeed(uint8_t speed, uint8_t port) {
     MidiUart_ = (MidiUartClass*) &MidiUart2;
   }
 
+  if (MidiUart_->speed == tmSpeeds[speed]) { return; }
+
   USE_LOCK();
   SET_LOCK();
-  turbo_state = speed;
-  sendTurbomidiHeader(0x20, MidiUart_);
+
+  sendturbomidiHeader(0x20, MidiUart_);
   MidiUart_->m_putc(speed );
   MidiUart_->m_putc(0xF7);
   CLEAR_LOCK();
 
   delay(10);
-  MidiUart_->setSpeed(tmSpeeds[speed ], port);
+  SET_LOCK();
+
+  MidiUart_->setSpeed(tmSpeeds[speed ]);
   MidiUart_->setActiveSenseTimer(290);
-  MidiUart_->speed = speed;
+    CLEAR_LOCK();
+
 }
 
 /*
@@ -5547,7 +5669,7 @@ void turboSetSpeed(uint8_t speed, uint8_t port) {
 
 bool handleEvent(gui_event_t *evt) {
 
-  // TurboMidi.startTurboMidi();
+  // cfg.uart1_turboMidi.startcfg.uart1_turboMidi();
 
   // MD.sendRequest(0x55,(uint8_t)global_page);
   // MD.loadGlobal(global_page);
@@ -5579,7 +5701,7 @@ bool handleEvent(gui_event_t *evt) {
     }
     return true;
   }
-  else if (curpage == 7) {
+  else if (curpage == NEW_PROJECT_PAGE) {
     if (EVENT_RELEASED(evt, Buttons.ENCODER1) || EVENT_RELEASED(evt, Buttons.ENCODER2) || EVENT_RELEASED(evt, Buttons.ENCODER3) || EVENT_RELEASED(evt, Buttons.ENCODER4)) {
       LCD.goLine(0);
       LCD.puts("Please Wait");
@@ -5941,54 +6063,9 @@ bool handleEvent(gui_event_t *evt) {
         new_project_page();
         return true;
       }
-
-
-      MidiClock.stop();
-      if (clockout == 1) {
-        MidiClock.transmit_uart2 = true;
-      }
-      else {
-        MidiClock.transmit_uart2 = false;
-      }
-      if (merge == 0) {
-
-        MidiClock.mode = MidiClock.EXTERNAL_MIDI;
-        MidiClock.transmit_uart1 = false;
-
-      }
-      else {
-        MidiClock.transmit_uart1 = true;
-        MidiClock.transmit_uart2 = false;
-        MidiClock.mode = MidiClock.EXTERNAL_UART2;
-      }
-
-      MidiClock.start();
-      send_globals();
-      delay(100);
-
-      switchGlobal(7);
-      if (turbo == 0) {
-        //   if (turbo_state != 1) {
-        turboSetSpeed(1, 1);
-        //  }
-      }
-      if (turbo == 1) {
-
-
-        if (turbo_state != 4)  {
-          //  TurboMidi.startTurboMidi();
-          turboSetSpeed(4, 1);
-          //     }
-          turbo_state = 4;
-        }
-        //turboSetSpeed(4);
-
-      }
-      if (turbo == 2) {
-        //       if (turbo_state != 7) {
-        turboSetSpeed(7, 1);
-        //    }
-      }
+      write_cfg();
+      cfg_midi_ports();
+     
       GUI.setPage(&page);
       curpage = 0;
       return true;
