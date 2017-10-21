@@ -5165,7 +5165,7 @@ int GridEncoder::update(encoder_t *enc) {
 
 void GridEncoderPage::loop() {
   if (MD.connected == true) {
-    if ((MidiUart.recvActiveSenseTimer > 300) && (MidiUart.speed > 1))  {
+    if ((MidiUart.recvActiveSenseTimer > 300) && (MidiUart.speed > 31250))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
       MidiUart.setSpeed((uint32_t)31250);
       MD.connected = false;
@@ -5181,7 +5181,7 @@ void GridEncoderPage::loop() {
   }
 
   if (Analog4.connected == true) {
-    if ((MidiUart2.recvActiveSenseTimer > 300) && (MidiUart2.speed > 1))  {
+    if ((MidiUart2.recvActiveSenseTimer > 300) && (MidiUart2.speed > 31250))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
       MidiUart2.setSpeed(31250);
       Analog4.connected = false;
