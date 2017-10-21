@@ -1790,7 +1790,8 @@ uint8_t seq_ext_pitch(uint8_t note_num) {
 }
 void a4_setup() {
   MidiUart.setSpeed(31250, 2);
-  delay(100);
+  for (uint8_t x = 0;  x < 3 && Analog4.connected == false; x++) {
+  delay(300);
   if (Analog4.getBlockingSettings(0)) {
     GUI.flash_strings_fill("A4", "CONNECTED");
 
@@ -1798,7 +1799,8 @@ void a4_setup() {
     uart2_device = DEVICE_A4;
     turboSetSpeed(4, 2);
   }
-  else {
+  }
+  if (Analog4.connected == false) {
     //If sysex not receiverd assume generic midi device;
     uart2_device = DEVICE_MIDI;
     GUI.flash_strings_fill("MIDI DEVICE", "CONNECTED");
@@ -1806,12 +1808,11 @@ void a4_setup() {
   }
 }
 void md_setup() {
-
-  MD.connected = true;
-
   MidiUart.setSpeed(31250, 1);
 
-  delay(100);
+for (uint8_t x = 0;  x < 3 && MD.connected == false; x++) {
+
+  delay(300);
   if (MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST, CALLBACK_TIMEOUT)) {
 
     turboSetSpeed(4, 1);
@@ -1844,10 +1845,12 @@ void md_setup() {
       }
     }
     MD.setStatus(0x22, curtrack);
+    MD.connected = true;
     GUI.flash_strings_fill("MD", "CONNECTED");
-
+    
     return;
   }
+}
   MD.connected = false;
 }
 class MCLMidiEvents : public MidiCallback {
@@ -5087,13 +5090,13 @@ void GridEncoderPage::loop() {
   if (MD.connected == true) {
     if ((MidiUart.recvActiveSenseTimer > 300) && (MidiUart.speed > 1))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      turboSetSpeed(1, 1);
+      MidiUart.setSpeed(31250, 1);
       MD.connected = false;
       GUI.flash_strings_fill("MD", "DISCONNECTED");
       //   }
     }
   }
-  if (MD.connected == false) {
+  else if (MD.connected == false) {
     if (MidiUart.recvActiveSenseTimer < 100) {
       md_setup();
       // if (Analog4.connected == false) { a4_setup(); }
@@ -5103,16 +5106,16 @@ void GridEncoderPage::loop() {
   if (Analog4.connected == true) {
     if ((MidiUart2.recvActiveSenseTimer > 300) && (MidiUart2.speed > 1))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      turboSetSpeed(1, 2);
+      MidiUart.setSpeed(31250, 2);
       Analog4.connected = false;
       uart2_device = DEVICE_NULL;
       GUI.flash_strings_fill("A4", "DISCONNECTED");
       //   }
     }
   }
-  if ((Analog4.connected == false) && (uart2_device == DEVICE_NULL)) {
+  else if ((Analog4.connected == false) && (uart2_device == DEVICE_NULL)) {
     if (MidiUart2.recvActiveSenseTimer < 100) {
-      delay(1500);
+     // delay(2000);
       a4_setup();
     }
   }
