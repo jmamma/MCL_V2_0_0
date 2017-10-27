@@ -152,6 +152,8 @@ uint8_t in_sysex = 0;
 uint8_t in_sysex2 = 0;
 
 uint8_t page_select = 0;
+uint8_t load_grid_models = 0;
+uint8_t grid_models[22];
 
 GridEncoder param1(0, GRID_WIDTH - 4, ENCODER_RES_GRID);
 GridEncoder param2(0, 127, ENCODER_RES_GRID);
@@ -1578,6 +1580,10 @@ void encoder_param2_handle(Encoder *enc) {
   //  PatternLengths[i] = temptrack.length;
   // }
   grid_lastclock = slowclock;
+  load_grid_models = 0;
+  A4Track track_buf;
+
+ 
 }
 
 uint8_t note_to_track_map(uint8_t note) {
@@ -1838,7 +1844,7 @@ uint8_t cfg_speed_to_turbo(uint8_t speed) {
   }
 }
 void a4_setup() {
-  MidiUart2.setSpeed(31250);
+  MidiUart.setSpeed(31250,2);
   for (uint8_t x = 0;  x < 3 && Analog4.connected == false; x++) {
   delay(300);
   if (Analog4.getBlockingSettings(0)) {
@@ -1857,7 +1863,7 @@ void a4_setup() {
   }
 }
 void md_setup() {
-  MidiUart.setSpeed((uint32_t)31250);
+MidiUart.setSpeed((uint32_t)31250,1);
 
 for (uint8_t x = 0;  x < 3 && MD.connected == false; x++) {
 
@@ -4228,8 +4234,8 @@ void setup() {
   cfg_midi_ports();
   //md_setup();
   param1.cur = cfg.cur_col;
-  param2.cur = cfg.cur_row;
-
+  param2.cur = cfg.cur_row;//turboSetSpeed(1,1);
+//turboSetSpeed(1,2 );
 }
 
 
@@ -5167,7 +5173,7 @@ void GridEncoderPage::loop() {
   if (MD.connected == true) {
     if ((MidiUart.recvActiveSenseTimer > 300) && (MidiUart.speed > 31250))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      MidiUart.setSpeed((uint32_t)31250);
+      MidiUart.setSpeed((uint32_t)31250,1);
       MD.connected = false;
       GUI.flash_strings_fill("MD", "DISCONNECTED");
       //   }
@@ -5183,7 +5189,7 @@ void GridEncoderPage::loop() {
   if (Analog4.connected == true) {
     if ((MidiUart2.recvActiveSenseTimer > 300) && (MidiUart2.speed > 31250))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      MidiUart2.setSpeed(31250);
+      MidiUart.setSpeed(31250,2);
       Analog4.connected = false;
       uart2_device = DEVICE_NULL;
       GUI.flash_strings_fill("A4", "DISCONNECTED");
@@ -5228,6 +5234,7 @@ void GridEncoderPage::display() {
   if (BUTTON_DOWN(Buttons.ENCODER4) && (param4.hasChanged())) {
     toggle_fx2();
   }
+  A4Track track_buf;
   uint8_t display_name = 0;
   if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
@@ -5238,6 +5245,14 @@ void GridEncoderPage::display() {
     }
   }
   else {
+    if (load_grid_models == 0) {
+       for (uint8_t i = 0; i < 22; i++) {
+
+     
+    grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_buf);
+  }
+  load_grid_models = 1;
+    }
     /*For each of the 4 encoder objects, ie 4 Grids to be displayed on screen*/
     for (uint8_t i = 0; i < 4; i++) {
 
@@ -5352,8 +5367,9 @@ void GridEncoder::displayAt(int i) {
   char a4_name2[2] = "TK";
 
   char strn[3] = "--";
-  A4Track track_buf;
-  uint8_t model = getGridModel(param1.getValue() + i, param2.getValue(), true, (A4Track*) &track_buf);
+  //A4Track track_buf;
+  uint8_t model = grid_models[param1.getValue() + i ];
+  //getGridModel(param1.getValue() + i, param2.getValue(), true, (A4Track*) &track_buf);
 
   /*Retrieve the first 2 characters of Maching Name associated with the Track at the current Grid. First obtain the Model object from the Track object, then convert the MachineType into a string*/
   if (param1.getValue() + i < 16) {
@@ -5486,7 +5502,9 @@ void init_notes() {
 */
 
 void cfg_midi_ports() {
+  
    MidiClock.stop();
+   
       if (cfg.clock_send == 1) {
         MidiClock.transmit_uart2 = true;
       }
@@ -5511,8 +5529,9 @@ void cfg_midi_ports() {
 
       switchGlobal(7);
        }
+       
       if (MD.connected) {
-        turboSetSpeed(cfg_speed_to_turbo(cfg.uart1_turbo), 1);
+      turboSetSpeed(cfg_speed_to_turbo(cfg.uart1_turbo), 1);
       }
       if (Analog4.connected) {
       turboSetSpeed(cfg_speed_to_turbo(cfg.uart2_turbo), 2);
@@ -5623,8 +5642,12 @@ uint32_t tmSpeeds[12] = {
   625000
 };
 void sendturbomidiHeader(uint8_t cmd, MidiUartClass *MidiUart_) {
-  MidiUart_->puts(turbomidi_sysex_header, sizeof(turbomidi_sysex_header));
-  MidiUart_->m_putc(cmd);
+  for (uint8_t x =0 ; x  < 6; x++) {
+      MidiUart_->m_putc_immediate(turbomidi_sysex_header[x]);
+
+  }
+  
+  MidiUart_->m_putc_immediate(cmd);
 }
 
 void turboSetSpeed(uint8_t speed, uint8_t port) {
@@ -5637,22 +5660,26 @@ void turboSetSpeed(uint8_t speed, uint8_t port) {
     MidiUart_ = (MidiUartClass*) &MidiUart2;
   }
 
-  if (MidiUart_->speed == tmSpeeds[speed]) { return; }
+   if (MidiUart_->speed == tmSpeeds[speed]) { return; }
 
-  USE_LOCK();
-  SET_LOCK();
+  //USE_LOCK();
+ // SET_LOCK();
 
   sendturbomidiHeader(0x20, MidiUart_);
-  MidiUart_->m_putc(speed );
-  MidiUart_->m_putc(0xF7);
-  CLEAR_LOCK();
+  MidiUart_->m_putc_immediate(speed);
 
-  delay(10);
-  SET_LOCK();
+  MidiUart_->m_putc_immediate(0xF7);
+ if (port == 1) {  while (!IS_BIT_SET8(UCSR1A, UDRE1)); }
+ else { while (!IS_BIT_SET8(UCSR2A, UDRE2)); }
+ delay(50);
+ MidiUart.setSpeed(tmSpeeds[speed ],port);
+  //delay(50);
+   MidiUart_->setActiveSenseTimer(150);
+  //  MidiUart_->m_putc_immediate(0xF8);
+ //MidiUart_->m_putc_immediate(0xFE);
 
-  MidiUart_->setSpeed(tmSpeeds[speed ]);
-  MidiUart_->setActiveSenseTimer(290);
-    CLEAR_LOCK();
+ // MidiUart_->sendActiveSenseTimer = 10;
+ //   CLEAR_LOCK();
 
 }
 
