@@ -1581,7 +1581,6 @@ void encoder_param2_handle(Encoder *enc) {
   // }
   grid_lastclock = slowclock;
   load_grid_models = 0;
-  A4Track track_buf;
 
  
 }
@@ -5217,6 +5216,7 @@ void GridEncoderPage::loop() {
 
 */
 
+  A4Track track_bufx;
 
 void GridEncoderPage::display() {
 
@@ -5234,7 +5234,6 @@ void GridEncoderPage::display() {
   if (BUTTON_DOWN(Buttons.ENCODER4) && (param4.hasChanged())) {
     toggle_fx2();
   }
-  A4Track track_buf;
   uint8_t display_name = 0;
   if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
@@ -5249,7 +5248,7 @@ void GridEncoderPage::display() {
        for (uint8_t i = 0; i < 22; i++) {
 
      
-    grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_buf);
+       grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
   }
   load_grid_models = 1;
     }
@@ -5369,6 +5368,7 @@ void GridEncoder::displayAt(int i) {
   char strn[3] = "--";
   //A4Track track_buf;
   uint8_t model = grid_models[param1.getValue() + i ];
+  
   //getGridModel(param1.getValue() + i, param2.getValue(), true, (A4Track*) &track_buf);
 
   /*Retrieve the first 2 characters of Maching Name associated with the Track at the current Grid. First obtain the Model object from the Track object, then convert the MachineType into a string*/
