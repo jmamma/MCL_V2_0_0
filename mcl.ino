@@ -4935,12 +4935,12 @@ void TrackInfoPage::display()  {
         }
         else if ((trackinfo_param2.getValue() < 6) && (trackinfo_param2.getValue() != 0))  {
           GUI.put_string_at(2, "-");
-          GUI.put_value_at1(3, 6 - trackinfo_param2.getValue());
+          GUI.put_value_at2(3, 6 - trackinfo_param2.getValue());
 
         }
         else {
           GUI.put_string_at(2, "+");
-          GUI.put_value_at1(3, trackinfo_param2.getValue() - 6);
+          GUI.put_value_at2(3, trackinfo_param2.getValue() - 6);
         }
       }
       else {
@@ -4949,12 +4949,12 @@ void TrackInfoPage::display()  {
         }
         else if ((trackinfo_param2.getValue() < 12) && (trackinfo_param2.getValue() != 0))  {
           GUI.put_string_at(2, "-");
-          GUI.put_value_at1(3, 12 - trackinfo_param2.getValue());
+          GUI.put_value_at2(3, 12 - trackinfo_param2.getValue());
 
         }
         else {
           GUI.put_string_at(2, "+");
-          GUI.put_value_at1(3, trackinfo_param2.getValue() - 12);
+          GUI.put_value_at2(3, trackinfo_param2.getValue() - 12);
         }
       }
 
@@ -5007,21 +5007,21 @@ void TrackInfoPage::display()  {
         }
         else {
           GUI.put_value_at1(15, page_select + 1);
-          GUI.put_value_at(5, trackinfo_param3.getValue());
+          GUI.put_value_at(6, trackinfo_param3.getValue());
 
           if (cur_col < 16) {
-            GUI.put_p_string_at(9, str1);
-            GUI.put_p_string_at(11, str2);
+            GUI.put_p_string_at(10, str1);
+            GUI.put_p_string_at(12, str2);
           }
           else {
-            GUI.put_value_at(5, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
+            GUI.put_value_at(6, (trackinfo_param3.getValue() / (2 / ExtPatternResolution[last_extseq_track])));
             if (Analog4.connected) {
-              GUI.put_string_at(9, "A4T");
+              GUI.put_string_at(10, "A4T");
             }
             else {
-              GUI.put_string_at(9, "MID");
+              GUI.put_string_at(10, "MID");
             }
-            GUI.put_value_at1(12, last_extseq_track + 1);
+            GUI.put_value_at1(13, last_extseq_track + 1);
           }
         }
         //PatternLengths[cur_col] = trackinfo_param3.getValue();
@@ -5029,11 +5029,11 @@ void TrackInfoPage::display()  {
 
       }
       if (curpage == SEQ_STEP_PAGE) {
-        GUI.put_p_string_at(9, str1);
-        GUI.put_p_string_at(11, str2);
-        GUI.put_value_at(5, trackinfo_param3.getValue());
+        GUI.put_p_string_at(10, str1);
+        GUI.put_p_string_at(12, str2);
+        GUI.put_value_at(6, trackinfo_param3.getValue());
         GUI.put_value_at1(15, page_select + 1);
-        GUI.put_value_at2(6, trackinfo_param3.getValue());
+        //GUI.put_value_at2(7, trackinfo_param3.getValue());
         draw_patternmask((page_select * 16), DEVICE_MD);
 
       }
@@ -5249,12 +5249,12 @@ void GridEncoderPage::loop() {
 void GridEncoderPage::display() {
 
   tick_frames();
-  GUI.put_value16_at(0, MidiClock.div192th_counter);
+  /*GUI.put_value16_at(0, MidiClock.div192th_counter);
   GUI.put_value16_at(5, MidiClock.div96th_counter);
     GUI.put_value_at(12, (uint8_t)MidiClock.div192th_time);
 
   return;
-  
+  */
   row_name_offset += (float) 1 / frames_fps * 1.5;
 
 
