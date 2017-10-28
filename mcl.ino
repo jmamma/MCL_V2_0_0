@@ -736,7 +736,7 @@ void sd_load_init() {
          new_project_page();
         }
 
-        else if (cfg.number_projects != 0) {
+        else if (cfg.number_projects > 0) {
 
           if (!sd_load_project(cfg.project)) {
             new_project_page();
@@ -747,10 +747,12 @@ void sd_load_init() {
         }
       }
       else {
+        cfg_init();
         new_project_page();
       }
     }
     else {
+      cfg_init();
       new_project_page();
     }
   }
@@ -794,9 +796,11 @@ void load_project_page() {
 void cfg_init() {
     cfgfile.open(true);
     fat_resize_file(cfgfile.fd, (uint32_t) GRID_SLOT_BYTES);
+  char my_string[16] = "/project000.mcl";
   
     cfg.version = CONFIG_VERSION;
     cfg.number_projects = 0;
+    m_strncpy(cfg.project, my_string, 16);
     cfg.clock_send = 0;
     cfg.clock_rec = 0;
     cfg.uart1_turbo = 2;
@@ -941,7 +945,7 @@ bool sd_load_project(char *projectname) {
     return false;
   }
  
-  m_strncpy(cfg.project, projectname, 15);
+  m_strncpy(cfg.project, projectname, 16);
   write_cfg();
   //
   
@@ -6035,6 +6039,7 @@ bool handleEvent(gui_event_t *evt) {
 
     if (EVENT_RELEASED(evt, Buttons.BUTTON1) || EVENT_RELEASED(evt, Buttons.BUTTON4)) {
       exploit_off();
+      
       GUI.setPage(&page);
       curpage = 0;
       return true;
@@ -6221,7 +6226,7 @@ bool handleEvent(gui_event_t *evt) {
       curpage = S_PAGE;
 
       GUI.setPage(&patternload_page);
-
+      load_grid_models = 0;
 
       return true;
     }
