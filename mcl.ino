@@ -1152,20 +1152,20 @@ void load_seq_step_page(uint8_t track) {
 
   cur_col = track;
   trackinfo_param3.cur = PatternLengths[track];
-  trackinfo_param2.cur = 6;
-  trackinfo_param2.max = 11;
+  trackinfo_param2.cur = 12;
+  trackinfo_param2.max = 23;
   curpage = SEQ_STEP_PAGE;
 }
 
 
 void load_seq_extstep_page(uint8_t track) {
   if (ExtPatternResolution[last_extseq_track] == 1) {
-    trackinfo_param2.cur = 3;
-    trackinfo_param2.max = 5;
-  }
-  else {
     trackinfo_param2.cur = 6;
     trackinfo_param2.max = 11;
+  }
+  else {
+    trackinfo_param2.cur = 12;
+    trackinfo_param2.max = 23;
   }
   last_extseq_track = track;
   trackinfo_param3.cur = ExtPatternLengths[track];
@@ -1486,7 +1486,7 @@ class MDSequencer : public ClockCallback {
           ///  0  1  2  3  4  5  0  1 2 3 4 5
 
 
-          if ((utiming >= 6) && (utiming - 6 == (int8_t)MidiClock.mod6_counter)) {
+          if ((utiming >= 12) && (utiming - 12 == (int8_t)MidiClock.mod12_counter)) {
 
             parameter_locks(i, step_count);
 
@@ -1496,7 +1496,7 @@ class MDSequencer : public ClockCallback {
 
           }
 
-          if ((utiming_next < 6) && ((utiming_next) == (int8_t) MidiClock.mod6_counter)) {
+          if ((utiming_next < 12) && ((utiming_next) == (int8_t) MidiClock.mod12_counter)) {
 
             parameter_locks(i, next_step);
 
@@ -1533,15 +1533,15 @@ class MDSequencer : public ClockCallback {
         uint8_t condition_next = Extconditional[i][next_step]; //lower
         if (!in_sysex2) {
 
-          int8_t timing_counter = MidiClock.mod6_counter;
+          int8_t timing_counter = MidiClock.mod12_counter;
 
           if (ExtPatternResolution[i] == 1) {
-            timing_counter = MidiClock.mod3_counter;
+            timing_counter = MidiClock.mod6_counter;
           }
 
 
 
-          if ((utiming >= (3 * ExtPatternResolution[i])) && (utiming - (3 * ExtPatternResolution[i]) == (int8_t)timing_counter)) {
+          if ((utiming >= (6 * ExtPatternResolution[i])) && (utiming - (6 * ExtPatternResolution[i]) == (int8_t)timing_counter)) {
 
             for (uint8_t c = 0; c < 4; c++) {
               if (ExtPatternNotes[i][c][step_count] < 0) {
@@ -1557,7 +1557,7 @@ class MDSequencer : public ClockCallback {
 
           }
 
-          if ((utiming_next < (3 * ExtPatternResolution[i])) && ((utiming_next) == (int8_t) timing_counter)) {
+          if ((utiming_next < (6 * ExtPatternResolution[i])) && ((utiming_next) == (int8_t) timing_counter)) {
 
             for (uint8_t c = 0; c < 4; c++) {
 
@@ -1730,12 +1730,12 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
     //Micro
     if (utiming == 0) {
       if (ExtPatternResolution[last_extseq_track] == 1) {
-        utiming = 3;
-        trackinfo_param2.max = 5;
+        utiming = 6;
+        trackinfo_param2.max = 11;
       }
       else {
-        trackinfo_param2.max = 11;
-        utiming = 6;
+        trackinfo_param2.max = 23;
+        utiming = 12;
       }
     }
     trackinfo_param2.cur = utiming;
@@ -1751,7 +1751,7 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
       return;
     }
 
-    trackinfo_param2.max = 11;
+    trackinfo_param2.max = 23;
     note_hold = current_clock;
     int8_t utiming = timing[cur_col][(note_num + (page_select * 16))]; //upper
     uint8_t condition = conditional[cur_col][(note_num + (page_select * 16))]; //lower
@@ -1761,7 +1761,7 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
     trackinfo_param1.cur = condition;
     //Micro
     if (utiming == 0) {
-      utiming = 6;
+      utiming = 12;
     }
     trackinfo_param2.cur = utiming;
   }
@@ -2064,10 +2064,10 @@ class MCLMidiEvents : public MidiCallback {
       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
       uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
 
-      uint8_t utiming = (MidiClock.mod3_counter + 3);
+      uint8_t utiming = (MidiClock.mod6_counter + 6);
 
       if (ExtPatternResolution[channel] > 1) {
-        utiming = (MidiClock.mod6_counter + 6);
+        utiming = (MidiClock.mod12_counter + 12);
       }
 
 
@@ -2194,10 +2194,10 @@ class MCLMidiEvents : public MidiCallback {
       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
       uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
 
-      uint8_t utiming = (MidiClock.mod3_counter + 3);
+      uint8_t utiming = (MidiClock.mod6_counter + 6);
 
       if (ExtPatternResolution[channel] > 1) {
-        utiming = (MidiClock.mod6_counter + 6);
+        utiming = (MidiClock.mod12_counter + 12);
       }
       uint8_t condition = 0;
       //  cur_col = note_num;
@@ -2215,7 +2215,7 @@ class MCLMidiEvents : public MidiCallback {
             if (step_count > ExtPatternLengths[channel]) {
               step_count = 0;
             }
-            utiming = MidiClock.mod6_counter;
+            utiming = MidiClock.mod12_counter;
             //timing = 0;
           }
         }
@@ -2441,7 +2441,7 @@ class MCLMidiEvents : public MidiCallback {
 
               //Fudge timing info if it's not there
               if (utiming == 0 ) {
-                utiming = 6;
+                utiming = 12;
                 conditional[last_md_track][(note_num + (page_select * 16))] = condition;
                 timing[last_md_track][(note_num + (page_select * 16))] = utiming;
 
@@ -2513,7 +2513,7 @@ class MCLMidiEvents : public MidiCallback {
 
           MD.triggerTrack(note_num, 127);
 
-          uint8_t utiming = MidiClock.mod6_counter + 6;
+          uint8_t utiming = MidiClock.mod12_counter + 12;
           uint8_t condition = 0;
           cur_col = note_num;
           trackinfo_param3.cur = PatternLengths[cur_col];
@@ -2595,7 +2595,7 @@ class MCLMidiEvents : public MidiCallback {
           uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[last_md_track] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[last_md_track]));
 
 
-          uint8_t utiming = MidiClock.mod6_counter + 6;
+          uint8_t utiming = MidiClock.mod12_counter + 12;
           uint8_t condition = 0;
           //  cur_col = note_num;
           //  timing = 3;
@@ -3947,9 +3947,9 @@ void loadtrackinfo_page(uint8_t i) {
     exploit_on();
 
     trackinfo_param1.max = 13;
-    trackinfo_param2.max = 11;
+    trackinfo_param2.max = 23;
     trackinfo_param2.min = 1;
-    trackinfo_param2.cur = 6;
+    trackinfo_param2.cur = 12;
     trackinfo_param3.max = 64;
     trackinfo_param4.max = 16;
     trackinfo_param3.cur = PatternLengths[cur_col];
@@ -4933,20 +4933,6 @@ void TrackInfoPage::display()  {
         if (trackinfo_param2.getValue() == 0) {
           GUI.put_string_at(2, "--");
         }
-        else if ((trackinfo_param2.getValue() < 3) && (trackinfo_param2.getValue() != 0))  {
-          GUI.put_string_at(2, "-");
-          GUI.put_value_at1(3, 3 - trackinfo_param2.getValue());
-
-        }
-        else {
-          GUI.put_string_at(2, "+");
-          GUI.put_value_at1(3, trackinfo_param2.getValue() - 3);
-        }
-      }
-      else {
-        if (trackinfo_param2.getValue() == 0) {
-          GUI.put_string_at(2, "--");
-        }
         else if ((trackinfo_param2.getValue() < 6) && (trackinfo_param2.getValue() != 0))  {
           GUI.put_string_at(2, "-");
           GUI.put_value_at1(3, 6 - trackinfo_param2.getValue());
@@ -4955,6 +4941,20 @@ void TrackInfoPage::display()  {
         else {
           GUI.put_string_at(2, "+");
           GUI.put_value_at1(3, trackinfo_param2.getValue() - 6);
+        }
+      }
+      else {
+        if (trackinfo_param2.getValue() == 0) {
+          GUI.put_string_at(2, "--");
+        }
+        else if ((trackinfo_param2.getValue() < 12) && (trackinfo_param2.getValue() != 0))  {
+          GUI.put_string_at(2, "-");
+          GUI.put_value_at1(3, 12 - trackinfo_param2.getValue());
+
+        }
+        else {
+          GUI.put_string_at(2, "+");
+          GUI.put_value_at1(3, trackinfo_param2.getValue() - 12);
         }
       }
 
@@ -5249,8 +5249,12 @@ void GridEncoderPage::loop() {
 void GridEncoderPage::display() {
 
   tick_frames();
+  GUI.put_value16_at(0, MidiClock.div192th_counter);
+  GUI.put_value16_at(5, MidiClock.div96th_counter);
+    GUI.put_value_at(12, (uint8_t)MidiClock.div192th_time);
 
-
+  return;
+  
   row_name_offset += (float) 1 / frames_fps * 1.5;
 
 
@@ -5910,9 +5914,9 @@ bool handleEvent(gui_event_t *evt) {
   }
   if ((curpage == SEQ_EUC_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1))  {
     trackinfo_param1.max = 13;
-    trackinfo_param2.max = 11;
+    trackinfo_param2.max = 23;
     trackinfo_param2.min = 1;
-    trackinfo_param2.cur = 6;
+    trackinfo_param2.cur = 12;
     trackinfo_param3.max = 64;
     trackinfo_param4.max = 16;
     curpage = SEQ_STEP_PAGE;
