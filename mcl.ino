@@ -1442,7 +1442,7 @@ class MDSequencer : public ClockCallback {
         ExtPatternMutes[i] = SEQ_MUTE_OFF;
       }
       //   MidiClock.addOnClockCallback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSetup);
-      MidiClock.addOn96Callback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSequencerCallback);
+      MidiClock.addOn192Callback(this, (midi_clock_callback_ptr_t)&MDSequencer::MDSequencerCallback);
       MidiClock.addOnMidiStopCallback(this, (midi_clock_callback_ptr_t)&MDSequencer::onMidiStopCallback);
 
 
