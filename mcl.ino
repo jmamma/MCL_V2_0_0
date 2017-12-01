@@ -151,7 +151,7 @@ uint8_t dont_interrupt = 0;
 uint8_t in_sysex = 0;
 uint8_t in_sysex2 = 0;
 
-uint8_t page_select = 0;
+uint8_t seq_page_select = 0;
 uint8_t load_grid_models = 0;
 uint8_t grid_models[22];
 
@@ -1699,13 +1699,13 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
   if ((curpage == SEQ_EXTSTEP_PAGE) && (device == DEVICE_MD)) {
     note_hold = current_clock;
 
-    if ((note_num + (page_select * 16)) >= ExtPatternLengths[last_extseq_track]) {
+    if ((note_num + (seq_page_select * 16)) >= ExtPatternLengths[last_extseq_track]) {
       notes[note_num] = 0;
       return;
     }
 
-    int8_t utiming = Exttiming[last_extseq_track][(note_num + (page_select * 16))]; //upper
-    uint8_t condition = Extconditional[last_extseq_track][(note_num + (page_select * 16))]; //lower
+    int8_t utiming = Exttiming[last_extseq_track][(note_num + (seq_page_select * 16))]; //upper
+    uint8_t condition = Extconditional[last_extseq_track][(note_num + (seq_page_select * 16))]; //lower
     trackinfo_param1.cur = condition;
     //Micro
     if (utiming == 0) {
@@ -1726,15 +1726,15 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
 
   if (curpage == SEQ_STEP_PAGE) {
 
-    if ((note_num + (page_select * 16)) >= PatternLengths[cur_col]) {
+    if ((note_num + (seq_page_select * 16)) >= PatternLengths[cur_col]) {
       notes[note_num] = 0;
       return;
     }
 
     trackinfo_param2.max = 23;
     note_hold = current_clock;
-    int8_t utiming = timing[cur_col][(note_num + (page_select * 16))]; //upper
-    uint8_t condition = conditional[cur_col][(note_num + (page_select * 16))]; //lower
+    int8_t utiming = timing[cur_col][(note_num + (seq_page_select * 16))]; //upper
+    uint8_t condition = conditional[cur_col][(note_num + (seq_page_select * 16))]; //lower
 
 
     //Cond
@@ -1758,8 +1758,8 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
     trackinfo_param1.cur = PatternLocksParams[last_md_track][param_offset];
     trackinfo_param3.cur = PatternLocksParams[last_md_track][param_offset + 1];
 
-    trackinfo_param2.cur = PatternLocks[last_md_track][param_offset][(note_num + (page_select * 16))];
-    trackinfo_param4.cur = PatternLocks[last_md_track][param_offset + 1][(note_num + (page_select * 16))];
+    trackinfo_param2.cur = PatternLocks[last_md_track][param_offset][(note_num + (seq_page_select * 16))];
+    trackinfo_param4.cur = PatternLocks[last_md_track][param_offset + 1][(note_num + (seq_page_select * 16))];
     notes[note_num] = 1;
 
 
@@ -1977,18 +1977,18 @@ class MCLMidiEvents : public MidiCallback {
           uint8_t match = 255;
           if (notes[i] == 1) {
             for (uint8_t c = 0; c < 4 && match == 255; c++) {
-              if (ExtPatternNotes[channel][c][i + page_select * 16] ==  -(1 * (msg[1] + 1))) {
-                ExtPatternNotes[channel][c][i + page_select * 16] = 0;
+              if (ExtPatternNotes[channel][c][i + seq_page_select * 16] ==  -(1 * (msg[1] + 1))) {
+                ExtPatternNotes[channel][c][i + seq_page_select * 16] = 0;
                 seq_buffer_notesoff(channel);
                 match = c;
               }
-              if (ExtPatternNotes[channel][c][i + page_select * 16] ==  (1 * (msg[1] + 1))) {
-                ExtPatternNotes[channel][c][i + page_select * 16] =  (-1 * (msg[1] + 1));
+              if (ExtPatternNotes[channel][c][i + seq_page_select * 16] ==  (1 * (msg[1] + 1))) {
+                ExtPatternNotes[channel][c][i + seq_page_select * 16] =  (-1 * (msg[1] + 1));
                 match = c;
               }
             }
             for (uint8_t c = 0; c < 4 && match == 255; c++) {
-              if (ExtPatternNotes[channel][c][i + page_select * 16] == 0) {
+              if (ExtPatternNotes[channel][c][i + seq_page_select * 16] == 0) {
                 match = c;
                 int8_t ons_and_offs = 0;
                 //Check to see if we have same number of note offs as note ons.
@@ -2004,10 +2004,10 @@ class MCLMidiEvents : public MidiCallback {
                   }
                 }
                 if (ons_and_offs <= 0) {
-                  ExtPatternNotes[channel][c][i + page_select * 16] = (msg[1] + 1);
+                  ExtPatternNotes[channel][c][i + seq_page_select * 16] = (msg[1] + 1);
                 }
                 else {
-                  ExtPatternNotes[channel][c][i + page_select * 16] = -1 * (msg[1] + 1);
+                  ExtPatternNotes[channel][c][i + seq_page_select * 16] = -1 * (msg[1] + 1);
                 }
               }
             }
@@ -2131,15 +2131,15 @@ class MCLMidiEvents : public MidiCallback {
           uint8_t match = 255;
           if (notes[i] == 1) {
              for (uint8_t c = 0; c < 4 && match == 255; c++) {
-              if (abs(ExtPatternNotes[channel][c][i + page_select * 16]) ==  (1 * (msg[1] + 1))) {
-                ExtPatternNotes[channel][c][i + page_select * 16] = 0;
+              if (abs(ExtPatternNotes[channel][c][i + seq_page_select * 16]) ==  (1 * (msg[1] + 1))) {
+                ExtPatternNotes[channel][c][i + seq_page_select * 16] = 0;
                 match = c;
               }
             }
             for (uint8_t c = 0; c < 4 && match == 255; c++) {
-              if (ExtPatternNotes[channel][c][i + page_select * 16] == 0) {
+              if (ExtPatternNotes[channel][c][i + seq_page_select * 16] == 0) {
                 match = c;
-                ExtPatternNotes[channel][c][i + page_select * 16] = -1 * (msg[1] + 1);
+                ExtPatternNotes[channel][c][i + seq_page_select * 16] = -1 * (msg[1] + 1);
               }
             }
           }
@@ -2356,7 +2356,7 @@ class MCLMidiEvents : public MidiCallback {
             else if  (curpage == SEQ_EXTSTEP_PAGE) {
               uint8_t utiming = (trackinfo_param2.cur + 0);
               uint8_t condition = trackinfo_param1.cur;
-              if ((note_num + (page_select * 16)) >= ExtPatternLengths[last_extseq_track]) {
+              if ((note_num + (seq_page_select * 16)) >= ExtPatternLengths[last_extseq_track]) {
                 return;
               }
 
@@ -2364,19 +2364,19 @@ class MCLMidiEvents : public MidiCallback {
               //condition = 3;
               if ((current_clock - note_hold) < TRIG_HOLD_TIME) {
                 for (uint8_t c = 0; c < 4; c++) {
-                  if (ExtPatternNotes[last_extseq_track][c][note_num + page_select * 16] > 0) {
-                    MidiUart2.sendNoteOff(last_extseq_track, abs(ExtPatternNotes[last_extseq_track][c][note_num + page_select * 16]) - 1, 0);
+                  if (ExtPatternNotes[last_extseq_track][c][note_num + seq_page_select * 16] > 0) {
+                    MidiUart2.sendNoteOff(last_extseq_track, abs(ExtPatternNotes[last_extseq_track][c][note_num + seq_page_select * 16]) - 1, 0);
                   }
-                  ExtPatternNotes[last_extseq_track][c][note_num + page_select * 16] = 0;
+                  ExtPatternNotes[last_extseq_track][c][note_num + seq_page_select * 16] = 0;
                 }
-                Exttiming[last_extseq_track][(note_num + (page_select * 16))] = 0;
-                Extconditional[last_extseq_track][(note_num + (page_select * 16))] = 0;
+                Exttiming[last_extseq_track][(note_num + (seq_page_select * 16))] = 0;
+                Extconditional[last_extseq_track][(note_num + (seq_page_select * 16))] = 0;
 
               }
 
               else {
-                Extconditional[last_extseq_track][(note_num + (page_select * 16))] = condition; //upper
-                Exttiming[last_extseq_track][(note_num + (page_select * 16))] = utiming; //upper
+                Extconditional[last_extseq_track][(note_num + (seq_page_select * 16))] = condition; //upper
+                Exttiming[last_extseq_track][(note_num + (seq_page_select * 16))] = utiming; //upper
 
               }
               notes[note_num] = 0;
@@ -2385,7 +2385,7 @@ class MCLMidiEvents : public MidiCallback {
             }
             else if ((curpage == SEQ_STEP_PAGE))  {
               notes[note_num] = 0;
-              if ((note_num + (page_select * 16)) >= PatternLengths[cur_col]) {
+              if ((note_num + (seq_page_select * 16)) >= PatternLengths[cur_col]) {
                 return;
               }
               uint8_t utiming = (trackinfo_param2.cur + 0);
@@ -2394,17 +2394,17 @@ class MCLMidiEvents : public MidiCallback {
 
               //  timing = 3;
               //condition = 3;
-              conditional[cur_col][(note_num + (page_select * 16))] = condition; //upper
-              timing[cur_col][(note_num + (page_select * 16))] = utiming; //upper
+              conditional[cur_col][(note_num + (seq_page_select * 16))] = condition; //upper
+              timing[cur_col][(note_num + (seq_page_select * 16))] = utiming; //upper
 
               //   conditional_timing[cur_col][(note_num + (trackinfo_param1.cur * 16))] = condition; //lower
 
-              if (!IS_BIT_SET64(PatternMasks[cur_col], (note_num + (page_select * 16)))) {
-                SET_BIT64(PatternMasks[cur_col], (note_num + (page_select * 16)) );
+              if (!IS_BIT_SET64(PatternMasks[cur_col], (note_num + (seq_page_select * 16)))) {
+                SET_BIT64(PatternMasks[cur_col], (note_num + (seq_page_select * 16)) );
               }
               else {
                 if ((current_clock - note_hold) < TRIG_HOLD_TIME) {
-                  CLEAR_BIT64(PatternMasks[cur_col], (note_num + (page_select * 16)));
+                  CLEAR_BIT64(PatternMasks[cur_col], (note_num + (seq_page_select * 16)));
                 }
               }
               //Cond
@@ -2416,23 +2416,23 @@ class MCLMidiEvents : public MidiCallback {
             }
             else if ((curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) {
 
-              int8_t utiming = timing[cur_col][(note_num + (page_select * 16))]; //upper
-              uint8_t condition = conditional[cur_col][(note_num + (page_select * 16))]; //lower
+              int8_t utiming = timing[cur_col][(note_num + (seq_page_select * 16))]; //upper
+              uint8_t condition = conditional[cur_col][(note_num + (seq_page_select * 16))]; //lower
 
               //Fudge timing info if it's not there
               if (utiming == 0 ) {
                 utiming = 12;
-                conditional[last_md_track][(note_num + (page_select * 16))] = condition;
-                timing[last_md_track][(note_num + (page_select * 16))] = utiming;
+                conditional[last_md_track][(note_num + (seq_page_select * 16))] = condition;
+                timing[last_md_track][(note_num + (seq_page_select * 16))] = utiming;
 
               }
-              if (IS_BIT_SET64(LockMasks[last_md_track], (note_num + (page_select * 16)))) {
+              if (IS_BIT_SET64(LockMasks[last_md_track], (note_num + (seq_page_select * 16)))) {
                 if ((current_clock - note_hold) < 300) {
-                  CLEAR_BIT64(LockMasks[last_md_track], (note_num + (page_select * 16)));
+                  CLEAR_BIT64(LockMasks[last_md_track], (note_num + (seq_page_select * 16)));
                 }
               }
               else {
-                SET_BIT64(LockMasks[last_md_track], (note_num + (page_select * 16)) );
+                SET_BIT64(LockMasks[last_md_track], (note_num + (seq_page_select * 16)) );
               }
 
               notes[note_num] = 0;
@@ -2444,8 +2444,8 @@ class MCLMidiEvents : public MidiCallback {
                 param_offset = 2;
               }
 
-              PatternLocks[last_md_track][param_offset][(note_num + (page_select * 16))] = trackinfo_param2.cur;
-              PatternLocks[last_md_track][param_offset + 1][(note_num + (page_select * 16))] = trackinfo_param4.cur;
+              PatternLocks[last_md_track][param_offset][(note_num + (seq_page_select * 16))] = trackinfo_param2.cur;
+              PatternLocks[last_md_track][param_offset + 1][(note_num + (seq_page_select * 16))] = trackinfo_param4.cur;
 
               PatternLocksParams[last_md_track][param_offset] = trackinfo_param1.cur;
               PatternLocksParams[last_md_track][param_offset + 1] = trackinfo_param3.cur;
@@ -4733,7 +4733,7 @@ void TrackInfoPage::display()  {
 
   else if ((curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_RLCK_PAGE)) {
     GUI.setLine(GUI.LINE1);
-    GUI.put_value_at1(15, page_select + 1);
+    GUI.put_value_at1(15, seq_page_select + 1);
 
     if (curpage == SEQ_RLCK_PAGE) {
       GUI.put_string_at(0, "RLCK");
@@ -4764,11 +4764,11 @@ void TrackInfoPage::display()  {
 
     if (curpage == SEQ_RLCK_PAGE) {
 
-      draw_lockmask(page_select * 16);
+      draw_lockmask(seq_page_select * 16);
 
     } if (curpage == SEQ_RTRK_PAGE) {
 
-      draw_patternmask(page_select * 16, DEVICE_MD);
+      draw_patternmask(seq_page_select * 16, DEVICE_MD);
 
     }
 
@@ -4868,13 +4868,13 @@ void TrackInfoPage::display()  {
     if (curpage == SEQ_PARAM_B_PAGE) {
       GUI.put_string_at(14, "B");
     }
-    GUI.put_value_at1(15, (page_select + 1));
-    draw_lockmask(page_select * 16);
+    GUI.put_value_at1(15, (seq_page_select + 1));
+    draw_lockmask(seq_page_select * 16);
 
   }
   else {
     GUI.setLine(GUI.LINE1);
-    GUI.put_value_at1(15, page_select + 1);
+    GUI.put_value_at1(15, seq_page_select + 1);
 
     if (curpage == SEQ_EUC_PAGE) {
       GUI.put_string_at(0, "E     ");
@@ -4891,7 +4891,7 @@ void TrackInfoPage::display()  {
       else {
         GUI.put_value_at2(11, trackinfo_param4.getValue());
       }
-      draw_patternmask((page_select * 16), DEVICE_MD);
+      draw_patternmask((seq_page_select * 16), DEVICE_MD);
 
     }
     if ((curpage == SEQ_STEP_PAGE) || (curpage == SEQ_EXTSTEP_PAGE)) {
@@ -4981,12 +4981,12 @@ void TrackInfoPage::display()  {
         if (notes_held > 0)  {
           for ( i = 0; i < 4; i++) {
 
-            notenum = abs(ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + page_select * 16]);
+            notenum = abs(ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + seq_page_select * 16]);
             if (notenum != 0) {
               notenum = notenum - 1;
               uint8_t oct =  notenum / 12;
               uint8_t note = notenum - 12 * (notenum / 12);
-              if (ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + page_select * 16] > 0) {
+              if (ExtPatternNotes[last_extseq_track][i][gui_last_trig_press + seq_page_select * 16] > 0) {
 
                 GUI.put_string_at(4 + i * 3, number_to_note.notes_upper[note]);
                 GUI.put_value_at1(4 + i * 3 + 2, oct);
@@ -5002,7 +5002,7 @@ void TrackInfoPage::display()  {
           }
         }
         else {
-          GUI.put_value_at1(15, page_select + 1);
+          GUI.put_value_at1(15, seq_page_select + 1);
           GUI.put_value_at(6, trackinfo_param3.getValue());
 
           if (cur_col < 16) {
@@ -5021,16 +5021,16 @@ void TrackInfoPage::display()  {
           }
         }
         //PatternLengths[cur_col] = trackinfo_param3.getValue();
-        draw_patternmask((page_select * 16), DEVICE_A4);
+        draw_patternmask((seq_page_select * 16), DEVICE_A4);
 
       }
       if (curpage == SEQ_STEP_PAGE) {
         GUI.put_p_string_at(10, str1);
         GUI.put_p_string_at(12, str2);
         GUI.put_value_at(6, trackinfo_param3.getValue());
-        GUI.put_value_at1(15, page_select + 1);
+        GUI.put_value_at1(15, seq_page_select + 1);
         //GUI.put_value_at2(7, trackinfo_param3.getValue());
-        draw_patternmask((page_select * 16), DEVICE_MD);
+        draw_patternmask((seq_page_select * 16), DEVICE_MD);
 
       }
     }
@@ -5974,16 +5974,16 @@ bool handleEvent(gui_event_t *evt) {
     return true;
   }
 
-  if (( (curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_RLCK_PAGE) || (curpage == SEQ_RPTC_PAGE) ||  (curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_STEP_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON2) ) {
+  if (( (curpage == SEQ_RTRK_PAGE) || (curpage == SEQ_PARAM_A_PAGE) || (curpage == SEQ_RLCK_PAGE) ||  (curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_STEP_PAGE) || (curpage == SEQ_PARAM_B_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON2) ) {
     uint8_t pagemax = 4;
-    page_select += 1;
+    seq_page_select += 1;
 
     if (cur_col > 15) {
       pagemax = 8;
 
     }
-    if (page_select >= pagemax) {
-      page_select = 0;
+    if (seq_page_select >= pagemax) {
+      seq_page_select = 0;
     }
 
     return true;
