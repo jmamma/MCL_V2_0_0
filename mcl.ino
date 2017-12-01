@@ -144,7 +144,7 @@ uint8_t load_the_damn_kit = 255;
 int encodervalue = NULL;
 
 int countx = 0;
-bool collect_notes = false;
+bool collect_trigs = false;
 //Instantiating GUI Objects.
 uint8_t dont_interrupt = 0;
 
@@ -685,7 +685,7 @@ class Config {
     uint32_t cues;
     uint8_t cur_row;
     uint8_t cur_col;
-   
+
 };
 Config cfg;
 
@@ -732,8 +732,8 @@ void sd_load_init() {
 
         if (cfg.version != CONFIG_VERSION) {
 
-         cfg_init();
-         new_project_page();
+          cfg_init();
+          new_project_page();
         }
 
         else if (cfg.number_projects > 0) {
@@ -743,7 +743,7 @@ void sd_load_init() {
           }
         }
         else {
-        new_project_page();
+          new_project_page();
         }
       }
       else {
@@ -794,28 +794,28 @@ void load_project_page() {
 
 */
 void cfg_init() {
-    cfgfile.open(true);
-    fat_resize_file(cfgfile.fd, (uint32_t) GRID_SLOT_BYTES);
+  cfgfile.open(true);
+  fat_resize_file(cfgfile.fd, (uint32_t) GRID_SLOT_BYTES);
   char my_string[16] = "/project000.mcl";
-  
-    cfg.version = CONFIG_VERSION;
-    cfg.number_projects = 0;
-    m_strncpy(cfg.project, my_string, 16);
-    cfg.clock_send = 0;
-    cfg.clock_rec = 0;
-    cfg.uart1_turbo = 2;
-    cfg.uart2_turbo = 2;
-    cur_row = 0;
-    cur_col = 0;
-    cfg.cues = 0;
-    cfgfile.write(( uint8_t*)&cfg, sizeof(Config));
-    cfgfile.close();
-  }
+
+  cfg.version = CONFIG_VERSION;
+  cfg.number_projects = 0;
+  m_strncpy(cfg.project, my_string, 16);
+  cfg.clock_send = 0;
+  cfg.clock_rec = 0;
+  cfg.uart1_turbo = 2;
+  cfg.uart2_turbo = 2;
+  cur_row = 0;
+  cur_col = 0;
+  cfg.cues = 0;
+  cfgfile.write(( uint8_t*)&cfg, sizeof(Config));
+  cfgfile.close();
+}
 void new_project_page() {
-// if (cfg.version != CONFIG_VERSION) {
+  // if (cfg.version != CONFIG_VERSION) {
   //            cfg_init();
-  
- // }
+
+  // }
 
 
   char my_string[16] = "/project___.mcl";
@@ -877,7 +877,7 @@ bool sd_new_project(char *projectname) {
   }
 
   write_project_header();
-  
+
   uint8_t ledstatus = 0;
   //Initialise the project file by filling the grid with blank data.
   for (int32_t i = 0; i < GRID_LENGTH * GRID_WIDTH; i++) {
@@ -939,16 +939,16 @@ bool sd_load_project(char *projectname) {
   if (!file.open(true)) {
     return false;
   }
- 
+
   if (!check_project_version()) {
     file.close();
     return false;
   }
- 
+
   m_strncpy(cfg.project, projectname, 16);
   write_cfg();
   //
-  
+
   return true;
 
 }
@@ -1152,31 +1152,7 @@ void load_the_damnkit(uint8_t pattern) {
 
 
 }
-void load_seq_step_page(uint8_t track) {
 
-  cur_col = track;
-  trackinfo_param3.cur = PatternLengths[track];
-  trackinfo_param2.cur = 12;
-  trackinfo_param2.max = 23;
-  curpage = SEQ_STEP_PAGE;
-}
-
-
-void load_seq_extstep_page(uint8_t track) {
-  if (ExtPatternResolution[last_extseq_track] == 1) {
-    trackinfo_param2.cur = 6;
-    trackinfo_param2.max = 11;
-  }
-  else {
-    trackinfo_param2.cur = 12;
-    trackinfo_param2.max = 23;
-  }
-  last_extseq_track = track;
-  trackinfo_param3.cur = ExtPatternLengths[track];
-  cur_col = track + 16;
-  curpage = SEQ_EXTSTEP_PAGE;
-
-}
 void clear_seq_conditional(uint8_t i) {
   for (uint8_t c = 0; c < 64; c++) {
     conditional[i][c] = 0;
@@ -1600,7 +1576,7 @@ void encoder_param2_handle(Encoder *enc) {
   grid_lastclock = slowclock;
   load_grid_models = 0;
 
- 
+
 }
 
 uint8_t note_to_track_map(uint8_t note) {
@@ -1847,30 +1823,30 @@ uint8_t seq_ext_pitch(uint8_t note_num) {
 }
 uint8_t cfg_speed_to_turbo(uint8_t speed) {
   switch (speed) {
-  case 0:
-  return 1; 
-  
-  case 1:
-  return 2;
-  
-  case 2:
-  return 4; 
-  
-  case 3:
-  return 7;
+    case 0:
+      return 1;
+
+    case 1:
+      return 2;
+
+    case 2:
+      return 4;
+
+    case 3:
+      return 7;
   }
 }
 void a4_setup() {
-  MidiUart.setSpeed(31250,2);
+  MidiUart.setSpeed(31250, 2);
   for (uint8_t x = 0;  x < 3 && Analog4.connected == false; x++) {
-  delay(300);
-  if (Analog4.getBlockingSettings(0)) {
-    GUI.flash_strings_fill("A4", "CONNECTED");
+    delay(300);
+    if (Analog4.getBlockingSettings(0)) {
+      GUI.flash_strings_fill("A4", "CONNECTED");
 
-    Analog4.connected = true;
-    uart2_device = DEVICE_A4;
-    turboSetSpeed(cfg_speed_to_turbo(cfg.uart2_turbo), 2);
-  }
+      Analog4.connected = true;
+      uart2_device = DEVICE_A4;
+      turboSetSpeed(cfg_speed_to_turbo(cfg.uart2_turbo), 2);
+    }
   }
   if (Analog4.connected == false) {
     //If sysex not receiverd assume generic midi device;
@@ -1880,50 +1856,50 @@ void a4_setup() {
   }
 }
 void md_setup() {
-MidiUart.setSpeed((uint32_t)31250,1);
+  MidiUart.setSpeed((uint32_t)31250, 1);
 
-for (uint8_t x = 0;  x < 3 && MD.connected == false; x++) {
+  for (uint8_t x = 0;  x < 3 && MD.connected == false; x++) {
 
-  delay(300);
-  if (MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST, CALLBACK_TIMEOUT)) {
+    delay(300);
+    if (MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST, CALLBACK_TIMEOUT)) {
 
-    turboSetSpeed(cfg_speed_to_turbo(cfg.uart1_turbo), 1);
-    
-    delay(100);
+      turboSetSpeed(cfg_speed_to_turbo(cfg.uart1_turbo), 1);
 
-    switchGlobal(7);
-    MD.resetMidiMap();
-    MD.global.baseChannel = 9;
+      delay(100);
 
-    if (!MD.getBlockingGlobal(7)) {
-      MD.connected = false;
-      return;
-    }
-    if (!global_one.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
-      GUI.flash_strings_fill("GLOBAL", "ERROR");
-      MD.connected = false;
-      return;
-    }
-    if (rec_global != 1) {
+      switchGlobal(7);
+      MD.resetMidiMap();
+      MD.global.baseChannel = 9;
 
-      rec_global = 1;
-      send_globals();
-    }
-    switchGlobal(7);
-    uint8_t curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
-    for (uint8_t x = 0; x < 2; x++) {
-      for (uint8_t y = 0; y < 16; y++) {
-        MD.setStatus(0x22, y);
-
+      if (!MD.getBlockingGlobal(7)) {
+        MD.connected = false;
+        return;
       }
+      if (!global_one.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
+        GUI.flash_strings_fill("GLOBAL", "ERROR");
+        MD.connected = false;
+        return;
+      }
+      if (rec_global != 1) {
+
+        rec_global = 1;
+        send_globals();
+      }
+      switchGlobal(7);
+      uint8_t curtrack = MD.getCurrentTrack(CALLBACK_TIMEOUT);
+      for (uint8_t x = 0; x < 2; x++) {
+        for (uint8_t y = 0; y < 16; y++) {
+          MD.setStatus(0x22, y);
+
+        }
+      }
+      MD.setStatus(0x22, curtrack);
+      MD.connected = true;
+      GUI.flash_strings_fill("MD", "CONNECTED");
+
+      return;
     }
-    MD.setStatus(0x22, curtrack);
-    MD.connected = true;
-    GUI.flash_strings_fill("MD", "CONNECTED");
-    
-    return;
   }
-}
   MD.connected = false;
 }
 class MCLMidiEvents : public MidiCallback {
@@ -2364,7 +2340,7 @@ class MCLMidiEvents : public MidiCallback {
 
       // if (msg[2] == 0) {
 
-      if ((collect_notes) && (msg[0] == 153) && (noteproceed == 1))  {
+      if ((collect_trigs) && (msg[0] == 153) && (noteproceed == 1))  {
 
         for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
           if (msg[1] == MD.global.drumMapping[i]) {
@@ -2645,7 +2621,7 @@ class MCLMidiEvents : public MidiCallback {
         // }
 
         if (noteproceed == 1) {
-          if ((collect_notes) && (msg[0] == 153)) {
+          if ((collect_trigs) && (msg[0] == 153)) {
             trigger_noteon_interface(msg, DEVICE_MD);
 
           }
@@ -3929,26 +3905,55 @@ void modify_track(int looptrack_) {
   clearLed();
 
 }
-void loadtrackinfo_page(uint8_t i) {
+
+void load_seq_step_page(uint8_t track) {
+
+  cur_col = track;
+  trackinfo_param3.cur = PatternLengths[track];
+  trackinfo_param2.cur = 12;
+  trackinfo_param2.max = 23;
+  curpage = SEQ_STEP_PAGE;
+}
+
+
+void load_seq_extstep_page(uint8_t track) {
+  if (ExtPatternResolution[last_extseq_track] == 1) {
+    trackinfo_param2.cur = 6;
+    trackinfo_param2.max = 11;
+  }
+  else {
+    trackinfo_param2.cur = 12;
+    trackinfo_param2.max = 23;
+  }
+  last_extseq_track = track;
+  trackinfo_param3.cur = ExtPatternLengths[track];
+  cur_col = track + 16;
+  curpage = SEQ_EXTSTEP_PAGE;
+
+}
+
+void load_seq_page(uint8_t page) {
   // if (MidiClock.state == 2) {
   // while (MidiClock.mod6_counter != 0);
 
   // }
   trackinfo_param2.min = 0;
+  if (curpage == 0) {
+    currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
+    MD.getCurrentTrack(CALLBACK_TIMEOUT);
 
-
-  currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
-  MD.getCurrentTrack(CALLBACK_TIMEOUT);
-
-  if (MidiClock.state != 2) {
-    MD.saveCurrentKit(currentkit_temp);
-  }
-  MD.getBlockingKit(currentkit_temp);
-
-  if (i == 0) {
-    curpage = SEQ_STEP_PAGE;
-
+    if (MidiClock.state != 2) {
+      MD.saveCurrentKit(currentkit_temp);
+    }
+    MD.getBlockingKit(currentkit_temp);
     exploit_on();
+  }
+  else {
+      init_notes();
+
+  }
+  if (page == SEQ_STEP_PAGE) {
+    collect_trigs = true;
 
     trackinfo_param1.max = 13;
     trackinfo_param2.max = 23;
@@ -3956,39 +3961,37 @@ void loadtrackinfo_page(uint8_t i) {
     trackinfo_param2.cur = 12;
     trackinfo_param3.max = 64;
     trackinfo_param4.max = 16;
-    trackinfo_param3.cur = PatternLengths[cur_col];
+    trackinfo_param3.cur = PatternLengths[last_md_track];
 
   }
-  if (i == 1) {
+  if (page == SEQ_RTRK_PAGE) {
 
-    exploit_on();
-    collect_notes = false;
+    collect_trigs = false;
 
     trackinfo_param1.max = 4;
     trackinfo_param2.max = 64;
     trackinfo_param3.max = 64;
     trackinfo_param4.max = 11;
-    trackinfo_param3.cur = PatternLengths[cur_col];
+    trackinfo_param3.cur = PatternLengths[last_md_track];
 
 
   }
-  if (i == 2) {
+  if (page == SEQ_PARAM_A_PAGE) {
+    collect_trigs = true;
 
     trackinfo_param1.max = 23;
     trackinfo_param2.max = 127;
     trackinfo_param3.max = 23;
     trackinfo_param4.max = 127;
 
-    exploit_on();
     trackinfo_param1.cur = PatternLocksParams[last_md_track][0];
     trackinfo_param3.cur = PatternLocksParams[last_md_track][1];
     trackinfo_param2.cur = MD.kit.params[last_md_track][PatternLocksParams[last_md_track][0]];
     trackinfo_param4.cur = MD.kit.params[last_md_track][PatternLocksParams[last_md_track][1]];
   }
-  if (i == 3) {
+  if (page == SEQ_PTC_PAGE) {
 
-    exploit_on();
-    collect_notes = false;
+    collect_trigs = false;
 
     trackinfo_param1.max = 8;
     trackinfo_param2.max = 64;
@@ -3997,23 +4000,12 @@ void loadtrackinfo_page(uint8_t i) {
     trackinfo_param2.cur = 32;
     trackinfo_param1.cur = 1;
 
-    trackinfo_param3.cur = PatternLengths[cur_col];
+    trackinfo_param3.cur = PatternLengths[last_md_track];
 
   }
-
+  curpage = page;
   GUI.setPage(&trackinfo_page);
-  if (i == 0) {
-    curpage = SEQ_STEP_PAGE;
-  }
-  else if (i == 1) {
-    curpage = SEQ_RTRK_PAGE;
-  }
-  else if (i == 2) {
-    curpage = SEQ_PARAM_A_PAGE;
-  }
-  else if (i == 3) {
-    curpage = SEQ_PTC_PAGE;
-  }
+
   //Len
   cur_col = last_md_track;
   cur_row = param2.getValue();
@@ -4241,7 +4233,7 @@ void setup() {
   //cfg.uart1_turboMidi.setup();
   //Start the SD Card Initialisation.
   sd_load_init();
- // MidiClock.mode = MidiClock.EXTERNAL_MIDI;
+  // MidiClock.mode = MidiClock.EXTERNAL_MIDI;
 
 
   MCLMidiEvents trigger;
@@ -4266,7 +4258,7 @@ void setup() {
   //md_setup();
   param1.cur = cfg.cur_col;
   param2.cur = cfg.cur_row;//turboSetSpeed(1,1);
-//turboSetSpeed(1,2 );
+  //turboSetSpeed(1,2 );
 }
 
 
@@ -4551,7 +4543,7 @@ void OptionsPage::display() {
     if (options_param2.getValue() == 1) {
       GUI.put_string_at_fill(10, "2x");
     }
-   if (options_param2.getValue() == 2) {
+    if (options_param2.getValue() == 2) {
       GUI.put_string_at_fill(10, "4x");
     }
     if (options_param2.getValue() == 3) {
@@ -5196,7 +5188,7 @@ int GridEncoder::update(encoder_t *enc) {
     cur = limit_value(cur, inc, min, max);
     rot_counter = rot_res;
   }
-  
+
   return cur;
 }
 
@@ -5204,7 +5196,7 @@ void GridEncoderPage::loop() {
   if (MD.connected == true) {
     if ((MidiUart.recvActiveSenseTimer > 300) && (MidiUart.speed > 31250))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      MidiUart.setSpeed((uint32_t)31250,1);
+      MidiUart.setSpeed((uint32_t)31250, 1);
       MD.connected = false;
       GUI.flash_strings_fill("MD", "DISCONNECTED");
       //   }
@@ -5220,7 +5212,7 @@ void GridEncoderPage::loop() {
   if (Analog4.connected == true) {
     if ((MidiUart2.recvActiveSenseTimer > 300) && (MidiUart2.speed > 31250))  {
       //  if (!MD.getBlockingStatus(0x22,CALLBACK_TIMEOUT)) {
-      MidiUart.setSpeed(31250,2);
+      MidiUart.setSpeed(31250, 2);
       Analog4.connected = false;
       uart2_device = DEVICE_NULL;
       GUI.flash_strings_fill("A4", "DISCONNECTED");
@@ -5229,7 +5221,7 @@ void GridEncoderPage::loop() {
   }
   else if ((Analog4.connected == false) && (uart2_device == DEVICE_NULL)) {
     if (MidiUart2.recvActiveSenseTimer < 100) {
-     // delay(2000);
+      // delay(2000);
       a4_setup();
     }
   }
@@ -5248,16 +5240,16 @@ void GridEncoderPage::loop() {
 
 */
 
-  A4Track track_bufx;
+A4Track track_bufx;
 
 void GridEncoderPage::display() {
 
   tick_frames();
   /*GUI.put_value16_at(0, MidiClock.div192th_counter);
-  GUI.put_value16_at(5, MidiClock.div96th_counter);
+    GUI.put_value16_at(5, MidiClock.div96th_counter);
     GUI.put_value_at(12, (uint8_t)MidiClock.div192th_time);
 
-  return;
+    return;
   */
   row_name_offset += (float) 1 / frames_fps * 1.5;
 
@@ -5273,20 +5265,20 @@ void GridEncoderPage::display() {
   uint8_t display_name = 0;
   if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
-       if (slowclock - cfg_save_lastclock > GUI_NAME_TIMEOUT) {
-       cfg.cur_col = param1.cur;
-       cfg.cur_row = param2.cur;
+    if (slowclock - cfg_save_lastclock > GUI_NAME_TIMEOUT) {
+      cfg.cur_col = param1.cur;
+      cfg.cur_row = param2.cur;
       write_cfg();
     }
   }
   else {
     if (load_grid_models == 0) {
-       for (uint8_t i = 0; i < 22; i++) {
+      for (uint8_t i = 0; i < 22; i++) {
 
-     
-       grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
-  }
-  load_grid_models = 1;
+
+        grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
+      }
+      load_grid_models = 1;
     }
     /*For each of the 4 encoder objects, ie 4 Grids to be displayed on screen*/
     for (uint8_t i = 0; i < 4; i++) {
@@ -5404,7 +5396,7 @@ void GridEncoder::displayAt(int i) {
   char strn[3] = "--";
   //A4Track track_buf;
   uint8_t model = grid_models[param1.getValue() + i ];
-  
+
   //getGridModel(param1.getValue() + i, param2.getValue(), true, (A4Track*) &track_buf);
 
   /*Retrieve the first 2 characters of Maching Name associated with the Track at the current Grid. First obtain the Model object from the Track object, then convert the MachineType into a string*/
@@ -5538,40 +5530,40 @@ void init_notes() {
 */
 
 void cfg_midi_ports() {
-  
-   MidiClock.stop();
-   
-      if (cfg.clock_send == 1) {
-        MidiClock.transmit_uart2 = true;
-      }
-      else {
-        MidiClock.transmit_uart2 = false;
-      }
-      if (cfg.clock_rec == 0) {
-        MidiClock.mode = MidiClock.EXTERNAL_MIDI;
-        MidiClock.transmit_uart1 = false;
 
-      }
-      else {
-        MidiClock.transmit_uart1 = true;
-        MidiClock.transmit_uart2 = false;
-        MidiClock.mode = MidiClock.EXTERNAL_UART2;
-      }
-      MidiClock.start();
-      if (MD.connected) {
-      send_globals();
-     
-      delay(100);
+  MidiClock.stop();
 
-      switchGlobal(7);
-       }
-       
-      if (MD.connected) {
-      turboSetSpeed(cfg_speed_to_turbo(cfg.uart1_turbo), 1);
-      }
-      if (Analog4.connected) {
-      turboSetSpeed(cfg_speed_to_turbo(cfg.uart2_turbo), 2);
-      }
+  if (cfg.clock_send == 1) {
+    MidiClock.transmit_uart2 = true;
+  }
+  else {
+    MidiClock.transmit_uart2 = false;
+  }
+  if (cfg.clock_rec == 0) {
+    MidiClock.mode = MidiClock.EXTERNAL_MIDI;
+    MidiClock.transmit_uart1 = false;
+
+  }
+  else {
+    MidiClock.transmit_uart1 = true;
+    MidiClock.transmit_uart2 = false;
+    MidiClock.mode = MidiClock.EXTERNAL_UART2;
+  }
+  MidiClock.start();
+  if (MD.connected) {
+    send_globals();
+
+    delay(100);
+
+    switchGlobal(7);
+  }
+
+  if (MD.connected) {
+    turboSetSpeed(cfg_speed_to_turbo(cfg.uart1_turbo), 1);
+  }
+  if (Analog4.connected) {
+    turboSetSpeed(cfg_speed_to_turbo(cfg.uart2_turbo), 2);
+  }
 }
 
 void exploit_on() {
@@ -5620,7 +5612,7 @@ void exploit_on() {
   }
   //    }
   //  MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,200);
-  collect_notes = true;
+  collect_trigs = true;
   //in_sysex = 0;
 }
 
@@ -5628,7 +5620,7 @@ void exploit_on() {
 void exploit_off() {
   // in_sysex = 1;
   exploit = 0;
-  collect_notes = false;
+  collect_trigs = false;
 
   //
   //  global_new.tempo = MidiClock.tempo;
@@ -5678,11 +5670,11 @@ uint32_t tmSpeeds[12] = {
   625000
 };
 void sendturbomidiHeader(uint8_t cmd, MidiUartClass *MidiUart_) {
-  for (uint8_t x =0 ; x  < 6; x++) {
-      MidiUart_->m_putc_immediate(turbomidi_sysex_header[x]);
+  for (uint8_t x = 0 ; x  < 6; x++) {
+    MidiUart_->m_putc_immediate(turbomidi_sysex_header[x]);
 
   }
-  
+
   MidiUart_->m_putc_immediate(cmd);
 }
 
@@ -5696,26 +5688,32 @@ void turboSetSpeed(uint8_t speed, uint8_t port) {
     MidiUart_ = (MidiUartClass*) &MidiUart2;
   }
 
-   if (MidiUart_->speed == tmSpeeds[speed]) { return; }
+  if (MidiUart_->speed == tmSpeeds[speed]) {
+    return;
+  }
 
   //USE_LOCK();
- // SET_LOCK();
+  // SET_LOCK();
 
   sendturbomidiHeader(0x20, MidiUart_);
   MidiUart_->m_putc_immediate(speed);
 
   MidiUart_->m_putc_immediate(0xF7);
- if (port == 1) {  while (!IS_BIT_SET8(UCSR1A, UDRE1)); }
- else { while (!IS_BIT_SET8(UCSR2A, UDRE2)); }
- delay(50);
- MidiUart.setSpeed(tmSpeeds[speed ],port);
+  if (port == 1) {
+    while (!IS_BIT_SET8(UCSR1A, UDRE1));
+  }
+  else {
+    while (!IS_BIT_SET8(UCSR2A, UDRE2));
+  }
+  delay(50);
+  MidiUart.setSpeed(tmSpeeds[speed ], port);
   //delay(50);
-   MidiUart_->setActiveSenseTimer(150);
+  MidiUart_->setActiveSenseTimer(150);
   //  MidiUart_->m_putc_immediate(0xF8);
- //MidiUart_->m_putc_immediate(0xFE);
+  //MidiUart_->m_putc_immediate(0xFE);
 
- // MidiUart_->sendActiveSenseTimer = 10;
- //   CLEAR_LOCK();
+  // MidiUart_->sendActiveSenseTimer = 10;
+  //   CLEAR_LOCK();
 
 }
 
@@ -5945,7 +5943,7 @@ bool handleEvent(gui_event_t *evt) {
   }
   if ((curpage == SEQ_RLCK_PAGE) && EVENT_RELEASED(evt, Buttons.BUTTON1)) {
     exploit_on();
-    collect_notes = false;
+    collect_trigs = false;
     curpage = SEQ_RTRK_PAGE;
     return true;
 
@@ -5994,16 +5992,69 @@ bool handleEvent(gui_event_t *evt) {
 
   else if ((curpage == SEQ_STEP_PAGE) || (curpage > 10)) {
 
-    if (EVENT_PRESSED(evt, Buttons.ENCODER1) || EVENT_PRESSED(evt, Buttons.ENCODER2) || EVENT_PRESSED(evt, Buttons.ENCODER3) || EVENT_PRESSED(evt, Buttons.ENCODER4)) {
-      //  PatternMasks[i] = getPatternMask(i, enc->getValue(), 3, true);
-      //  PatternLengths[i] = temptrack.length;
+    if (EVENT_PRESSED(evt, Buttons.ENCODER1) && (curpage == SEQ_STEP_PAGE)) {
       exploit_off();
-
       GUI.setPage(&page);
-
       curpage = 0;
+      return true;
+
     }
-    return true;
+    if (EVENT_PRESSED(evt, Buttons.ENCODER2) && (curpage == SEQ_RTRK_PAGE)) {
+      exploit_off();
+      GUI.setPage(&page);
+      curpage = 0;
+      return true;
+
+    }
+    if (EVENT_PRESSED(evt, Buttons.ENCODER3) && (curpage == SEQ_PARAM_A_PAGE)) {
+      exploit_off();
+      GUI.setPage(&page);
+      curpage = 0;
+      return true;
+
+    }
+    if (EVENT_PRESSED(evt, Buttons.ENCODER4) && (curpage == SEQ_PTC_PAGE)) {
+      exploit_off();
+      GUI.setPage(&page);
+      curpage = 0;
+      return true;
+
+    }
+
+    if (BUTTON_PRESSED(Buttons.ENCODER1))  {
+
+      load_seq_page(SEQ_STEP_PAGE);
+
+
+
+      return true;
+    }
+    if (BUTTON_PRESSED(Buttons.ENCODER2))  {
+
+
+      load_seq_page(SEQ_RTRK_PAGE);
+
+      return true;
+
+
+
+    }
+    if (BUTTON_PRESSED(Buttons.ENCODER3))  {
+
+      load_seq_page(SEQ_PARAM_A_PAGE);
+
+
+
+      return true;
+    }
+    if (BUTTON_PRESSED(Buttons.ENCODER4))  {
+
+      load_seq_page(SEQ_PTC_PAGE);
+
+      return true;
+    }
+
+
   }
 
   /*end if page == 1*/
@@ -6039,7 +6090,7 @@ bool handleEvent(gui_event_t *evt) {
 
     if (EVENT_RELEASED(evt, Buttons.BUTTON1) || EVENT_RELEASED(evt, Buttons.BUTTON4)) {
       exploit_off();
-      
+
       GUI.setPage(&page);
       curpage = 0;
       return true;
@@ -6129,7 +6180,7 @@ bool handleEvent(gui_event_t *evt) {
       }
       write_cfg();
       cfg_midi_ports();
-     
+
       GUI.setPage(&page);
       curpage = 0;
       return true;
@@ -6300,7 +6351,7 @@ bool handleEvent(gui_event_t *evt) {
 
     if (BUTTON_PRESSED(Buttons.ENCODER1))  {
 
-      loadtrackinfo_page(0);
+      load_seq_page(SEQ_STEP_PAGE);
 
 
 
@@ -6309,7 +6360,7 @@ bool handleEvent(gui_event_t *evt) {
     if (BUTTON_PRESSED(Buttons.ENCODER2))  {
 
 
-      loadtrackinfo_page(1);
+      load_seq_page(SEQ_RTRK_PAGE);
 
       return true;
 
@@ -6318,7 +6369,7 @@ bool handleEvent(gui_event_t *evt) {
     }
     if (BUTTON_PRESSED(Buttons.ENCODER3))  {
 
-      loadtrackinfo_page(2);
+      load_seq_page(SEQ_PARAM_A_PAGE);
 
 
 
@@ -6326,7 +6377,7 @@ bool handleEvent(gui_event_t *evt) {
     }
     if (BUTTON_PRESSED(Buttons.ENCODER4))  {
 
-      loadtrackinfo_page(3);
+      load_seq_page(SEQ_PTC_PAGE);
 
       return true;
     }
