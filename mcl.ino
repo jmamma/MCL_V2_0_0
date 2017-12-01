@@ -3941,8 +3941,8 @@ void load_seq_page(uint8_t page) {
   if (curpage == 0) {
     currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
     MD.getCurrentTrack(CALLBACK_TIMEOUT);
-
-    if (MidiClock.state != 2) {
+   //Don't save kit if sequencer is running, otherwise parameter locks will be stored.
+   if (MidiClock.state != 2) {
       MD.saveCurrentKit(currentkit_temp);
     }
     MD.getBlockingKit(currentkit_temp);
