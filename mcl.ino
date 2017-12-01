@@ -5266,6 +5266,9 @@ void GridEncoderPage::display() {
     toggle_fx2();
   }
   uint8_t display_name = 0;
+  if (slowclock < grid_lastclock) {
+    grid_lastclock = 0xFFFF - grid_lastclock; 
+  }
   if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
     if (slowclock - cfg_save_lastclock > GUI_NAME_TIMEOUT) {
