@@ -39,7 +39,8 @@
 #define W_PAGE 4
 #define SEQ_STEP_PAGE 1
 #define SEQ_EXTSTEP_PAGE 18
-#define SEQ_EUC_PAGE 17
+#define SEQ_EUC_PAGE 20
+#define SEQ_EUCPTC_PAGE 21
 #define SEQ_RLCK_PAGE 13
 #define SEQ_RTRK_PAGE 11
 #define SEQ_RPTC_PAGE 14
@@ -154,6 +155,9 @@ uint8_t in_sysex2 = 0;
 uint8_t seq_page_select = 0;
 uint8_t load_grid_models = 0;
 uint8_t grid_models[22];
+
+uint8_t euclid_scale = 0;
+uint8_t euclid_oct = 0;
 
 GridEncoder param1(0, GRID_WIDTH - 4, ENCODER_RES_GRID);
 GridEncoder param2(0, 127, ENCODER_RES_GRID);
@@ -3194,6 +3198,7 @@ void encoder_level_handle(Encoder *enc) {
 */
 
 void toggle_fx1() {
+  dispeffect = 1;
   if (param3.effect == MD_FX_REV) {
     fx_dc = param3.getValue();
     param3.setValue(fx_tm);
@@ -3216,6 +3221,7 @@ void toggle_fx1() {
   Toggles FX  ! 2 between Delay FB and Reverb Level Settings
 */
 void toggle_fx2() {
+  dispeffect = 1;
 
   if (param4.effect == MD_FX_REV) {
     fx_lv = param4.getValue();
@@ -3954,6 +3960,28 @@ void load_seq_page(uint8_t page) {
   else {
       init_notes();
 
+  }
+  if (page == SEQ_EUC_PAGE) {
+        collect_trigs = true;
+
+       trackinfo_param1.max = 64;
+      trackinfo_param2.max = 64;
+      trackinfo_param2.min = 0;
+      trackinfo_param2.cur = 0;
+          trackinfo_param3.max = 64;
+    trackinfo_param3.cur = PatternLengths[last_md_track];
+      trackinfo_param4.max = 36;
+  }
+   if (page == SEQ_EUCPTC_PAGE) {
+        collect_trigs = true;
+    trackinfo_param1.max = 8;
+    trackinfo_param2.max = 64;
+    trackinfo_param3.max = 64;
+    trackinfo_param4.max = 15;
+    trackinfo_param2.cur = 32;
+    trackinfo_param1.cur = 1;
+
+    trackinfo_param3.cur = PatternLengths[last_md_track];
   }
   if (page == SEQ_STEP_PAGE) {
     collect_trigs = true;
@@ -4706,7 +4734,7 @@ void TrackInfoPage::display()  {
     GUI.setLine(GUI.LINE2);
 
     // GUI.put_string_at(12,"Cue");
-    GUI.put_string_at(0, "CUES");
+    GUI.put_string_at(0, "CUES     ");
 
     GUI.put_string_at(9, "Q:");
 
@@ -4896,6 +4924,9 @@ void TrackInfoPage::display()  {
       }
       draw_patternmask((seq_page_select * 16), DEVICE_MD);
 
+    }
+    if (curpage == SEQ_EUCPTC_PAGE) {
+      
     }
     if ((curpage == SEQ_STEP_PAGE) || (curpage == SEQ_EXTSTEP_PAGE)) {
       GUI.put_string_at(0, "                ");
@@ -5242,8 +5273,18 @@ void GridEncoderPage::loop() {
 
 
 */
-
 A4Track track_bufx;
+
+void load_gridf_models() {
+     if (load_grid_models == 0) {
+      for (uint8_t i = 0; i < 22; i++) {
+
+
+        grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
+      }
+      load_grid_models = 1;
+}
+}
 
 void GridEncoderPage::display() {
 
@@ -5258,11 +5299,11 @@ void GridEncoderPage::display() {
 
 
 
-  if (BUTTON_DOWN(Buttons.ENCODER3) && (param3.hasChanged())) {
+  if (BUTTON_DOWN(Buttons.BUTTON3) && (param3.hasChanged())) {
     toggle_fx1();
   }
 
-  if (BUTTON_DOWN(Buttons.ENCODER4) && (param4.hasChanged())) {
+  if (BUTTON_DOWN(Buttons.BUTTON3) && (param4.hasChanged())) {
     toggle_fx2();
   }
   uint8_t display_name = 0;
@@ -5278,14 +5319,8 @@ void GridEncoderPage::display() {
     }
   }
   else {
-    if (load_grid_models == 0) {
-      for (uint8_t i = 0; i < 22; i++) {
-
-
-        grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
-      }
-      load_grid_models = 1;
-    }
+     load_gridf_models();
+    
     /*For each of the 4 encoder objects, ie 4 Grids to be displayed on screen*/
     for (uint8_t i = 0; i < 4; i++) {
 
@@ -5902,13 +5937,7 @@ bool handleEvent(gui_event_t *evt) {
 
     return true;
     /*
-      trackinfo_param1.max = 64;
-      trackinfo_param2.max = 64;
-      trackinfo_param2.min = 0;
-      trackinfo_param2.cur = 0;
-      trackinfo_param3.max = 96;
-      trackinfo_param4.max = 36;
-      curpage = SEQ_EUC_PAGE;
+   
       return true;
     */
 
@@ -5963,6 +5992,8 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
+  //void setEuclid( uint8_t track, uint8_t pulses, uint8_t len, uint8_t offset, uint8_t scale, uint8_t root) {
+
   if (( (curpage == SEQ_EUC_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) && BUTTON_DOWN(Buttons.BUTTON3) ) {
     random_pattern( trackinfo_param1.cur, PatternLengths[last_md_track], trackinfo_param2.cur, trackinfo_param4.cur, trackinfo_param3.cur);
 
@@ -5971,7 +6002,7 @@ bool handleEvent(gui_event_t *evt) {
   }
   if (( (curpage == SEQ_EUC_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
 
-    setEuclid(last_md_track, trackinfo_param1.cur, PatternLengths[last_md_track], trackinfo_param2.cur, trackinfo_param4.cur, trackinfo_param3.cur);
+    setEuclid(last_md_track, trackinfo_param1.cur, trackinfo_param3.cur, trackinfo_param2.cur, euclid_scale, euclid_oct);
     return true;
   }
 
@@ -6197,6 +6228,12 @@ bool handleEvent(gui_event_t *evt) {
   }
 
   else  if ((curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
+  if ((curpage == CUE_PAGE) && EVENT_PRESSED(evt, Buttons.BUTTON1)) {
+      curpage = MIXER_PAGE;
+  }
+  else if ((curpage == MIXER_PAGE) && EVENT_PRESSED(evt, Buttons.BUTTON1)) {
+      curpage = CUE_PAGE;
+    }
     /*
           if (curpage == MIXER_PAGE) {
                         if  (EVENT_PRESSED(evt, Buttons.ENCODER2)) {
@@ -6239,7 +6276,7 @@ bool handleEvent(gui_event_t *evt) {
         level_pressmode = 0;
       }
     }
-    if ((EVENT_PRESSED(evt, Buttons.BUTTON2)) || (EVENT_PRESSED(evt, Buttons.BUTTON3))) {
+    if (EVENT_PRESSED(evt, Buttons.BUTTON2)) {
       exploit_off();
       GUI.setPage(&page);
       curpage = 0;
@@ -6269,8 +6306,14 @@ bool handleEvent(gui_event_t *evt) {
     /*Store pattern in track Grids from offset set by the current left most Grid on screen*/
     //        if ( (EVENT_PRESSED(evt, Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON2)) || (EVENT_PRESSED(evt, Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON1) ))
 
-
+    //CLEAR ROW
+    if (BUTTON_RELEASED(Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON3)) {
+      clear_row(param2.getValue());
+      load_grid_models = 0;
+      return true;
+    }
     //TRACK READ PAGE
+
     if (EVENT_RELEASED(evt, Buttons.BUTTON1) )
     {
       MD.getCurrentTrack(CALLBACK_TIMEOUT);
@@ -6309,10 +6352,6 @@ bool handleEvent(gui_event_t *evt) {
       curpage = W_PAGE;
       return true;
     }
-    if (BUTTON_DOWN(Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON3)) {
-      clear_row(param2.getValue());
-      return true;
-    }
 
     if (BUTTON_DOWN(Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON4)) {
       setLed();
@@ -6326,11 +6365,7 @@ bool handleEvent(gui_event_t *evt) {
     }
 
 
-    if (EVENT_PRESSED(evt, Buttons.BUTTON3)) {
-      exploit_on();
-      curpage = CUE_PAGE;
-      GUI.setPage(&trackinfo_page);
-    }
+
     if (EVENT_PRESSED(evt, Buttons.BUTTON2)) {
       currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
       curpage = MIXER_PAGE;
@@ -6356,10 +6391,12 @@ bool handleEvent(gui_event_t *evt) {
     //  }
 
     if (BUTTON_PRESSED(Buttons.ENCODER1))  {
-
+      if (BUTTON_DOWN(Buttons.BUTTON3)) {
+      load_seq_page(SEQ_EUC_PAGE);
+      } 
+      else {
       load_seq_page(SEQ_STEP_PAGE);
-
-
+      }
 
       return true;
     }
