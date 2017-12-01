@@ -2292,6 +2292,7 @@ class MCLMidiEvents : public MidiCallback {
         // group = (param/32)
         //
         cur_col = track;
+        last_md_track = track;
         trackinfo_param3.cur = PatternLengths[cur_col];
         uint8_t match = 255;
         uint8_t c = 0;
@@ -2496,6 +2497,8 @@ class MCLMidiEvents : public MidiCallback {
           uint8_t utiming = MidiClock.mod12_counter + 12;
           uint8_t condition = 0;
           cur_col = note_num;
+          last_md_track = note_num;
+
           trackinfo_param3.cur = PatternLengths[cur_col];
           //  timing = 3;
           //condition = 3;
