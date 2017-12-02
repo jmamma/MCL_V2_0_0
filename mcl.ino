@@ -1396,6 +1396,13 @@ void trig_conditional(uint8_t condition, uint8_t i) {
     MD.triggerTrack(i, 127);
   }
 }
+
+//0   1   2   3   4   5   0
+//M   M   M   M   M   M   M   M   M   M   M   M   M  MOD6
+//X - - - - - - - - - - - X - - - - - - - - - - - X  x1
+//x           X           X           X           X  x2
+//0 1 2 3 5 6 7 8 9 A B C 0                          MOD12
+
 class TrigInterface: public ClockCallback {
   public:
 
@@ -1506,7 +1513,15 @@ class MDSequencer : public ClockCallback {
         int8_t utiming = Exttiming[i][step_count]; //upper
         uint8_t condition = Extconditional[i][step_count]; //lower
 
-        if (step_count == (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) - 1)) {
+        int8_t timing_counter = MidiClock.mod12_counter;
+
+        if ((ExtPatternResolution[i] == 1)) {
+          timing_counter = MidiClock.mod12_counter - (6 * (MidiClock.mod12_counter / 6));
+
+        }
+        //        if (step_count == (ExtPatternLengths[i] * (2 / ExtPatternResolution[i]) - 1)) {
+
+        if (step_count == ExtPatternLengths[i]) {
           next_step = 0;
         }
         else {
@@ -1516,14 +1531,6 @@ class MDSequencer : public ClockCallback {
         int8_t utiming_next = Exttiming[i][next_step]; //upper
         uint8_t condition_next = Extconditional[i][next_step]; //lower
         if (!in_sysex2) {
-
-          int8_t timing_counter = MidiClock.mod12_counter;
-
-          if (ExtPatternResolution[i] == 1) {
-            timing_counter = MidiClock.mod6_counter;
-          }
-
-
 
           if ((utiming >= (6 * ExtPatternResolution[i])) && (utiming - (6 * ExtPatternResolution[i]) == (int8_t)timing_counter)) {
 
@@ -2022,6 +2029,8 @@ class MCLMidiEvents : public MidiCallback {
             }
           }
         }
+
+
         return;
       }
       trigger_noteon_interface(msg, DEVICE_A4);
@@ -2053,7 +2062,9 @@ class MCLMidiEvents : public MidiCallback {
       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
       uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
 
-      uint8_t utiming = (MidiClock.mod6_counter + 6);
+
+      uint8_t utiming = 6 + MidiClock.mod12_counter - (6 * (MidiClock.mod12_counter / 6));
+
 
       if (ExtPatternResolution[channel] > 1) {
         utiming = (MidiClock.mod12_counter + 12);
@@ -2183,11 +2194,13 @@ class MCLMidiEvents : public MidiCallback {
       // uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]) * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel] * (2 / ExtPatternResolution[channel]))));
       uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[channel]) - (pattern_start_clock32th / ExtPatternResolution[channel])) - (ExtPatternLengths[channel] * ((MidiClock.div32th_counter / ExtPatternResolution[channel] - (pattern_start_clock32th / ExtPatternResolution[channel])) / (ExtPatternLengths[channel])));
 
-      uint8_t utiming = (MidiClock.mod6_counter + 6);
+      uint8_t utiming = 6 + MidiClock.mod12_counter - (6 * (MidiClock.mod12_counter / 6));
+
 
       if (ExtPatternResolution[channel] > 1) {
         utiming = (MidiClock.mod12_counter + 12);
       }
+
       uint8_t condition = 0;
       //  cur_col = note_num;
       //  timing = 3;
@@ -2199,12 +2212,13 @@ class MCLMidiEvents : public MidiCallback {
       for (c = 0; c < 4 && match == 255; c++)  {
         if (abs(ExtPatternNotes[channel][c][step_count]) == pitch + 1) {
           match = c;
-          if (ExtPatternNotes[channel][c][step_count] < 0) {
+
+          if (ExtPatternNotes[channel][c][step_count] > 0) {
             step_count = step_count + 1;
             if (step_count > ExtPatternLengths[channel]) {
               step_count = 0;
             }
-            utiming = MidiClock.mod12_counter;
+            utiming = MidiClock.mod12_counter - (6 * (MidiClock.mod12_counter / 6));
             //timing = 0;
           }
         }
@@ -4987,12 +5001,12 @@ void TrackInfoPage::display()  {
         }
         else if ((trackinfo_param2.getValue() < 6) && (trackinfo_param2.getValue() != 0))  {
           GUI.put_string_at(2, "-");
-          GUI.put_value_at2(3, 6 - trackinfo_param2.getValue());
+          GUI.put_value_at1(3, 6 - trackinfo_param2.getValue());
 
         }
         else {
           GUI.put_string_at(2, "+");
-          GUI.put_value_at2(3, trackinfo_param2.getValue() - 6);
+          GUI.put_value_at1(3, trackinfo_param2.getValue() - 6);
         }
       }
       else {
@@ -5001,12 +5015,12 @@ void TrackInfoPage::display()  {
         }
         else if ((trackinfo_param2.getValue() < 12) && (trackinfo_param2.getValue() != 0))  {
           GUI.put_string_at(2, "-");
-          GUI.put_value_at2(3, 12 - trackinfo_param2.getValue());
+          GUI.put_value_at1(3, 12 - trackinfo_param2.getValue());
 
         }
         else {
           GUI.put_string_at(2, "+");
-          GUI.put_value_at2(3, trackinfo_param2.getValue() - 12);
+          GUI.put_value_at1(3, trackinfo_param2.getValue() - 12);
         }
       }
 
@@ -5163,39 +5177,39 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
   /*Get the Pattern bit mask for the selected track*/
   //    uint64_t patternmask = getPatternMask(cur_col, cur_row , 3, false);
   uint64_t patternmask = PatternMasks[cur_col];
-  uint8_t note_held = 0;
+  int8_t note_held = 0;
 
   /*Display 16 steps on screen, starting at an offset set by the encoder1 value*/
   /*The encoder offset allows you to scroll through the 4 pages of the 16 step sequencer triggers that make up a 64 step pattern*/
 
   /*For 16 steps check to see if there is a trigger at pattern position i + (encoder_offset * 16) */
+  if (device == DEVICE_MD) {
+
+    for (int i = 0; i < 16; i++) {
       if (device == DEVICE_MD) {
-
-  for (int i = 0; i < 16; i++) {
-    if (device == DEVICE_MD) {
-      uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[cur_col] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[cur_col]));
+        uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[cur_col] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[cur_col]));
 
 
-      if (i + offset >= PatternLengths[cur_col]) {
-        mystr[i] = ' ';
-      }
-      else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
-        mystr[i] = ' ';
-      }
-      else if (IS_BIT_SET64(patternmask, i + offset) ) {
-        /*If the bit is set, there is a trigger at this position. We'd like to display it as [] on screen*/
-        /*Char 219 on the minicommand LCD is a []*/
-        mystr[i] = (char) 219;
+        if (i + offset >= PatternLengths[cur_col]) {
+          mystr[i] = ' ';
+        }
+        else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
+          mystr[i] = ' ';
+        }
+        else if (IS_BIT_SET64(patternmask, i + offset) ) {
+          /*If the bit is set, there is a trigger at this position. We'd like to display it as [] on screen*/
+          /*Char 219 on the minicommand LCD is a []*/
+          mystr[i] = (char) 219;
+        }
       }
     }
   }
-      }
-    else {
-        
-        for (int i = 0; i < ExtPatternLengths[last_extseq_track]; i++) {
+  else {
+
+    for (int i = 0; i < ExtPatternLengths[last_extseq_track]; i++) {
 
       uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track]) - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) - (ExtPatternLengths[last_extseq_track] * ((MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track] - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) / (ExtPatternLengths[last_extseq_track])));
-    uint8_t noteson = 0;
+      uint8_t noteson = 0;
       uint8_t notesoff = 0;
 
       for (uint8_t a = 0; a < 4; a++) {
@@ -5205,45 +5219,60 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
           noteson++;
           //    mystr[i] = (char) 219;
         }
-   
+
         if (ExtPatternNotes[last_extseq_track][a][i] < 0) {
           notesoff++;
         }
-     
+
 
       }
+      if ((noteson > 0) && (notesoff > 0)) {
+        if ((i >= offset) && (i < offset + 16)) {
+          mystr[i - offset] = (char) 219;
+        }
+        note_held += noteson;
+        note_held -= notesoff;
 
-      if (noteson > 0) {
-             if ((i >= offset) && (i < offset + 16)) {  mystr[i- offset] =  (char) 002; }
-        note_held += 1;
+      }
+      else if (noteson > 0) {
+        if ((i >= offset) && (i < offset + 16)) {
+          mystr[i - offset] =  (char) 002;
+        }
+        note_held += noteson;
       }
       else if (notesoff > 0) {
-              if ((i >= offset) && (i < offset + 16)) { mystr[i - offset] =  (char) 004; }
-        note_held -= 1;
+        if ((i >= offset) && (i < offset + 16)) {
+          mystr[i - offset] =  (char) 004;
+        }
+        note_held -= notesoff;
       }
       else {
         if (note_held >= 1) {
-               if ((i >= offset) && (i < offset + 16)) { mystr[i - offset] =  (char) 003; }
+          if ((i >= offset) && (i < offset + 16)) {
+            mystr[i - offset] =  (char) 003;
+          }
         }
       }
 
       if ((i >= ExtPatternLengths[last_extseq_track]) || (step_count ==  i) && (MidiClock.state == 2)) {
-             if ((i > offset) && (i < offset + 16)) { mystr[i - offset] = ' '; }
-      }
-    if ((i >= offset) && (i < offset + 16)) {
-
-    if (notes[i - offset] > 0)  {
-      /*If the bit is set, there is a cue at this position. We'd like to display it as [] on screen*/
-      /*Char 219 on the minicommand LCD is a []*/
-
-      mystr[i - offset] = (char) 255;
-    }
-      }
+        if ((i > offset) && (i < offset + 16)) {
+          mystr[i - offset] = ' ';
         }
+      }
+      if ((i >= offset) && (i < offset + 16)) {
+
+        if (notes[i - offset] > 0)  {
+          /*If the bit is set, there is a cue at this position. We'd like to display it as [] on screen*/
+          /*Char 219 on the minicommand LCD is a []*/
+
+          mystr[i - offset] = (char) 255;
+        }
+      }
+    }
   }
-    
-      
-      
+
+
+
   /*Display the step sequencer pattern on screen, 16 steps at a time*/
   GUI.put_string_at(0, mystr);
 
@@ -5344,15 +5373,15 @@ void load_gridf_models() {
 void GridEncoderPage::display() {
 
   tick_frames();
-  /*GUI.put_value16_at(0, MidiClock.div192th_counter);
-    GUI.put_value16_at(5, MidiClock.div96th_counter);
-    GUI.put_value_at(12, (uint8_t)MidiClock.div192th_time);
+  //GUI.put_value16_at(0, MidiClock.div192th_counter);
+  //  GUI.put_value16_at(5, MidiClock.div96th_counter);
+  //   GUI.put_value_at(12, (uint8_t)MidiClock.div192th_time);
+  //if (MidiClock.mod12_counter > 10) { GUI.put_value16_at(0, MidiClock.mod12_counter); }
+  //GUI.put_value16_at(5, MidiClock.mod6_counter);
 
-    return;
-  */
+  //  return;
+
   row_name_offset += (float) 1 / frames_fps * 1.5;
-
-
 
   if (BUTTON_DOWN(Buttons.BUTTON3) && (param3.hasChanged())) {
     toggle_fx1();
