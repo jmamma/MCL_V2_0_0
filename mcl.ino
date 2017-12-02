@@ -4219,13 +4219,14 @@ TrigInterface trig_interface;
 MDSequencer md_seq;
 
 void create_chars_seq() {
-  uint8_t temp_charmap1[8] = { 0, 31, 16, 16, 16, 31, 0 };
+  uint8_t temp_charmap1[8] = {  0, 15, 16, 16, 16, 15, 0 };
   uint8_t temp_charmap2[8] = {  0, 31, 0, 0, 0, 31, 0 };
-  uint8_t temp_charmap3[8] = {  0, 31, 1, 1, 1, 31, 0};
-
+  uint8_t temp_charmap3[8] = {  0, 30, 1, 1, 1, 30, 0 };
+  uint8_t temp_charmap4[8] = {  0, 14, 17, 17, 17, 14, 0};
   LCD.createChar(2, temp_charmap1);
   LCD.createChar(3, temp_charmap2);
   LCD.createChar(4, temp_charmap3);
+  LCD.createChar(5, temp_charmap4);
 
 }
 void create_chars_mixer() {
@@ -5228,7 +5229,7 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
       }
       if ((noteson > 0) && (notesoff > 0)) {
         if ((i >= offset) && (i < offset + 16)) {
-          mystr[i - offset] = (char) 219;
+          mystr[i - offset] = (char) 004;
         }
         note_held += noteson;
         note_held -= notesoff;
