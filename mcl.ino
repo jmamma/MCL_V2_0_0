@@ -1980,6 +1980,9 @@ class MCLMidiEvents : public MidiCallback {
         for (uint8_t i = 0; i < 16; i++) {
           uint8_t match = 255;
           if (notes[i] == 1) {
+            //Look for matching note already on this step
+            //If it's a note off, then disable the note
+            //If it's a note on, set the note note-off.
             for (uint8_t c = 0; c < 4 && match == 255; c++) {
               if (ExtPatternNotes[channel][c][i + seq_page_select * 16] ==  -(1 * (msg[1] + 1))) {
                 ExtPatternNotes[channel][c][i + seq_page_select * 16] = 0;
@@ -1991,13 +1994,15 @@ class MCLMidiEvents : public MidiCallback {
                 match = c;
               }
             }
+
+            //No matches are found, we count number of on and off to determine next note type.
             for (uint8_t c = 0; c < 4 && match == 255; c++) {
               if (ExtPatternNotes[channel][c][i + seq_page_select * 16] == 0) {
                 match = c;
                 int8_t ons_and_offs = 0;
                 //Check to see if we have same number of note offs as note ons.
                 //If there are more note ons for given note, the next note entered should be a note off.
-                for (uint8_t a = 0; a < 64; a++) {
+                for (uint8_t a = 0; a < ExtPatternLengths[channel]; a++) {
                   for (uint8_t b = 0; b < 4; b++) {
                     if (ExtPatternNotes[channel][b][a] ==  -(1 * (msg[1] + 1))) {
                       ons_and_offs -= 1;
@@ -5164,6 +5169,8 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
   /*The encoder offset allows you to scroll through the 4 pages of the 16 step sequencer triggers that make up a 64 step pattern*/
 
   /*For 16 steps check to see if there is a trigger at pattern position i + (encoder_offset * 16) */
+      if (device == DEVICE_MD) {
+
   for (int i = 0; i < 16; i++) {
     if (device == DEVICE_MD) {
       uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[cur_col] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[cur_col]));
@@ -5181,50 +5188,62 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
         mystr[i] = (char) 219;
       }
     }
+  }
+      }
     else {
+        
+        for (int i = 0; i < ExtPatternLengths[last_extseq_track]; i++) {
+
       uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track]) - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) - (ExtPatternLengths[last_extseq_track] * ((MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track] - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) / (ExtPatternLengths[last_extseq_track])));
-      uint8_t noteson = 0;
+    uint8_t noteson = 0;
       uint8_t notesoff = 0;
 
       for (uint8_t a = 0; a < 4; a++) {
 
-        if (ExtPatternNotes[last_extseq_track][a][i + offset] > 0) {
+        if (ExtPatternNotes[last_extseq_track][a][i] > 0) {
 
           noteson++;
           //    mystr[i] = (char) 219;
         }
-        else if (ExtPatternNotes[last_extseq_track][a][i + offset] < 0) {
+   
+        if (ExtPatternNotes[last_extseq_track][a][i] < 0) {
           notesoff++;
         }
+     
 
       }
 
       if (noteson > 0) {
-        mystr[i] =  (char) 002;
-        note_held = 1;
+             if ((i >= offset) && (i < offset + 16)) {  mystr[i- offset] =  (char) 002; }
+        note_held += 1;
       }
       else if (notesoff > 0) {
-        mystr[i] =  (char) 004;
-        note_held = 0;
+              if ((i >= offset) && (i < offset + 16)) { mystr[i - offset] =  (char) 004; }
+        note_held -= 1;
       }
       else {
-        if (note_held == 1) {
-          mystr[i] =  (char) 003;
+        if (note_held >= 1) {
+               if ((i >= offset) && (i < offset + 16)) { mystr[i - offset] =  (char) 003; }
         }
       }
 
-      if ((i + offset >= ExtPatternLengths[last_extseq_track]) || (step_count ==  i + offset) && (MidiClock.state == 2)) {
-        mystr[i] = ' ';
+      if ((i >= ExtPatternLengths[last_extseq_track]) || (step_count ==  i) && (MidiClock.state == 2)) {
+             if ((i > offset) && (i < offset + 16)) { mystr[i - offset] = ' '; }
       }
-    }
-    if (notes[i] > 0)  {
+    if ((i >= offset) && (i < offset + 16)) {
+
+    if (notes[i - offset] > 0)  {
       /*If the bit is set, there is a cue at this position. We'd like to display it as [] on screen*/
       /*Char 219 on the minicommand LCD is a []*/
 
-      mystr[i] = (char) 255;
+      mystr[i - offset] = (char) 255;
     }
-
+      }
+        }
   }
+    
+      
+      
   /*Display the step sequencer pattern on screen, 16 steps at a time*/
   GUI.put_string_at(0, mystr);
 
