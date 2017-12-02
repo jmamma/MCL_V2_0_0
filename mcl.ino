@@ -3948,32 +3948,33 @@ void load_seq_page(uint8_t page) {
   // }
   trackinfo_param2.min = 0;
   if (curpage == 0) {
+    create_chars_seq();
     currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
     MD.getCurrentTrack(CALLBACK_TIMEOUT);
-   //Don't save kit if sequencer is running, otherwise parameter locks will be stored.
-   if (MidiClock.state != 2) {
+    //Don't save kit if sequencer is running, otherwise parameter locks will be stored.
+    if (MidiClock.state != 2) {
       MD.saveCurrentKit(currentkit_temp);
     }
     MD.getBlockingKit(currentkit_temp);
     exploit_on();
   }
   else {
-      init_notes();
+    init_notes();
 
   }
   if (page == SEQ_EUC_PAGE) {
-        collect_trigs = true;
+    collect_trigs = true;
 
-       trackinfo_param1.max = 64;
-      trackinfo_param2.max = 64;
-      trackinfo_param2.min = 0;
-      trackinfo_param2.cur = 0;
-          trackinfo_param3.max = 64;
+    trackinfo_param1.max = 64;
+    trackinfo_param2.max = 64;
+    trackinfo_param2.min = 0;
+    trackinfo_param2.cur = 0;
+    trackinfo_param3.max = 64;
     trackinfo_param3.cur = PatternLengths[last_md_track];
-      trackinfo_param4.max = 36;
+    trackinfo_param4.max = 36;
   }
-   if (page == SEQ_EUCPTC_PAGE) {
-        collect_trigs = true;
+  if (page == SEQ_EUCPTC_PAGE) {
+    collect_trigs = true;
     trackinfo_param1.max = 8;
     trackinfo_param2.max = 64;
     trackinfo_param3.max = 64;
@@ -4103,7 +4104,6 @@ void combine_strings(char *newstring, char *string1, char *string2) {
   Defines the pixels of one glyph and is used to create the custom || character
 */
 
-uint8_t charmap[8] = { 10, 10, 10, 10, 10, 10, 10, 00 };
 
 
 /*
@@ -4198,10 +4198,19 @@ void setup_global(int global_num) {
 }
 TrigInterface trig_interface;
 MDSequencer md_seq;
-void setup() {
 
+void create_chars_seq() {
+  uint8_t temp_charmap1[8] = { 0, 31, 16, 16, 16, 31, 0 };
+  uint8_t temp_charmap2[8] = {  0, 31, 0, 0, 0, 31, 0 };
+  uint8_t temp_charmap3[8] = {  0, 31, 1, 1, 1, 31, 0};
 
-  LCD.createChar(1, charmap);
+  LCD.createChar(2, temp_charmap1);
+  LCD.createChar(3, temp_charmap2);
+  LCD.createChar(4, temp_charmap3);
+
+}
+void create_chars_mixer() {
+
 
   uint8_t temp_charmap[8] = { 0, 0, 0, 0, 0, 0, 0, 31  };
 
@@ -4212,6 +4221,14 @@ void setup() {
     }
 
   }
+
+}
+
+void setup() {
+
+  uint8_t charmap[8] = { 10, 10, 10, 10, 10, 10, 10, 00 };
+
+  LCD.createChar(1, charmap);
 
 
   //Enable callbacks, and disable some of the ones we don't want to use.
@@ -4926,7 +4943,7 @@ void TrackInfoPage::display()  {
 
     }
     if (curpage == SEQ_EUCPTC_PAGE) {
-      
+
     }
     if ((curpage == SEQ_STEP_PAGE) || (curpage == SEQ_EXTSTEP_PAGE)) {
       GUI.put_string_at(0, "                ");
@@ -5141,7 +5158,7 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
   /*Get the Pattern bit mask for the selected track*/
   //    uint64_t patternmask = getPatternMask(cur_col, cur_row , 3, false);
   uint64_t patternmask = PatternMasks[cur_col];
-
+  uint8_t note_held = 0;
 
   /*Display 16 steps on screen, starting at an offset set by the encoder1 value*/
   /*The encoder offset allows you to scroll through the 4 pages of the 16 step sequencer triggers that make up a 64 step pattern*/
@@ -5166,19 +5183,38 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
     }
     else {
       uint8_t step_count = ( (MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track]) - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) - (ExtPatternLengths[last_extseq_track] * ((MidiClock.div32th_counter / ExtPatternResolution[last_extseq_track] - (pattern_start_clock32th / ExtPatternResolution[last_extseq_track])) / (ExtPatternLengths[last_extseq_track])));
+      uint8_t noteson = 0;
+      uint8_t notesoff = 0;
 
       for (uint8_t a = 0; a < 4; a++) {
 
-        if (i + offset >= ExtPatternLengths[last_extseq_track]) {
-          mystr[i] = ' ';
-        }
-        else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
-          mystr[i] = ' ';
-        }
-        else if (ExtPatternNotes[last_extseq_track][a][i + offset] != 0) {
-          mystr[i] = (char) 219;
+        if (ExtPatternNotes[last_extseq_track][a][i + offset] > 0) {
 
+          noteson++;
+          //    mystr[i] = (char) 219;
         }
+        else if (ExtPatternNotes[last_extseq_track][a][i + offset] < 0) {
+          notesoff++;
+        }
+
+      }
+
+      if (noteson > 0) {
+        mystr[i] =  (char) 002;
+        note_held = 1;
+      }
+      else if (notesoff > 0) {
+        mystr[i] =  (char) 004;
+        note_held = 0;
+      }
+      else {
+        if (note_held == 1) {
+          mystr[i] =  (char) 003;
+        }
+      }
+
+      if ((i + offset >= ExtPatternLengths[last_extseq_track]) || (step_count ==  i + offset) && (MidiClock.state == 2)) {
+        mystr[i] = ' ';
       }
     }
     if (notes[i] > 0)  {
@@ -5276,14 +5312,14 @@ void GridEncoderPage::loop() {
 A4Track track_bufx;
 
 void load_gridf_models() {
-     if (load_grid_models == 0) {
-      for (uint8_t i = 0; i < 22; i++) {
+  if (load_grid_models == 0) {
+    for (uint8_t i = 0; i < 22; i++) {
 
 
-        grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
-      }
-      load_grid_models = 1;
-}
+      grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
+    }
+    load_grid_models = 1;
+  }
 }
 
 void GridEncoderPage::display() {
@@ -5308,7 +5344,7 @@ void GridEncoderPage::display() {
   }
   uint8_t display_name = 0;
   if (slowclock < grid_lastclock) {
-    grid_lastclock = 0xFFFF - grid_lastclock; 
+    grid_lastclock = 0xFFFF - grid_lastclock;
   }
   if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
@@ -5319,8 +5355,8 @@ void GridEncoderPage::display() {
     }
   }
   else {
-     load_gridf_models();
-    
+    load_gridf_models();
+
     /*For each of the 4 encoder objects, ie 4 Grids to be displayed on screen*/
     for (uint8_t i = 0; i < 4; i++) {
 
@@ -5937,7 +5973,7 @@ bool handleEvent(gui_event_t *evt) {
 
     return true;
     /*
-   
+
       return true;
     */
 
@@ -6228,10 +6264,10 @@ bool handleEvent(gui_event_t *evt) {
   }
 
   else  if ((curpage == CUE_PAGE) || (curpage == MIXER_PAGE)) {
-  if ((curpage == CUE_PAGE) && EVENT_PRESSED(evt, Buttons.BUTTON1)) {
+    if ((curpage == CUE_PAGE) && EVENT_PRESSED(evt, Buttons.BUTTON1)) {
       curpage = MIXER_PAGE;
-  }
-  else if ((curpage == MIXER_PAGE) && EVENT_PRESSED(evt, Buttons.BUTTON1)) {
+    }
+    else if ((curpage == MIXER_PAGE) && EVENT_PRESSED(evt, Buttons.BUTTON1)) {
       curpage = CUE_PAGE;
     }
     /*
@@ -6367,6 +6403,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
     if (EVENT_PRESSED(evt, Buttons.BUTTON2)) {
+      create_chars_mixer();
       currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
       curpage = MIXER_PAGE;
       MD.saveCurrentKit(currentkit_temp);
@@ -6392,10 +6429,10 @@ bool handleEvent(gui_event_t *evt) {
 
     if (BUTTON_PRESSED(Buttons.ENCODER1))  {
       if (BUTTON_DOWN(Buttons.BUTTON3)) {
-      load_seq_page(SEQ_EUC_PAGE);
-      } 
+        load_seq_page(SEQ_EUC_PAGE);
+      }
       else {
-      load_seq_page(SEQ_STEP_PAGE);
+        load_seq_page(SEQ_STEP_PAGE);
       }
 
       return true;
