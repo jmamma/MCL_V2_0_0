@@ -1270,6 +1270,11 @@ void setEuclid( uint8_t track, uint8_t pulses, uint8_t len, uint8_t offset, uint
     }
   }
 }
+void random_track(uint8_t track, uint8_t pulses, uint8_t len, uint8_t offset, uint8_t scale, uint8_t root) {
+  setEuclid(track, random(0, random(0, pulses)), len, random(0, offset), scale, root);
+
+
+}
 void random_pattern(uint8_t pulses, uint8_t len, uint8_t offset, uint8_t scale, uint8_t root) {
 
   for (uint8_t i = 0; i < 16; i++) {
@@ -1598,6 +1603,43 @@ uint8_t note_to_track_map(uint8_t note) {
     }
   }
 }
+uint8_t notes_all_off() {
+  uint8_t all_notes_off = 0;
+  uint8_t a = 0;
+  uint8_t b = 0;
+  for (uint8_t i = 0; i < 20; i++) {
+    if (notes[i] == 1) {
+      a++;
+    }
+    if (notes[i] == 3) {
+      b++;
+    }
+  }
+
+  if ((a == 0) && (b > 0)) {
+    all_notes_off = 1;
+  }
+  return all_notes_off;
+}
+
+uint8_t notes_count_off() {
+  uint8_t a = 0;
+  for (uint8_t i = 0; i < 20; i++) {
+    if (notes[i] == 3) {
+      a++;
+    }
+  }
+  return a;
+}
+uint8_t notes_count() {
+  uint8_t a = 0;
+  for (uint8_t i = 0; i < 20; i++) {
+    if (notes[i] > 0) {
+      a++;
+    }
+  }
+  return a;
+}
 void trigger_noteoff_interface(uint8_t *msg, uint8_t device) {
   uint8_t channel = MIDI_VOICE_CHANNEL(msg[0]);
 
@@ -1618,27 +1660,36 @@ void trigger_noteoff_interface(uint8_t *msg, uint8_t device) {
   if (note_num > 20) {
     return;
   }
+  else if (curpage == SEQ_EUC_PAGE) {
+    /*
+        if (notes_all_off() == 1) {
+           if (notes_count_off()  > 1) {
+                  uint8_t a = 0;
+      for (uint8_t i = 0; i < 16; i++) {
+                if (notes[i] > 0) { random_track(i, trackinfo_param1.cur, trackinfo_param3.cur, trackinfo_param2.cur, euclid_scale, euclid_oct); }
+      }
+           }
+    */
+    if (notes_all_off() == 1) {
 
+      if (notes_count_off() == 1) {
+        //     setEuclid(note_num, trackinfo_param1.cur, trackinfo_param3.cur, trackinfo_param2.cur, euclid_scale, euclid_oct);
+        //   last_md_track = note_num;
+        cur_col = note_num;
+      }
+
+      init_notes();
+    }
+
+
+  }
   else if ((curpage == S_PAGE) || (curpage == W_PAGE) || (curpage == CUE_PAGE)) {
     int i;
     draw_notes(0);
-    uint8_t all_notes_off = 0;
-    uint8_t a = 0;
-    uint8_t b = 0;
-    for (i = 0; i < 20; i++) {
-      if (notes[i] == 1) {
-        a++;
-      }
-      if (notes[i] == 3) {
-        b++;
-      }
-    }
 
-    if ((a == 0) && (b > 0)) {
-      all_notes_off = 1;
-    }
 
-    if (all_notes_off == 1) {
+
+    if (notes_all_off() == 1) {
       if (curpage == S_PAGE)  {
         exploit_off();
         store_tracks_in_mem( 0, param2.getValue(), STORE_IN_PLACE);
@@ -1651,7 +1702,7 @@ void trigger_noteoff_interface(uint8_t *msg, uint8_t device) {
         GUI.setPage(&page);
         curpage = 0;
       }
-      if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() > 0) && (b > 1)) {
+      if ((curpage == CUE_PAGE) && (trackinfo_param4.getValue() > 0) && (notes_count_off() > 1)) {
         toggle_cues_batch();
         send_globals();
         exploit_off();
@@ -1734,7 +1785,9 @@ void trigger_noteon_interface(uint8_t *msg, uint8_t device) {
     gui_last_trig_press = note_num;
   }
 
+  if (curpage == SEQ_EUC_PAGE) {
 
+  }
   if (curpage == SEQ_STEP_PAGE) {
 
     if ((note_num + (seq_page_select * 16)) >= PatternLengths[cur_col]) {
@@ -3985,10 +4038,11 @@ void load_seq_page(uint8_t page) {
     collect_trigs = true;
 
     trackinfo_param1.max = 64;
+    trackinfo_param1.cur = 8;
     trackinfo_param2.max = 64;
     trackinfo_param2.min = 0;
     trackinfo_param2.cur = 0;
-    trackinfo_param3.max = 64;
+    trackinfo_param3.max = 12;
     trackinfo_param3.cur = PatternLengths[last_md_track];
     trackinfo_param4.max = 36;
   }
@@ -4222,7 +4276,7 @@ void create_chars_seq() {
   uint8_t temp_charmap1[8] = {  0, 15, 16, 16, 16, 15, 0 };
   uint8_t temp_charmap2[8] = {  0, 31, 0, 0, 0, 31, 0 };
   uint8_t temp_charmap3[8] = {  0, 30, 1, 1, 1, 30, 0 };
-  uint8_t temp_charmap4[8] = {  0, 14, 17, 17, 17, 14, 0};
+  uint8_t temp_charmap4[8] = {  0, 27, 4, 4, 4, 27, 0 };
   LCD.createChar(2, temp_charmap1);
   LCD.createChar(3, temp_charmap2);
   LCD.createChar(4, temp_charmap3);
@@ -4951,7 +5005,7 @@ void TrackInfoPage::display()  {
 
       GUI.put_value_at2(5, trackinfo_param2.getValue());
 
-      GUI.put_value_at2(8, trackinfo_param3.getValue());
+      GUI.put_value_at1(8, trackinfo_param3.getValue());
 
       if (BUTTON_DOWN(Buttons.BUTTON2)) {
         GUI.put_value_at2(11, euclid_root[last_md_track]);
@@ -4959,8 +5013,9 @@ void TrackInfoPage::display()  {
       else {
         GUI.put_value_at2(11, trackinfo_param4.getValue());
       }
+      // draw_patternmask((seq_page_select * 16), DEVICE_MD);
+      // draw_lockmask(seq_page_select * 16);
       draw_patternmask((seq_page_select * 16), DEVICE_MD);
-
     }
     if (curpage == SEQ_EUCPTC_PAGE) {
 
@@ -5002,12 +5057,22 @@ void TrackInfoPage::display()  {
         }
         else if ((trackinfo_param2.getValue() < 6) && (trackinfo_param2.getValue() != 0))  {
           GUI.put_string_at(2, "-");
-          GUI.put_value_at1(3, 6 - trackinfo_param2.getValue());
-
+          if (curpage == SEQ_STEP_PAGE)  {
+            GUI.put_value_at2(3, 6 - trackinfo_param2.getValue());
+          }
+          else {
+            GUI.put_value_at1(3, trackinfo_param2.getValue() - 6);
+          }
         }
         else {
           GUI.put_string_at(2, "+");
-          GUI.put_value_at1(3, trackinfo_param2.getValue() - 6);
+          if (curpage == SEQ_STEP_PAGE)  {
+            GUI.put_value_at2(3, trackinfo_param2.getValue() - 6);
+          }
+          else {
+            GUI.put_value_at1(3, trackinfo_param2.getValue() - 6);
+          }
+
         }
       }
       else {
@@ -5126,6 +5191,9 @@ void TrackInfoPage::display()  {
 
   }
 }
+
+
+
 void draw_lockmask(uint8_t offset) {
   GUI.setLine(GUI.LINE2);
 
@@ -5197,11 +5265,18 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
         else if ((step_count ==  i + offset) && (MidiClock.state == 2))  {
           mystr[i] = ' ';
         }
+        else if (notes[i - offset] > 0)  {
+          /*If the bit is set, there is a cue at this position. We'd like to display it as [] on screen*/
+          /*Char 219 on the minicommand LCD is a []*/
+
+          mystr[i - offset] = (char) 255;
+        }
         else if (IS_BIT_SET64(patternmask, i + offset) ) {
           /*If the bit is set, there is a trigger at this position. We'd like to display it as [] on screen*/
           /*Char 219 on the minicommand LCD is a []*/
           mystr[i] = (char) 219;
         }
+
       }
     }
   }
@@ -5229,7 +5304,7 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
       }
       if ((noteson > 0) && (notesoff > 0)) {
         if ((i >= offset) && (i < offset + 16)) {
-          mystr[i - offset] = (char) 004;
+          mystr[i - offset] = (char) 005;
         }
         note_held += noteson;
         note_held -= notesoff;
@@ -5256,7 +5331,7 @@ void draw_patternmask(uint8_t offset, uint8_t device) {
       }
 
       if ((i >= ExtPatternLengths[last_extseq_track]) || (step_count ==  i) && (MidiClock.state == 2)) {
-        if ((i > offset) && (i < offset + 16)) {
+        if ((i >= offset) && (i < offset + 16)) {
           mystr[i - offset] = ' ';
         }
       }
@@ -5971,7 +6046,7 @@ bool handleEvent(gui_event_t *evt) {
     return true;
 
   }
-  if (((curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) && ( BUTTON_DOWN(Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3))) {
+  if (((curpage == SEQ_EXTSTEP_PAGE) || (curpage == SEQ_PTC_PAGE) || (curpage == SEQ_RPTC_PAGE)) && ( EVENT_PRESSED(evt, Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3))) {
     //((EVENT_RELEASED(evt, Buttons.BUTTON3) && BUTTON_DOWN(Buttons.BUTTON2)) || (EVENT_RELEASED(evt, Buttons.BUTTON2) && BUTTON_DOWN(Buttons.BUTTON3)))) {
     //if (cur_col < 16) {
     if (ExtPatternResolution[last_extseq_track] == 1) {
@@ -6086,8 +6161,25 @@ bool handleEvent(gui_event_t *evt) {
     return true;
   }
   if (( (curpage == SEQ_EUC_PAGE)) && EVENT_PRESSED(evt, Buttons.BUTTON4) ) {
+    uint8_t notescount = 0;
+    for (uint8_t i = 0; i < 16; i++) {
+      if (notes[i] == 1) {
+        notescount++;
+      }
+    }
+    for (uint8_t i = 0; i < 16; i++) {
+      if (notes[i] > 0) {
+        if (notescount == 1) {
+          setEuclid(i, trackinfo_param1.cur, trackinfo_param3.cur, trackinfo_param2.cur, trackinfo_param4.cur, trackinfo_param3.cur);
+        }
+        else {
+          random_track(i, trackinfo_param1.cur, PatternLengths[i], trackinfo_param2.cur, trackinfo_param4.cur, trackinfo_param3.cur);
+        }
+      }
 
-    setEuclid(last_md_track, trackinfo_param1.cur, trackinfo_param3.cur, trackinfo_param2.cur, euclid_scale, euclid_oct);
+    }
+
+    // setEuclid(last_md_track, trackinfo_param1.cur, trackinfo_param3.cur, trackinfo_param2.cur, euclid_scale, euclid_oct);
     return true;
   }
 
