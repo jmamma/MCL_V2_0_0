@@ -17,7 +17,7 @@
 #include "OptionPage.h"
 #include <MidiClockPage.h>
 //#include <cfg.uart1_turboMidi.hh>
-#include <SDCard.h>
+#include <SdFat.h>
 #include <string.h>
 #include <midi-common.hh>
 //#include <SimpleFS.hh>
@@ -48,7 +48,7 @@
 #define SEQ_PARAM_B_PAGE 15
 #define SEQ_PTC_PAGE 16
 #define SEQ_NOTEBUF_SIZE 8
-#define EXPLOIT_DELAY_TIME 300
+#define EXPLOIT_DELAY_TIME 350
 #define TRIG_HOLD_TIME 200
 
 #define OLED_CLK 52
@@ -88,9 +88,11 @@ MDGlobal global_one;
 MDGlobal global_two;
 uint8_t rec_global = 0;
 /*Current Loaded project file, set to test.mcl as initial name*/
-SDCardFile file("/test.mcl");
+SdFat SD;
+
+File file;
 /*Configuration file used to store settings when Minicommand is turned off*/
-SDCardFile cfgfile("/config.mcls");
+File cfgfile;
 
 int numProjects = 0;
 int curProject = 0;
@@ -374,29 +376,30 @@ class ExtSeqTrack {
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
       int32_t len;
-      file.seek(&offset, FAT_SEEK_SET);
+      file.seekSet(offset);
       if (m > 0) {
-         file.read(( uint8_t*) (this), m);
-         }
-         else {
-      file.read(( uint8_t*) (this), sizeof(ExtSeqTrack));
-         }
+        file.read(( uint8_t*) (this), m);
+      }
+      else {
+        file.read(( uint8_t*) (this), sizeof(ExtSeqTrack));
+      }
       return true;
     }
-   bool store_track_in_grid(int track, int32_t column, int32_t row) {
-  /*Assign a track to Grid i*/
-  /*Extraact track data from received pattern and kit and store in track object*/
+    bool store_track_in_grid(int track, int32_t column, int32_t row) {
+      /*Assign a track to Grid i*/
+      /*Extraact track data from received pattern and kit and store in track object*/
 
-  int32_t len;
-  int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
-  file.seek(&offset, FAT_SEEK_SET);
+      int32_t len;
+      int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
+      file.seekSet(offset);
 
       getTrack_from_sysex(track - 16, column - 16);
-      file.write(( uint8_t*) this, sizeof(ExtSeqTrack));
-    
-    return true;
+      int b;
+      b = file.write(( uint8_t*) this, sizeof(ExtSeqTrack));
 
-  }
+      return true;
+
+    }
 
 
 
@@ -446,36 +449,36 @@ class A4Track : public ExtSeqTrack {
 
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
       int32_t len;
-      file.seek(&offset, FAT_SEEK_SET);
+      file.seekSet(offset);
 
       if (Analog4.connected) {
-         if (m > 0) {
-         file.read(( uint8_t*) (this), m);
-         }
-         else {
-                   file.read(( uint8_t*) (this), sizeof(A4Track));
-         }
+        if (m > 0) {
+          file.read(( uint8_t*) (this), m);
+        }
+        else {
+          file.read(( uint8_t*) (this), sizeof(A4Track));
+        }
       }
       return true;
-  }
-  bool store_track_in_grid(int track, int32_t column, int32_t row) {
-  /*Assign a track to Grid i*/
-  /*Extraact track data from received pattern and kit and store in track object*/
+    }
+    bool store_track_in_grid(int track, int32_t column, int32_t row) {
+      /*Assign a track to Grid i*/
+      /*Extraact track data from received pattern and kit and store in track object*/
 
-  int32_t len;
-  int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
-  file.seek(&offset, FAT_SEEK_SET);
+      int32_t len;
+      int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
+      file.seekSet(offset);
 
-  /*analog 4 tracks*/
-    if (Analog4.connected) {
-      getTrack_from_sysex(track - 16, column - 16);
-      file.write(( uint8_t*)  this, sizeof(A4Track));
-    return true;
+      /*analog 4 tracks*/
+      if (Analog4.connected) {
+        getTrack_from_sysex(track - 16, column - 16);
+        file.write(( uint8_t*)  this, sizeof(A4Track));
+        return true;
 
-  }
+      }
 
-}
-  
+    }
+
 
 
 };
@@ -662,12 +665,12 @@ class MDTrack {
         pattern_rec.swingPatterns[tracknumber] = swingPattern;
 
         for (int n = 0; n < arraysize; n ++) {
-          Serial.println();
-          Serial.println("Adding");
-          Serial.println(step[n]);
-          Serial.println(param_number[n]);
-          Serial.println(value[n]);
-          
+          //Serial.println();
+          //Serial.println("Adding");
+          //Serial.println(step[n]);
+          //Serial.println(param_number[n]);
+          //Serial.println(value[n]);
+
           //  if (arraysize > 5) {     GUI.flash_string_fill("greater than 5"); }
           pattern_rec.addLock(tracknumber, step[n], param_number[n], value[n]);
         }
@@ -713,50 +716,49 @@ class MDTrack {
     }
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
 
-  int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
+      int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
 
-  int32_t len;
+      int32_t len;
 
-  file.seek(&offset, FAT_SEEK_SET);
-    len = (sizeof(MDTrack) - sizeof(kitextra) - (LOCK_AMOUNT * 3));
+      file.seekSet(offset);
+      len = (sizeof(MDTrack) - sizeof(kitextra) - (LOCK_AMOUNT * 3));
 
-    //len = (sizeof(MDTrack)  - (LOCK_AMOUNT * 3));
+      //len = (sizeof(MDTrack)  - (LOCK_AMOUNT * 3));
+
       file.read(( uint8_t*) this, len);
 
-    if (m == 0) {
-                
+      if (m == 0) {
 
-      file.read(( uint8_t*) &(this->kitextra), sizeof(kitextra));
-      file.read(( uint8_t*) &(this->param_number[0]), arraysize);
-      file.read(( uint8_t*) &(this->value[0]), arraysize);
-      file.read(( uint8_t*) &(this->step[0]), arraysize);
-    }
-    return true;
+
+        file.read(( uint8_t*) & (this->kitextra), sizeof(kitextra));
+        file.read(( uint8_t*) & (this->param_number[0]), arraysize);
+        file.read(( uint8_t*) & (this->value[0]), arraysize);
+        file.read(( uint8_t*) & (this->step[0]), arraysize);
+      }
+      return true;
     }
     bool store_track_in_grid(int track, int32_t column, int32_t row) {
-  /*Assign a track to Grid i*/
-  /*Extraact track data from received pattern and kit and store in track object*/
+      /*Assign a track to Grid i*/
+      /*Extraact track data from received pattern and kit and store in track object*/
 
-  int32_t len;
-  int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
-  file.seek(&offset, FAT_SEEK_SET);
+      int32_t len;
+      int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
+      file.seekSet(offset);
 
-    getTrack_from_sysex(track, column);
-    len = sizeof(MDTrack) - (LOCK_AMOUNT * 3);
+      getTrack_from_sysex(track, column);
+      len = sizeof(MDTrack) - (LOCK_AMOUNT * 3);
 
+      file.write(( uint8_t*)  (this), len);
 
-
-    file.write(( uint8_t*)  (this), len);
-
-    file.write(( uint8_t*)  &(this->param_number[0]), arraysize);
-    file.write(( uint8_t*)  &(this->value[0]), arraysize);
-    file.write(( uint8_t*)  &(this->step[0]), arraysize);
-    return true;
+      file.write(( uint8_t*)  & (this->param_number[0]), arraysize);
+      file.write(( uint8_t*)  & (this->value[0]), arraysize);
+      file.write(( uint8_t*)  & (this->step[0]), arraysize);
+      return true;
 
 
- 
 
-}
+
+    }
 };
 
 
@@ -842,23 +844,25 @@ Project project_header;
 
 */
 void sd_load_init() {
-
-  if (SDCard.init() != 0) {
-    Serial.println("conf err");
+  //File file("/test.mcl",O_WRITE);
+  /*Configuration file used to store settings when Minicommand is turned off*/
+  if (!SD.begin(53, SPI_FULL_SPEED)) {
+    //Serial.println("SD err");
     GUI.flash_strings_fill("SD CARD ERROR", "");
   }
 
   else {
-        Serial.println("sd ok");
-      sd_new_project(newprj);
+    //Serial.println("sd ok");
 
-    if (cfgfile.open(true)) {
+    if (cfgfile.open("/config.mcls", O_RDWR)) {
+      //Serial.println("CFG read");
+      if (int b = cfgfile.read(( uint8_t*)&cfg, sizeof(Config)) > 0) {
+        //Serial.println("CFG read");
 
-      if (cfgfile.read(( uint8_t*)&cfg, sizeof(Config))) {
-        cfgfile.close();
+        //Serial.println(b);
 
         if (cfg.version != CONFIG_VERSION) {
-        Serial.println("bad cfg version");
+          //Serial.println("bad cfg version");
 
           cfg_init();
           new_project_page();
@@ -875,13 +879,12 @@ void sd_load_init() {
         }
       }
       else {
-                Serial.println("bad cfg version");
         cfg_init();
         new_project_page();
       }
     }
     else {
-      Serial.println("could not open conf");
+      //Serial.println("could not open conf");
       cfg_init();
       new_project_page();
     }
@@ -901,9 +904,44 @@ void sd_load_init() {
 
 */
 
-SDCardEntry entries[40];
+//SDCardEntry entries[40];
+char file_entries[30][16];
+
 void load_project_page() {
-  int numEntries = SDCard.listDirectory("/", entries, countof(entries));
+
+  char temp_entry[16];
+
+  SdFile dirfile;
+  int index = 0;
+  int numEntries = 0;
+  //  dirfile.open("/",O_READ);
+  SD.vwd()->rewind();
+
+  while (dirfile.openNext(SD.vwd(), O_READ)) {
+    for (uint8_t c = 0; c < 16; c++ ) {
+      temp_entry[c] = 0;
+    }
+    dirfile.getName(temp_entry, 16);
+    char mcl[3] = "mcl";
+    bool is_mcl_file = true;
+
+    // //Serial.println(temp_entry);
+
+    for (uint8_t a = 1; a < 3; a++) {
+      if (temp_entry[14 - a] != mcl[3 - a]) {
+        is_mcl_file = false;
+      }
+    }
+    if (is_mcl_file) {
+      strcpy(&file_entries[numEntries][0], &temp_entry[0]);
+      //Serial.println(file_entries[index]);
+      numEntries++;
+    }
+    index++;
+    dirfile.close();
+
+  }
+
   if (numEntries <= 0) {
     numEntries = 0;
     loadproj_param1.max = 0;
@@ -925,9 +963,12 @@ void load_project_page() {
 */
 void cfg_init() {
 
-  Serial.println("conf");
-  cfgfile.open(true);
-  fat_resize_file(cfgfile.fd, (uint32_t) GRID_SLOT_BYTES);
+  //Serial.println("conf ext");
+  cfgfile.remove();
+  if ( cfgfile.createContiguous("/config.mcls", (uint32_t) GRID_SLOT_BYTES)) {
+    //Serial.println("created new conf");
+  }
+
   char my_string[16] = "/project000.mcl";
 
   cfg.version = CONFIG_VERSION;
@@ -940,8 +981,8 @@ void cfg_init() {
   cur_row = 0;
   cur_col = 0;
   cfg.cues = 0;
-  cfgfile.write(( uint8_t*)&cfg, sizeof(Config));
   cfgfile.close();
+  write_cfg();
 }
 void new_project_page() {
   // if (cfg.version != CONFIG_VERSION) {
@@ -979,8 +1020,10 @@ void write_project_header() {
   //  Config cfg;
   //  uint8_t reserved[16];
   project_header.hash = 0;
-  file.seek(0, FAT_SEEK_SET);
-  file.write(( uint8_t*)&project_header, sizeof(project_header));
+  file.seekSet(0);
+  int b = file.write(( uint8_t*)&project_header, sizeof(project_header));
+  //Serial.println("bytes written project header");
+  //Serial.println(b);
   /* file.write(( uint8_t*)&project_header.version, sizeof(project_header.version));
     file.write(( uint8_t*)&cfg, sizeof(project_header.cfg));
     file.write(( uint8_t*)&project_header.reserved, sizeof(project_header.reserved));
@@ -989,55 +1032,34 @@ void write_project_header() {
 
 
 bool sd_new_project(char *projectname) {
-   if (SDCard.init() != 0) {
-    Serial.println("could not init");
-  }
-  else {
-        Serial.print("init okay");
 
-  }
 
-   SDCardFile myfile("/blahx");
-  //myfile.close();
- // myfile.setPath("/blah2");
 
-   if ( myfile.open(true)) {
-
-       Serial.println("file open okay");
-
-   }
-   else {
-           Serial.println("file not okay");
-   }
-     uint8_t exitcode = fat_resize_file(file.fd, (uint32_t) GRID_SLOT_BYTES + (uint32_t) GRID_SLOT_BYTES * (uint32_t) GRID_LENGTH * (uint32_t) GRID_WIDTH);
-   Serial.println(exitcode);
-
-   return;
-
-  
 
   numProjects++;
- 
- 
-  file.close();
-  file.setPath(projectname);
 
-  file.setPath("/myfile");
-  exitcode = 0;
+
+  file.close();
+
+  bool exitcode;
+
   temptrack.active = EMPTY_TRACK_TYPE;
 
-  if (file.open(true)) {
-    Serial.println("file open");
-  }
-  Serial.println(exitcode);
+
+  //Serial.println(exitcode);
   //Make sure the file is large enough for the entire GRID
-  exitcode = fat_resize_file(file.fd, (uint32_t) GRID_SLOT_BYTES + (uint32_t) GRID_SLOT_BYTES * (uint32_t) GRID_LENGTH * (uint32_t) GRID_WIDTH);
-  Serial.println(exitcode);
-  if (exitcode == 0) {
+  exitcode = file.createContiguous(projectname, (uint32_t) GRID_SLOT_BYTES + (uint32_t) GRID_SLOT_BYTES * (uint32_t) GRID_LENGTH * (uint32_t) GRID_WIDTH);
+
+  //Serial.println(exitcode);
+  if (exitcode == false) {
     file.close();
+    //Serial.println("could not extend file");
+
     return false;
   }
-
+  //Serial.println("file extended");
+  file.close();
+  file.open(projectname, O_RDWR);
   write_project_header();
 
   uint8_t ledstatus = 0;
@@ -1077,8 +1099,7 @@ bool sd_new_project(char *projectname) {
 
   }
   clearLed2();
-  file.close();
-  file.open(true);
+  file.seekSet(0);
   m_strncpy(cfg.project, projectname, 16);
 
   cfg.number_projects++;
@@ -1097,9 +1118,14 @@ bool sd_new_project(char *projectname) {
 
 bool sd_load_project(char *projectname) {
   file.close();
-  file.setPath(projectname);
-  if (!file.open(true)) {
+  if (!file.open(projectname, O_RDWR)) {
+    //Serial.println("could not load project");
     return false;
+  }
+  else {
+    //Serial.println("project load okay");
+    //Serial.println(projectname);
+
   }
 
   if (!check_project_version()) {
@@ -1116,8 +1142,11 @@ bool sd_load_project(char *projectname) {
 }
 
 bool check_project_version() {
-  file.seek(0, FAT_SEEK_SET);
-  file.read(( uint8_t*) & (project_header), sizeof(project_header));
+  file.seekSet(0);
+  int b = 0;
+  b = file.read(( uint8_t*) & (project_header), sizeof(project_header));
+  //Serial.println("Project Header Size: ");
+  //Serial.println(b);
   //  file.read(( uint8_t*)&(project_header.cfg),sizeof(project_header.cfg));
   if (project_header.version >= VERSION) {
     return true;
@@ -1137,10 +1166,8 @@ bool check_project_version() {
 */
 
 void write_cfg() {
-  cfgfile.open(true);
-
+  cfgfile.open("/config.mcls", O_RDWR);
   cfgfile.write(( uint8_t*)&cfg, sizeof(Config));
-
   cfgfile.close();
   cfg_save_lastclock = slowclock;
 }
@@ -1643,14 +1670,29 @@ void encoder_param2_handle(Encoder *enc) {
   //  PatternMasks[i] = getPatternMask(i, enc->getValue(), 3, true);
   //  PatternLengths[i] = temptrack.length;
   // }
+  A4Track *track_bufx;
   if (enc->hasChanged()) {
-  grid_lastclock = slowclock;
-  load_grid_models = 0;
-  
+    grid_lastclock = slowclock;
 
+    getGridModel(0, param2.getValue(), true, track_bufx);
+
+    if ((temptrack.active != EMPTY_TRACK_TYPE)) {
+      for (uint8_t c = 0; c < 17; c++) {
+        currentkitName[c] = temptrack.kitName[c] ;
+      }
+    }
+    for (uint8_t c = 0; c < 17; c++) {
+      currentkitName[c] = ' ';
+    }
   }
 
+  load_grid_models = 0;
 }
+
+
+
+
+
 
 uint8_t note_to_track_map(uint8_t note) {
   uint8_t note_to_track_map[7] = { 0, 2, 4, 5, 7, 9, 11 };
@@ -1899,9 +1941,11 @@ bool place_track_inpattern(int curtrack, int column, int row, A4Sound *analogfou
   //       if (Grids[encodervaluer] != NULL) {
 
   if (column < 16) {
- 
+
     if (temptrack.load_track_from_grid(column, row, 0)) {
+      if (temptrack.active != EMPTY_TRACK_TYPE) {
       temptrack.placeTrack_in_sysex(curtrack, column);
+      }
     }
   }
   else {
@@ -1909,12 +1953,18 @@ bool place_track_inpattern(int curtrack, int column, int row, A4Sound *analogfou
       A4Track track_buf;
 
       track_buf.load_track_from_grid(column, row, 0);
+            if (track_buf.active != EMPTY_TRACK_TYPE) {
+
       return track_buf.placeTrack_in_sysex(curtrack, column, analogfour_sound);
+            }
     }
     else {
       ExtSeqTrack track_buf;
       track_buf.load_track_from_grid(column, row, 0);
+                  if (track_buf.active != EMPTY_TRACK_TYPE) {
+
       return track_buf.placeTrack_in_sysex(curtrack, column);
+                  }
     }
   }
 
@@ -3456,15 +3506,15 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
 
       if (store_behaviour == STORE_IN_PLACE) {
         if ((i >= 16) && (i < 20)) {
-        if (Analog4.connected) {
-          
+          if (Analog4.connected) {
+
             Analog4.getBlockingSoundX(i - 16);
             analogfour_track.sound.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8);
-        }
-                    n = analogfour_track.store_track_in_grid(i, i, cur_row);
+          }
+          n = analogfour_track.store_track_in_grid(i, i, cur_row);
         }
         else {
-        n = temptrack.store_track_in_grid(i, i, cur_row);
+          n = temptrack.store_track_in_grid(i, i, cur_row);
         }
       }
 
@@ -3709,7 +3759,7 @@ void send_pattern_kit_to_md() {
   //Let's also set the kit receive position to be the original.
 
 
-  if (write_original == 1) {
+  if ((write_original == 1) && (temptrack.active != EMPTY_TRACK_TYPE)) {
 
     //     MD.kit.origPosition = temptrack.origPosition;
     for (uint8_t c = 0; c < 17; c++) {
@@ -4179,8 +4229,14 @@ void clear_row (int row) {
 void clear_Grid(int i) {
   temptrack.active = EMPTY_TRACK_TYPE;
   int32_t offset = (int32_t) GRID_SLOT_BYTES + (int32_t) i * (int32_t) GRID_SLOT_BYTES;
-  file.seek(&offset, FAT_SEEK_SET);
-  file.write(( uint8_t*) & (temptrack.active), sizeof(temptrack.active));
+
+  /*if (file.seekSet(offset)) {
+    //Serial.println("seek okay");
+    }
+    //Serial.println("Writing");
+    //Serial.println(sizeof(temptrack.active)); */
+  int b = file.write(( uint8_t*) & (temptrack.active), sizeof(temptrack.active));
+  // //Serial.println(b);
 }
 
 /*
@@ -4356,8 +4412,8 @@ void create_chars_mixer() {
 
 void setup() {
 
-  Serial.begin(9600);
-  Serial.println("Test");
+  //Serial.begin(9600);
+  //Serial.println("Test");
 
   uint8_t charmap[8] = { 10, 10, 10, 10, 10, 10, 10, 00 };
 
@@ -4460,20 +4516,14 @@ void setup() {
 
 uint32_t getGridModel(int column, int row, bool load, A4Track *track_buf) {
   if (column < 16) {
-     if ( load == true) {
-    if (!temptrack.load_track_from_grid(column, row, 50)) {
-      return NULL;
-    }
-  }
-   if (column == 0) {
-
-         for (uint8_t c = 0; c < 17; c++) {
-  
-      //currentkitName[c] = temptrack.kitName[c] ;
-    }
+    if ( load == true) {
+      if (!temptrack.load_track_from_grid(column, row, 50)) {
+        return NULL;
       }
-    
-   if (temptrack.active == EMPTY_TRACK_TYPE) {
+    }
+
+
+    if (temptrack.active == EMPTY_TRACK_TYPE) {
       return NULL;
     }
     else {
@@ -4481,12 +4531,12 @@ uint32_t getGridModel(int column, int row, bool load, A4Track *track_buf) {
     }
   }
 
-  else { 
-  if ( load == true) {
-    if (!track_buf->load_track_from_grid(column, row, 50)) {
-      return NULL;
+  else {
+    if ( load == true) {
+      if (!track_buf->load_track_from_grid(column, row, 50)) {
+        return NULL;
+      }
     }
-  }
     return track_buf->active;
 
 
@@ -4507,48 +4557,48 @@ uint32_t getGridModel(int column, int row, bool load, A4Track *track_buf) {
 char *getTrackKit(int column, int row, bool load, bool scroll) {
 
   A4Track track_buf;
-    if (grid_models[column] == EMPTY_TRACK_TYPE) {
-      return "----";
-    }
+  if (grid_models[column] == EMPTY_TRACK_TYPE) {
+    return "----";
+  }
 
 
-    uint8_t char_position = 0;
-    //if ((slowclock % 50) == 0) { row_name_offset++; }
-    if (row_name_offset > 15) {
-      row_name_offset = 0;
-    }
-    if (scroll) {
+  uint8_t char_position = 0;
+  //if ((slowclock % 50) == 0) { row_name_offset++; }
+  if (row_name_offset > 15) {
+    row_name_offset = 0;
+  }
+  if (scroll) {
 
-      for (uint8_t c = 0; c < 4; c++) {
+    for (uint8_t c = 0; c < 4; c++) {
 
-        if (c + (uint8_t)row_name_offset > 15) {
-          char_position =  c + (uint8_t)row_name_offset - 16;
-        }
-        else {
-          char_position =  c + (uint8_t)row_name_offset;
-        }
-        //  char some_string[] = "hello my baby";
-        //row_name[c] = some_string[char_position];
-        if (char_position < 5) {
-          row_name[c] = ' ';
-        }
-        else {
-          row_name[c] = currentkitName[char_position - 5];
-        }
+      if (c + (uint8_t)row_name_offset > 15) {
+        char_position =  c + (uint8_t)row_name_offset - 16;
       }
-      row_name[4] = '\0';
-
-    }
-    else {
-      for (uint8_t a = 0; a < 16; a++) {
-        row_name[a] = currentkitName[a];
+      else {
+        char_position =  c + (uint8_t)row_name_offset;
       }
-      row_name[16] = '\0';
-
+      //  char some_string[] = "hello my baby";
+      //row_name[c] = some_string[char_position];
+      if (char_position < 5) {
+        row_name[c] = ' ';
+      }
+      else {
+        row_name[c] = currentkitName[char_position - 5];
+      }
     }
+    row_name[4] = '\0';
 
-    return row_name;
-  
+  }
+  else {
+    for (uint8_t a = 0; a < 16; a++) {
+      row_name[a] = currentkitName[a];
+    }
+    row_name[16] = '\0';
+
+  }
+
+  return row_name;
+
 }
 
 /*
@@ -4791,7 +4841,7 @@ void TrackInfoPage::display()  {
     GUI.setLine(GUI.LINE1);
     GUI.put_string_at(0, "Project:");
     GUI.setLine(GUI.LINE2);
-    GUI.put_string_at_fill(0, entries[loadproj_param1.getValue()].name);
+    GUI.put_string_at_fill(0, file_entries[loadproj_param1.getValue()]);
     return;
   }
 
@@ -5444,13 +5494,22 @@ void GridEncoderPage::loop() {
 A4Track track_bufx;
 
 void load_gridf_models() {
+
   if (load_grid_models == 0) {
     for (uint8_t i = 0; i < 22; i++) {
-    grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
+      grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
+      if ((temptrack.active != EMPTY_TRACK_TYPE) && (i == 0)) {
+        for (uint8_t c = 0; c < 17; c++) {
+          currentkitName[c] = temptrack.kitName[c] ;
+        }
 
-  
+      }
+
+
+
     }
     load_grid_models = 1;
+
   }
 }
 
@@ -5478,6 +5537,8 @@ void GridEncoderPage::display() {
   if (slowclock < grid_lastclock) {
     grid_lastclock = 0xFFFF - grid_lastclock;
   }
+  load_gridf_models();
+
   if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
     if (slowclock - cfg_save_lastclock > GUI_NAME_TIMEOUT) {
@@ -5487,7 +5548,6 @@ void GridEncoderPage::display() {
     }
   }
   else {
-        load_gridf_models();
 
     /*For each of the 4 encoder objects, ie 4 Grids to be displayed on screen*/
     for (uint8_t i = 0; i < 4; i++) {
@@ -5548,7 +5608,7 @@ void GridEncoderPage::display() {
     if (display_name == 1) {
       GUI.put_string_at(0, "                ");
 
-      GUI.put_string_at(0, getTrackKit(encoders[0]->cur, encoders[1]->cur, false, false ));
+      GUI.put_string_at(0, currentkitName);
       GUI.setLine(GUI.LINE2);
 
       GUI.put_string_at(0, "                ");
@@ -5556,12 +5616,11 @@ void GridEncoderPage::display() {
       char str[5];
 
 
-     // if (patternload_param1.getValue() < 8) {
-        //if (temptrack.active != EMPTY_TRACK_TYPE) {
-       //   MD.getPatternName(temptrack.patternOrigPosition , str);
-          GUI.put_string_at(0, currentkitName);
-       // }
-     // }
+      // if (patternload_param1.getValue() < 8) {
+      //if (temptrack.active != EMPTY_TRACK_TYPE) {
+      //   MD.getPatternName(temptrack.patternOrigPosition , str);
+      // }
+      // }
     }
     else {
 
@@ -5783,7 +5842,6 @@ void exploit_on() {
   MD.setStatus(0x22, 15);
   // MD.getBlockingGlobal(0);
   init_notes();
-  exploit_start_clock = slowclock;
   noteproceed = 0;
 
   /*if (MidiClock.state == 2) {
@@ -5812,7 +5870,10 @@ void exploit_on() {
     MidiUart.m_putc_immediate(MIDI_STOP);
   }
   //   }
+  
   MD.global.baseChannel = 4;
+    exploit_start_clock = slowclock;
+
   switchGlobal(6);
 
   //     if ((MidiClock.state == 2) &&  (MidiClock.mode == MidiClock.EXTERNAL_UART2)) {
@@ -5949,17 +6010,18 @@ bool handleEvent(gui_event_t *evt) {
 
 
     if (EVENT_RELEASED(evt, Buttons.ENCODER1) || EVENT_RELEASED(evt, Buttons.ENCODER2) || EVENT_RELEASED(evt, Buttons.ENCODER3) || EVENT_RELEASED(evt, Buttons.ENCODER4)) {
-      uint8_t size = m_strlen(entries[loadproj_param1.getValue()].name);
-      if (strcmp(&entries[loadproj_param1.getValue()].name[size - 4], "mcl") == 0)  {
+      uint8_t size = m_strlen(file_entries[loadproj_param1.getValue()]);
+      if (strcmp(&file_entries[loadproj_param1.getValue()][size - 4], "mcl") == 0)  {
 
 
 
         char temp[size + 1];
         temp[0] = '/';
-        m_strncpy(&temp[1], entries[loadproj_param1.getValue()].name, size);
+        m_strncpy(&temp[1], file_entries[loadproj_param1.getValue()], size);
 
 
         if (sd_load_project(temp)) {
+          load_grid_models = 0;
           GUI.setPage(&page);
           curpage = 0;
         }
@@ -5981,6 +6043,7 @@ bool handleEvent(gui_event_t *evt) {
       bool exitcode = sd_new_project(newprj);
       if (exitcode == true) {
         GUI.setPage(&page);
+        load_grid_models = 0;
         curpage = 0;
       }
       else {
