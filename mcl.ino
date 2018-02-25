@@ -5550,9 +5550,9 @@ void GridEncoderPage::display() {
   }
   load_gridf_models();
 
-  if ((slowclock - grid_lastclock) < GUI_NAME_TIMEOUT) {
+  if (clock_diff(grid_lastclock,slowclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
-    if (slowclock - cfg_save_lastclock > GUI_NAME_TIMEOUT) {
+    if (clock_diff(cfg_save_lastclock,slowclock) > GUI_NAME_TIMEOUT) {
       cfg.cur_col = param1.cur;
       cfg.cur_row = param2.cur;
       write_cfg();
