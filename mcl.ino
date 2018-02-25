@@ -1050,7 +1050,7 @@ bool sd_new_project(char *projectname) {
   //Make sure the file is large enough for the entire GRID
   exitcode = file.createContiguous(projectname, (uint32_t) GRID_SLOT_BYTES + (uint32_t) GRID_SLOT_BYTES * (uint32_t) GRID_LENGTH * (uint32_t) GRID_WIDTH);
 
-  //Serial.println(exitcode);
+ // Serial.println(exitcode);
   if (exitcode == false) {
     file.close();
     //Serial.println("could not extend file");
@@ -4413,7 +4413,8 @@ void create_chars_mixer() {
 void setup() {
 
   //Serial.begin(9600);
-  //Serial.println("Test");
+  //Serial.println("MegaCommand");
+  //Serial.println(VERSION);
 
   uint8_t charmap[8] = { 10, 10, 10, 10, 10, 10, 10, 00 };
 
@@ -6039,7 +6040,13 @@ bool handleEvent(gui_event_t *evt) {
       LCD.puts("Please Wait");
       LCD.goLine(1);
       LCD.puts("Creating Project");
-
+     
+     
+      if (SD.exists(newprj)) {
+        GUI.flash_strings_fill("Project exists","");
+        return true;
+      }
+      
       bool exitcode = sd_new_project(newprj);
       if (exitcode == true) {
         GUI.setPage(&page);
