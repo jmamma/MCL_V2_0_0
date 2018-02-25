@@ -2663,6 +2663,7 @@ class MCLMidiEvents : public MidiCallback {
       if ((curpage == SEQ_RTRK_PAGE) && (msg[0] == 153)) {
 
         if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
+          
           noteproceed = 1;
         }
 
@@ -2797,6 +2798,9 @@ class MCLMidiEvents : public MidiCallback {
 
           //We need to wait 500ms for the exploit to take effect before collecting notes
           if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
+              //      Serial.println("Note proceed on");
+                //  Serial.println(clock_diff(exploit_start_clock, current_clock));
+
             noteproceed = 1;
           }
         }
@@ -4124,16 +4128,21 @@ void load_seq_page(uint8_t page) {
   // while (MidiClock.mod6_counter != 0);
 
   // }
+
   trackinfo_param2.min = 0;
   if (curpage == 0) {
     create_chars_seq();
     currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
-    MD.getCurrentTrack(CALLBACK_TIMEOUT);
+        curpage = page;
+
     //Don't save kit if sequencer is running, otherwise parameter locks will be stored.
-    if (MidiClock.state != 2) {
+   if (MidiClock.state != 2) {
       MD.saveCurrentKit(currentkit_temp);
     }
-    MD.getBlockingKit(currentkit_temp);
+
+     MD.getBlockingKit(currentkit_temp);
+     MD.getCurrentTrack(CALLBACK_TIMEOUT);
+
     exploit_on();
   }
   else {
@@ -4214,7 +4223,8 @@ void load_seq_page(uint8_t page) {
     trackinfo_param3.cur = PatternLengths[last_md_track];
 
   }
-  curpage = page;
+          curpage = page;
+
   GUI.setPage(&trackinfo_page);
 
   //Len
@@ -5836,14 +5846,19 @@ void cfg_midi_ports() {
 }
 
 void exploit_on() {
+    //Serial.println("Exploit on");
+      //  Serial.println(slowclock);
+
+
   // in_sysex = 1;
+  noteproceed = 0;
+  if (exploit == 1) { exploit_start_clock = slowclock; return; }
   exploit = 1;
   //last_md_track = MD.getCurrentTrack(CALLBACK_TIMEOUT);
   last_md_track = MD.currentTrack;
   MD.setStatus(0x22, 15);
   // MD.getBlockingGlobal(0);
   init_notes();
-  noteproceed = 0;
 
   /*if (MidiClock.state == 2) {
 
@@ -5873,7 +5888,6 @@ void exploit_on() {
   //   }
   
   MD.global.baseChannel = 4;
-    exploit_start_clock = slowclock;
 
   switchGlobal(6);
 
@@ -5883,13 +5897,19 @@ void exploit_on() {
   }
   //    }
   //  MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,200);
+      exploit_start_clock = slowclock;
+
   collect_trigs = true;
   //in_sysex = 0;
 }
 
 
 void exploit_off() {
-  // in_sysex = 1;
+  noteproceed = 0;
+ //Serial.println("Exploit off");
+   //     Serial.println(slowclock);
+        // in_sysex = 1;
+  if (exploit == 0) { return; }
   exploit = 0;
   collect_trigs = false;
 
@@ -6313,7 +6333,7 @@ bool handleEvent(gui_event_t *evt) {
 
     }
 
-    if (BUTTON_PRESSED(Buttons.ENCODER1))  {
+    if (EVENT_PRESSED(evt, Buttons.ENCODER1))  {
 
       load_seq_page(SEQ_STEP_PAGE);
 
