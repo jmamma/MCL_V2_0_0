@@ -102,7 +102,7 @@ uint8_t in_sysex = 0;
 uint8_t in_sysex2 = 0;
 
 uint8_t seq_page_select = 0;
-uint8_t load_grid_models = 0;
+uint8_t reload_slot_models = 0;
 uint8_t grid_models[22];
 
 uint8_t euclid_scale = 0;
@@ -319,11 +319,11 @@ class ExtSeqTrack {
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
       bool ret;
       int b = 0;
-      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
       int32_t len;
       ret = file.seekSet(offset);
       if (!ret) {
+        DEBUG_PRINT_FN();
         DEBUG_PRINTLN("Seek failed");
         return false;
       }
@@ -335,6 +335,7 @@ class ExtSeqTrack {
       }
 
       if (!ret) {
+        DEBUG_PRINT_FN();
         DEBUG_PRINTLN("Read failed");
         return false;
       }
@@ -346,7 +347,7 @@ class ExtSeqTrack {
       bool ret;
 
       int b = 0;
-      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT_FN();
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
       ret = file.seekSet(offset);
@@ -412,7 +413,7 @@ class A4Track : public ExtSeqTrack {
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
       bool ret;
       int b = 0;
-      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT_FN();
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
       int32_t len;
       ret = file.seekSet(offset);
@@ -439,7 +440,7 @@ class A4Track : public ExtSeqTrack {
       /*Extraact track data from received pattern and kit and store in track object*/
       bool ret;
       int b = 0;
-      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT_FN();
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
       ret = file.seekSet(offset);
@@ -701,7 +702,7 @@ class MDTrack {
       bool ret;
       int b = 0;
 
-      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT_FN();
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
 
       int32_t len;
@@ -758,7 +759,7 @@ class MDTrack {
       /*Extraact track data from received pattern and kit and store in track object*/
       bool ret;
       int b = 0;
-      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT_FN();
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
       ret = file.seekSet(offset);
@@ -871,7 +872,6 @@ Project project_header;
 */
 bool sd_write_data(void *data, size_t len, FatFile *filep) {
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   int b;
   bool pass = false;
   bool ret;
@@ -880,13 +880,15 @@ bool sd_write_data(void *data, size_t len, FatFile *filep) {
   uint8_t n = 0;
 
   for (n = 0; n < SD_MAX_RETRIES && pass == false; n++) {
-    DEBUG_PRINT("Write Attempt: ");
-    DEBUG_PRINTLN(n);
+
 
     b = filep->write(( uint8_t*) data, len);
   
 
     if (b < len) {
+      DEBUG_PRINT_FN();
+      DEBUG_PRINT("Write Attempt: ");
+      DEBUG_PRINTLN(n);
       DEBUG_PRINT("Write failed: ");
       DEBUG_PRINT(b);
       DEBUG_PRINT(" of ");
@@ -901,10 +903,6 @@ bool sd_write_data(void *data, size_t len, FatFile *filep) {
       }
     }
     if (b == len) {
-      DEBUG_PRINT("Write success: ");
-      DEBUG_PRINT(b);
-      DEBUG_PRINT(" of ");
-      DEBUG_PRINTLN(len);
       pass = true;
     }
   }
@@ -923,7 +921,6 @@ bool sd_write_data(void *data, size_t len, FatFile *filep) {
 */
 bool sd_read_data(void *data, size_t len, FatFile *filep) {
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   int b;
   bool pass = false;
   bool ret;
@@ -932,18 +929,21 @@ bool sd_read_data(void *data, size_t len, FatFile *filep) {
   uint8_t n = 0;
 
   for (n = 0; n < SD_MAX_RETRIES && pass == false; n++) {
-    DEBUG_PRINT("Read Attempt: ");
-    DEBUG_PRINTLN(n);
+
 
     b = filep->read(( uint8_t*) data, len);
 
 
     if (b < len) {
-      sd_read_fail++;
+      DEBUG_PRINT_FN();
+      DEBUG_PRINT("Read Attempt: ");
+      DEBUG_PRINTLN(n);
       DEBUG_PRINT("Read failed: ");
       DEBUG_PRINT(b);
       DEBUG_PRINT(" of ");
       DEBUG_PRINTLN(len);
+      sd_read_fail++;
+
       /*reset position*/
       ret = filep->seekSet(pos);
       if (!ret) {
@@ -953,10 +953,6 @@ bool sd_read_data(void *data, size_t len, FatFile *filep) {
       pass = false;
     }
     if (b == len) {
-      DEBUG_PRINT("Read success: ");
-      DEBUG_PRINT(b);
-      DEBUG_PRINT(" of ");
-      DEBUG_PRINTLN(len);
       pass = true;
     }
   }
@@ -989,19 +985,21 @@ bool sd_read_data(void *data, size_t len, FatFile *filep) {
 
 */
 bool sd_load_init() {
-  bool ret;
+  bool ret = false;
   int b;
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT_FN();
   DEBUG_PRINTLN("Initializing SD Card");
   //File file("/test.mcl",O_WRITE);
   /*Configuration file used to store settings when Minicommand is turned off*/
+  for (uint8_t n = 0; n < SD_MAX_RETRIES && ret == false; n++) {
   ret = SD.begin(53, SPI_FULL_SPEED);
-  if (!ret) {
-    //DEBUG_PRINTLN("SD err");
-    DEBUG_PRINTLN("SD Card Initializing failed");
-    GUI.flash_strings_fill("SD CARD ERROR", "");
-    return false;
+  if (!ret) { delay(500); }
+  }
+  if (ret == false) {
+      DEBUG_PRINTLN("SD Card Initializing failed");
+      GUI.flash_strings_fill("SD CARD ERROR", "");
+      return false;
   }
 
   else {
@@ -1088,7 +1086,7 @@ void load_project_page() {
   bool ret;
   int b;
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT_FN();
   DEBUG_PRINTLN("Load project page");
 
   char temp_entry[16];
@@ -1148,7 +1146,7 @@ bool cfg_init() {
   bool ret;
   int b;
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT_FN();
   DEBUG_PRINTLN("Initialising cfgfile");
 
   //DEBUG_PRINTLN("conf ext");
@@ -1214,7 +1212,7 @@ bool write_project_header() {
   bool ret;
   int b;
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT_FN();
   DEBUG_PRINTLN("Writing project header");
 
   project_header.version = VERSION;
@@ -1236,11 +1234,9 @@ bool write_project_header() {
 
   if (!ret) {
     DEBUG_PRINTLN("Write header failed");
-    DEBUG_PRINT(b);
     return false;
   }
   DEBUG_PRINTLN("Write header success");
-  DEBUG_PRINT(b);
   return true;
 }
 
@@ -1249,7 +1245,7 @@ bool sd_new_project(char *projectname) {
 
   bool ret;
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT_FN();
   DEBUG_PRINTLN("Creating new project");
   numProjects++;
 
@@ -1283,6 +1279,9 @@ bool sd_new_project(char *projectname) {
   }
 
   uint8_t ledstatus = 0;
+  
+  DEBUG_PRINTLN("Initializing project.. please wait");
+
   //Initialise the project file by filling the grid with blank data.
   for (int32_t i = 0; i < GRID_LENGTH * GRID_WIDTH; i++) {
     if (i % 25 == 0) {
@@ -1335,7 +1334,7 @@ bool sd_load_project(char *projectname) {
 
   bool ret;
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT_FN();
   DEBUG_PRINTLN("Loading project");
   DEBUG_PRINTLN(projectname);
 
@@ -1371,7 +1370,7 @@ bool check_project_version() {
   bool ret;
   int b = 0;
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT_FN();
   DEBUG_PRINTLN("Check project version");
 
   ret = file.seekSet(0);
@@ -1407,7 +1406,7 @@ bool write_cfg() {
   bool ret;
   int b;
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT_FN();
   DEBUG_PRINTLN("Writing cfg");
 
   cfgfile.close();
@@ -1941,7 +1940,7 @@ void encoder_param2_handle(Encoder *enc) {
     }
   }
 
-  load_grid_models = 0;
+  reload_slot_models = 0;
 }
 
 
@@ -4498,16 +4497,16 @@ bool clear_Grid(int i) {
   bool ret;
   int b;
 
-  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
-  DEBUG_PRINT("Clearing grid: ");
-  DEBUG_PRINTLN(i);
+ 
 
   temptrack.active = EMPTY_TRACK_TYPE;
   int32_t offset = (int32_t) GRID_SLOT_BYTES + (int32_t) i * (int32_t) GRID_SLOT_BYTES;
 
   ret = file.seekSet(offset);
   if (!ret) {
-    DEBUG_PRINTLN("Clear grid failed");
+     DEBUG_PRINT_FN();
+     DEBUG_PRINTLN("Clear grid failed: ");
+     DEBUG_PRINTLN(i);
     return false;
   }
   //DEBUG_PRINTLN("Writing");
@@ -4757,7 +4756,9 @@ void setup() {
   //sd_new_project(newprj);
   bool ret = false;
 
-  sd_load_init();
+  ret = sd_load_init();
+
+  //if (!ret) { }
 
 
   // MidiClock.mode = MidiClock.EXTERNAL_MIDI;
@@ -5781,11 +5782,15 @@ void GridEncoderPage::loop() {
 */
 A4Track track_bufx;
 
-void load_gridf_models() {
+void load_slot_models() {
+  
+      DEBUG_PRINT_FN(x);
 
-  if (load_grid_models == 0) {
+      DEBUG_PRINT("Row: "); DEBUG_PRINTLN(param2.getValue());
     for (uint8_t i = 0; i < 22; i++) {
       grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
+      DEBUG_PRINT("Slot: "); DEBUG_PRINT(i); DEBUG_PRINT(" Model: ");
+      DEBUG_PRINTLN(grid_models[i]);
       if ((temptrack.active != EMPTY_TRACK_TYPE) && (i == 0)) {
         for (uint8_t c = 0; c < 17; c++) {
           currentkitName[c] = temptrack.kitName[c] ;
@@ -5796,9 +5801,7 @@ void load_gridf_models() {
 
 
     }
-    load_grid_models = 1;
-
-  }
+ 
 }
 
 void GridEncoderPage::display() {
@@ -5825,7 +5828,10 @@ void GridEncoderPage::display() {
   if (slowclock < grid_lastclock) {
     grid_lastclock = 0xFFFF - grid_lastclock;
   }
-  load_gridf_models();
+    if (reload_slot_models == 0) {
+  load_slot_models();
+  reload_slot_models = 1;
+    }
 
   if (clock_diff(grid_lastclock, slowclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
@@ -6324,7 +6330,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
         if (sd_load_project(temp)) {
-          load_grid_models = 0;
+          reload_slot_models = 0;
           GUI.setPage(&page);
           curpage = 0;
         }
@@ -6352,7 +6358,7 @@ bool handleEvent(gui_event_t *evt) {
       bool ret = sd_new_project(newprj);
       if (ret) {
         GUI.setPage(&page);
-        load_grid_models = 0;
+        reload_slot_models = 0;
         curpage = 0;
       }
       else {
@@ -6867,7 +6873,7 @@ bool handleEvent(gui_event_t *evt) {
     //CLEAR ROW
     if (BUTTON_RELEASED(Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON3)) {
       clear_row(param2.getValue());
-      load_grid_models = 0;
+      reload_slot_models = 0;
       return true;
     }
     //TRACK READ PAGE
@@ -6884,7 +6890,7 @@ bool handleEvent(gui_event_t *evt) {
       curpage = S_PAGE;
 
       GUI.setPage(&patternload_page);
-      load_grid_models = 0;
+      reload_slot_models = 0;
 
       return true;
     }
