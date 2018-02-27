@@ -25,14 +25,18 @@
 #define DEBUG_MCL 1
 
 #ifdef DEBUG_MCL
- #define DEBUG_PRINT(x)  Serial.print(x)
- #define DEBUG_PRINTLN(x)  Serial.println(x)
+#define DEBUG_PRINT(x)  Serial.print(x)
+#define DEBUG_PRINTLN(x)  Serial.println(x)
 
 #else
- #define DEBUG_PRINT(x)
- #define DEBUG_PRINTLN(x)
+#define DEBUG_PRINT(x)
+#define DEBUG_PRINTLN(x)
 #endif
 //
+
+#define SD_MAX_RETRIES 5 /* Number of SD card read/write retries before return failure */
+uint16_t sd_write_fail = 0;
+uint16_t sd_read_fail = 0;
 
 //RELEASE 1 BYTE/STABLE-BETA 1 BYTE /REVISION 2 BYTES
 
@@ -336,6 +340,10 @@ struct musical_notes  {
   const char *notes_lower[16] = { "c ", "c#", "d ", "d#", "e ", "f", "f#", "g ", "g#", "a ", "a#", "b " };
 
 };
+
+bool sd_read_data(void *data, size_t len, FatFile *filep);
+bool sd_write_data(void *data, size_t len, FatFile *filep);
+
 /*
    ==============
    class: MDTrack
@@ -393,7 +401,7 @@ class ExtSeqTrack {
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
       bool ret;
       int b = 0;
-      DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
       int32_t len;
       ret = file.seekSet(offset);
@@ -402,13 +410,13 @@ class ExtSeqTrack {
         return false;
       }
       if (m > 0) {
-        b = file.read(( uint8_t*) (this), m);
+        ret = sd_read_data(( uint8_t*) (this), m, &file);
       }
       else {
-        b = file.read(( uint8_t*) (this), sizeof(ExtSeqTrack));
+        ret = sd_read_data(( uint8_t*) (this), sizeof(ExtSeqTrack), &file);
       }
 
-      if (b <= 0) {
+      if (!ret) {
         DEBUG_PRINTLN("Read failed");
         return false;
       }
@@ -420,7 +428,7 @@ class ExtSeqTrack {
       bool ret;
 
       int b = 0;
-      DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
       ret = file.seekSet(offset);
@@ -430,8 +438,8 @@ class ExtSeqTrack {
       }
 
       getTrack_from_sysex(track - 16, column - 16);
-      b = file.write(( uint8_t*) this, sizeof(ExtSeqTrack));
-      if (b <= 0) {
+      ret = sd_write_data(( uint8_t*) this, sizeof(ExtSeqTrack), &file);
+      if (!ret) {
         DEBUG_PRINTLN("Write failed");
         return false;
       }
@@ -486,7 +494,7 @@ class A4Track : public ExtSeqTrack {
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
       bool ret;
       int b = 0;
-      DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
       int32_t len;
       ret = file.seekSet(offset);
@@ -496,12 +504,12 @@ class A4Track : public ExtSeqTrack {
       }
       if (Analog4.connected) {
         if (m > 0) {
-          b = file.read(( uint8_t*) (this), m);
+          ret = sd_read_data(( uint8_t*) (this), m, &file);
         }
         else {
-          b = file.read(( uint8_t*) (this), sizeof(A4Track));
+          ret = sd_read_data(( uint8_t*) (this), sizeof(A4Track), &file);
         }
-        if (b <= 0) {
+        if (!ret) {
           DEBUG_PRINTLN("Write failed");
           return false;
         }
@@ -513,15 +521,22 @@ class A4Track : public ExtSeqTrack {
       /*Extraact track data from received pattern and kit and store in track object*/
       bool ret;
       int b = 0;
-      DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
-      file.seekSet(offset);
+      ret = file.seekSet(offset);
+      if (!ret) {
+        DEBUG_PRINTLN("Seek failed");
+        return false;
+      }
 
       /*analog 4 tracks*/
       if (Analog4.connected) {
         getTrack_from_sysex(track - 16, column - 16);
-        file.write(( uint8_t*)  this, sizeof(A4Track));
+        ret = sd_write_data(( uint8_t*)  this, sizeof(A4Track), &file);
+        if (!ret) {
+          return false;
+        }
         return true;
 
       }
@@ -764,34 +779,59 @@ class MDTrack {
       }
     }
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
-      
+
       bool ret;
       int b = 0;
-      
-      DEBUG_PRINTLN(__FUNCTION__);
+
+      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
 
       int32_t len;
 
-      file.seekSet(offset);
+      ret = file.seekSet(offset);
+      if (!ret) {
+        DEBUG_PRINTLN("Seek failed");
+        return false;
+      }
+
       len = (sizeof(MDTrack) - sizeof(kitextra) - (LOCK_AMOUNT * 3));
 
       //len = (sizeof(MDTrack)  - (LOCK_AMOUNT * 3));
 
-      b = file.read(( uint8_t*) this, len);
+      ret = sd_read_data(( uint8_t*) this, len, &file);
 
-      if (b <= 0) {
+      if (!ret) {
         DEBUG_PRINTLN("read failed");
         return false;
       }
-      
+
       if (m == 0) {
 
 
-        file.read(( uint8_t*) & (this->kitextra), sizeof(kitextra));
-        file.read(( uint8_t*) & (this->param_number[0]), arraysize);
-        file.read(( uint8_t*) & (this->value[0]), arraysize);
-        file.read(( uint8_t*) & (this->step[0]), arraysize);
+        ret = sd_read_data(( uint8_t*) & (this->kitextra), sizeof(kitextra), &file);
+        if (!ret) {
+          DEBUG_PRINTLN("read failed");
+          return false;
+        }
+
+        ret = sd_read_data(( uint8_t*) & (this->param_number[0]), arraysize, &file);
+        if (!ret) {
+          DEBUG_PRINTLN("read failed");
+          return false;
+        }
+
+        ret = sd_read_data(( uint8_t*) & (this->value[0]), arraysize, &file);
+        if (!ret) {
+          DEBUG_PRINTLN("read failed");
+          return false;
+        }
+
+        ret = sd_read_data(( uint8_t*) & (this->step[0]), arraysize, &file);
+        if (!ret) {
+          DEBUG_PRINTLN("read failed");
+          return false;
+        }
+
       }
       return true;
     }
@@ -800,21 +840,42 @@ class MDTrack {
       /*Extraact track data from received pattern and kit and store in track object*/
       bool ret;
       int b = 0;
-      DEBUG_PRINTLN(__FUNCTION__);
+      DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
-      file.seekSet(offset);
+      ret = file.seekSet(offset);
+      if (!ret) {
+        DEBUG_PRINTLN( "seek failed");
+        return false;
+      }
 
       getTrack_from_sysex(track, column);
       len = sizeof(MDTrack) - (LOCK_AMOUNT * 3);
 
-      b = file.write(( uint8_t*)  (this), len);
-      if (b <= 0) { DEBUG_PRINTLN( "write failed"); }
-      return false;
+      ret = sd_write_data(( uint8_t*)  (this), len, &file);
+      if (!ret) {
+        DEBUG_PRINTLN( "write failed");
+        return false;
+      }
 
-      file.write(( uint8_t*)  & (this->param_number[0]), arraysize);
-      file.write(( uint8_t*)  & (this->value[0]), arraysize);
-      file.write(( uint8_t*)  & (this->step[0]), arraysize);
+      ret = sd_write_data(( uint8_t*)  & (this->param_number[0]), arraysize, &file);
+      if (!ret) {
+        DEBUG_PRINTLN( "write failed");
+        return false;
+      }
+
+      ret = sd_write_data(( uint8_t*)  & (this->value[0]), arraysize, &file);
+      if (!ret) {
+        DEBUG_PRINTLN( "write failed");
+        return false;
+      }
+
+      ret = sd_write_data(( uint8_t*)  & (this->step[0]), arraysize, &file);
+      if (!ret) {
+        DEBUG_PRINTLN( "write failed");
+        return false;
+      }
+
       return true;
 
 
@@ -887,7 +948,103 @@ Project project_header;
 
 
 
+/*
+   Function for writing to the project file
+*/
+bool sd_write_data(void *data, size_t len, FatFile *filep) {
 
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  int b;
+  bool pass = false;
+  bool ret;
+  uint32_t pos = filep->curPosition();
+
+  uint8_t n = 0;
+
+  for (n = 0; n < SD_MAX_RETRIES && pass == false; n++) {
+    DEBUG_PRINT("Write Attempt: ");
+    DEBUG_PRINTLN(n);
+
+    b = filep->write(( uint8_t*) data, len);
+    DEBUG_PRINT(b);
+    DEBUG_PRINT(" of ");
+    DEBUG_PRINTLN(len);
+
+    if (b < len) {
+      DEBUG_PRINTLN("Write failed");
+      sd_write_fail++;
+      pass = false;
+      /*reset position*/
+      ret = filep->seekSet(pos);
+      if (!ret) {
+        DEBUG_PRINTLN("Could not seek, failing");
+        return false;
+      }
+    }
+    if (b == len) {
+      DEBUG_PRINTLN("Write success");
+      pass = true;
+    }
+  }
+
+  if (pass) {
+    return true;
+  }
+  else {
+    DEBUG_PRINTLN("Total write failures");
+    DEBUG_PRINTLN(sd_write_fail);
+    return false;
+  }
+}
+/*
+   Function for reading from the project file
+*/
+bool sd_read_data(void *data, size_t len, FatFile *filep) {
+
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  int b;
+  bool pass = false;
+  bool ret;
+  uint32_t pos = filep->curPosition();
+
+  uint8_t n = 0;
+
+  for (n = 0; n < SD_MAX_RETRIES && pass == false; n++) {
+    DEBUG_PRINT("Read Attempt: ");
+    DEBUG_PRINTLN(n);
+
+    b = filep->read(( uint8_t*) data, len);
+    DEBUG_PRINT(b);
+    DEBUG_PRINT(" of ");
+    DEBUG_PRINTLN(len);
+
+    if (b < len) {
+      sd_read_fail++;
+      DEBUG_PRINTLN("Read failed");
+      /*reset position*/
+      ret = filep->seekSet(pos);
+      if (!ret) {
+        DEBUG_PRINTLN("Could not seek, failing");
+        return false;
+      }
+      pass = false;
+    }
+    if (b == len) {
+      DEBUG_PRINTLN("Read success");
+      pass = true;
+    }
+  }
+
+  if (pass) {
+    return true;
+  }
+  else {
+    DEBUG_PRINTLN("Total read failures");
+    DEBUG_PRINTLN(sd_read_fail);
+
+    return false;
+  }
+}
 /*
 
    /*
@@ -909,7 +1066,7 @@ bool sd_load_init() {
   bool ret;
   int b;
 
-  DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   DEBUG_PRINTLN("Initializing SD Card");
   //File file("/test.mcl",O_WRITE);
   /*Configuration file used to store settings when Minicommand is turned off*/
@@ -1005,7 +1162,7 @@ void load_project_page() {
   bool ret;
   int b;
 
-  DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   DEBUG_PRINTLN("Load project page");
 
   char temp_entry[16];
@@ -1024,7 +1181,6 @@ void load_project_page() {
     char mcl[3] = "mcl";
     bool is_mcl_file = true;
 
-    DEBUG_PRINTLN(__FUNCTION__);
     DEBUG_PRINTLN(temp_entry);
 
     for (uint8_t a = 1; a < 3; a++) {
@@ -1066,9 +1222,9 @@ bool cfg_init() {
   bool ret;
   int b;
 
-  DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   DEBUG_PRINTLN("Initialising cfgfile");
- 
+
   //DEBUG_PRINTLN("conf ext");
   cfgfile.remove();
   ret = cfgfile.createContiguous("/config.mcls", (uint32_t) GRID_SLOT_BYTES);
@@ -1132,7 +1288,7 @@ bool write_project_header() {
   bool ret;
   int b;
 
-  DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   DEBUG_PRINTLN("Writing project header");
 
   project_header.version = VERSION;
@@ -1150,9 +1306,9 @@ bool write_project_header() {
 
   }
 
-  b = file.write(( uint8_t*)&project_header, sizeof(project_header));
+  ret = sd_write_data(( uint8_t*)&project_header, sizeof(project_header), &file);
 
-  if (b <= 0) {
+  if (!ret) {
     DEBUG_PRINTLN("Write header failed");
     DEBUG_PRINT(b);
     return false;
@@ -1167,7 +1323,7 @@ bool sd_new_project(char *projectname) {
 
   bool ret;
 
-  DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   DEBUG_PRINTLN("Creating new project");
   numProjects++;
 
@@ -1253,7 +1409,7 @@ bool sd_load_project(char *projectname) {
 
   bool ret;
 
-  DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   DEBUG_PRINTLN("Loading project");
   DEBUG_PRINTLN(projectname);
 
@@ -1289,7 +1445,7 @@ bool check_project_version() {
   bool ret;
   int b = 0;
 
-  DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   DEBUG_PRINTLN("Check project version");
 
   ret = file.seekSet(0);
@@ -1298,9 +1454,9 @@ bool check_project_version() {
     DEBUG_PRINTLN("Seek failed");
     return false;
   }
-  b = file.read(( uint8_t*) & (project_header), sizeof(project_header));
+  ret = sd_read_data(( uint8_t*) & (project_header), sizeof(project_header), &file);
 
-  if (b <= 0) {
+  if (!ret) {
     DEBUG_PRINTLN("Could not read project header");
     return false;
   }
@@ -1325,7 +1481,7 @@ bool write_cfg() {
   bool ret;
   int b;
 
-  DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
   DEBUG_PRINTLN("Writing cfg");
 
   cfgfile.close();
@@ -1339,7 +1495,7 @@ bool write_cfg() {
   if (b <= 0) {
     DEBUG_PRINTLN("Write cfg failed");
   }
-    DEBUG_PRINTLN("Write cfg okay");
+  DEBUG_PRINTLN("Write cfg okay");
   cfgfile.close();
   cfg_save_lastclock = slowclock;
   return true;
@@ -2125,18 +2281,20 @@ bool place_track_inpattern(int curtrack, int column, int row, A4Sound *analogfou
     if (Analog4.connected) {
       A4Track track_buf;
 
-      track_buf.load_track_from_grid(column, row, 0);
-      if (track_buf.active != EMPTY_TRACK_TYPE) {
+      if (track_buf.load_track_from_grid(column, row, 0)) {
+        if (track_buf.active != EMPTY_TRACK_TYPE) {
 
-        return track_buf.placeTrack_in_sysex(curtrack, column, analogfour_sound);
+          return track_buf.placeTrack_in_sysex(curtrack, column, analogfour_sound);
+        }
       }
     }
     else {
       ExtSeqTrack track_buf;
-      track_buf.load_track_from_grid(column, row, 0);
-      if (track_buf.active != EMPTY_TRACK_TYPE) {
+      if (track_buf.load_track_from_grid(column, row, 0)) {
+        if (track_buf.active != EMPTY_TRACK_TYPE) {
 
-        return track_buf.placeTrack_in_sysex(curtrack, column);
+          return track_buf.placeTrack_in_sysex(curtrack, column);
+        }
       }
     }
   }
@@ -4414,9 +4572,9 @@ bool clear_Grid(int i) {
   bool ret;
   int b;
 
-  DEBUG_PRINTLN(__FUNCTION__);
-  DEBUG_PRINTLN("Clearing grid ");
-  DEBUG_PRINT(i);
+  DEBUG_PRINT("func_call: "); DEBUG_PRINTLN(__FUNCTION__);
+  DEBUG_PRINT("Clearing grid: ");
+  DEBUG_PRINTLN(i);
 
   temptrack.active = EMPTY_TRACK_TYPE;
   int32_t offset = (int32_t) GRID_SLOT_BYTES + (int32_t) i * (int32_t) GRID_SLOT_BYTES;
@@ -4429,9 +4587,9 @@ bool clear_Grid(int i) {
   //DEBUG_PRINTLN("Writing");
   //DEBUG_PRINTLN(sizeof(temptrack.active));
 
-  b = file.write(( uint8_t*) & (temptrack.active), sizeof(temptrack.active));
+  ret = sd_write_data(( uint8_t*) & (temptrack.active), sizeof(temptrack.active), &file);
 
-  if (b <= 0) {
+  if (!ret) {
     DEBUG_PRINTLN("Write failed");
     return false;
   }
@@ -4674,7 +4832,7 @@ void setup() {
   bool ret = false;
 
   sd_load_init();
- 
+
 
   // MidiClock.mode = MidiClock.EXTERNAL_MIDI;
 
