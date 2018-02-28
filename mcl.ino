@@ -1274,9 +1274,6 @@ bool sd_new_project(char *projectname) {
     return false;
   }
 
-  if (!write_project_header()) {
-    return false;
-  }
 
   uint8_t ledstatus = 0;
   
@@ -1309,6 +1306,11 @@ bool sd_new_project(char *projectname) {
     DEBUG_PRINTLN("Could not seek");
     return false;
   }
+
+  if (!write_project_header()) {
+    return false;
+  }
+
   m_strncpy(cfg.project, projectname, 16);
 
   cfg.number_projects++;
