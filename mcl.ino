@@ -432,6 +432,7 @@ class A4Track : public ExtSeqTrack {
           DEBUG_PRINTLN("Write failed");
           return false;
         }
+        return true;
       }
       return false;
     }
@@ -441,6 +442,7 @@ class A4Track : public ExtSeqTrack {
       bool ret;
       int b = 0;
       DEBUG_PRINT_FN();
+      DEBUG_PRINTLN("storing a4 track");
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
       ret = file.seekSet(offset);
@@ -883,7 +885,7 @@ bool sd_write_data(void *data, size_t len, FatFile *filep) {
 
 
     b = filep->write(( uint8_t*) data, len);
-  
+
 
     if (b < len) {
       DEBUG_PRINT_FN();
@@ -993,13 +995,15 @@ bool sd_load_init() {
   //File file("/test.mcl",O_WRITE);
   /*Configuration file used to store settings when Minicommand is turned off*/
   for (uint8_t n = 0; n < SD_MAX_RETRIES && ret == false; n++) {
-  ret = SD.begin(53, SPI_FULL_SPEED);
-  if (!ret) { delay(500); }
+    ret = SD.begin(53, SPI_FULL_SPEED);
+    if (!ret) {
+      delay(500);
+    }
   }
   if (ret == false) {
-      DEBUG_PRINTLN("SD Card Initializing failed");
-      GUI.flash_strings_fill("SD CARD ERROR", "");
-      return false;
+    DEBUG_PRINTLN("SD Card Initializing failed");
+    GUI.flash_strings_fill("SD CARD ERROR", "");
+    return false;
   }
 
   else {
@@ -1008,7 +1012,7 @@ bool sd_load_init() {
     if (cfgfile.open("/config.mcls", O_RDWR)) {
       DEBUG_PRINTLN("Config file open: success");
 
-      if (b = cfgfile.read(( uint8_t*)&cfg, sizeof(Config)) > 0) {
+      if (sd_read_data(( uint8_t*)&cfg, sizeof(Config), &cfgfile)) {
         DEBUG_PRINTLN("Config file read: success");
         DEBUG_PRINT(b);
 
@@ -1276,7 +1280,7 @@ bool sd_new_project(char *projectname) {
 
 
   uint8_t ledstatus = 0;
-  
+
   DEBUG_PRINTLN("Initializing project.. please wait");
 
   //Initialise the project file by filling the grid with blank data.
@@ -1311,13 +1315,14 @@ bool sd_new_project(char *projectname) {
     return false;
   }
 
-  m_strncpy(cfg.project, projectname, 16);
-
+  //m_strncpy(cfg.project, projectname, 16);
+  file.close();
   cfg.number_projects++;
-  ret = write_cfg();
-  if (!ret) {
-    return false;
-  }
+  write_cfg();
+
+  // if (!ret) {
+  // return false;
+  // }
 
 
   return true;
@@ -1418,8 +1423,8 @@ bool write_cfg() {
     return false;
   }
 
-  b = cfgfile.write(( uint8_t*)&cfg, sizeof(Config));
-  if (b <= 0) {
+  ret = sd_write_data(( uint8_t*)&cfg, sizeof(Config), &cfgfile);
+  if (!ret) {
     DEBUG_PRINTLN("Write cfg failed");
   }
   DEBUG_PRINTLN("Write cfg okay");
@@ -1922,32 +1927,13 @@ uint8_t globalbasechannel_to_channel(uint8_t b) {
   }
 }
 void encoder_param2_handle(Encoder *enc) {
-  // for (int i = 0; i < 16; i++) {
-  //  PatternMasks[i] = getPatternMask(i, enc->getValue(), 3, true);
-  //  PatternLengths[i] = temptrack.length;
-  // }
-  A4Track *track_bufx;
+
   if (enc->hasChanged()) {
     grid_lastclock = slowclock;
 
-    getGridModel(0, param2.getValue(), true, track_bufx);
-
-    if ((temptrack.active != EMPTY_TRACK_TYPE)) {
-      for (uint8_t c = 0; c < 17; c++) {
-        currentkitName[c] = temptrack.kitName[c] ;
-      }
-    }
-    for (uint8_t c = 0; c < 17; c++) {
-      currentkitName[c] = ' ';
-    }
+    reload_slot_models = 0;
   }
-
-  reload_slot_models = 0;
 }
-
-
-
-
 
 
 uint8_t note_to_track_map(uint8_t note) {
@@ -3769,7 +3755,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
       if (store_behaviour == STORE_IN_PLACE) {
         if ((i >= 16) && (i < 20)) {
           if (Analog4.connected) {
-
+            DEBUG_PRINTLN("a4 get sound");
             Analog4.getBlockingSoundX(i - 16);
             analogfour_track.sound.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8);
           }
@@ -4499,16 +4485,16 @@ bool clear_Grid(int i) {
   bool ret;
   int b;
 
- 
+
 
   temptrack.active = EMPTY_TRACK_TYPE;
   int32_t offset = (int32_t) GRID_SLOT_BYTES + (int32_t) i * (int32_t) GRID_SLOT_BYTES;
 
   ret = file.seekSet(offset);
   if (!ret) {
-     DEBUG_PRINT_FN();
-     DEBUG_PRINTLN("Clear grid failed: ");
-     DEBUG_PRINTLN(i);
+    DEBUG_PRINT_FN();
+    DEBUG_PRINTLN("Clear grid failed: ");
+    DEBUG_PRINTLN(i);
     return false;
   }
   //DEBUG_PRINTLN("Writing");
@@ -5785,25 +5771,32 @@ void GridEncoderPage::loop() {
 A4Track track_bufx;
 
 void load_slot_models() {
-  
-      DEBUG_PRINT_FN(x);
 
-      DEBUG_PRINT("Row: "); DEBUG_PRINTLN(param2.getValue());
-    for (uint8_t i = 0; i < 22; i++) {
-      grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
-      DEBUG_PRINT("Slot: "); DEBUG_PRINT(i); DEBUG_PRINT(" Model: ");
-      DEBUG_PRINTLN(grid_models[i]);
-      if ((temptrack.active != EMPTY_TRACK_TYPE) && (i == 0)) {
+  DEBUG_PRINT_FN(x);
+
+  DEBUG_PRINT("Row: "); DEBUG_PRINTLN(param2.getValue());
+  for (uint8_t i = 0; i < 22; i++) {
+    grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
+    DEBUG_PRINT("Slot: "); DEBUG_PRINT(i); DEBUG_PRINT(" Model: ");
+    DEBUG_PRINTLN(grid_models[i]);
+    if (i == 0) {
+      if (temptrack.active != EMPTY_TRACK_TYPE) {
         for (uint8_t c = 0; c < 17; c++) {
           currentkitName[c] = temptrack.kitName[c] ;
         }
-
       }
-
-
-
+      else {
+        for (uint8_t c = 0; c < 17; c++) {
+          currentkitName[c] = ' ' ;
+        }
+      }
     }
- 
+
+
+
+
+  }
+
 }
 
 void GridEncoderPage::display() {
@@ -5830,10 +5823,10 @@ void GridEncoderPage::display() {
   if (slowclock < grid_lastclock) {
     grid_lastclock = 0xFFFF - grid_lastclock;
   }
-    if (reload_slot_models == 0) {
-  load_slot_models();
-  reload_slot_models = 1;
-    }
+  if (reload_slot_models == 0) {
+    load_slot_models();
+    reload_slot_models = 1;
+  }
 
   if (clock_diff(grid_lastclock, slowclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
@@ -6359,15 +6352,19 @@ bool handleEvent(gui_event_t *evt) {
 
       bool ret = sd_new_project(newprj);
       if (ret) {
-        GUI.setPage(&page);
-        reload_slot_models = 0;
-        curpage = 0;
-      }
-      else {
-        GUI.flash_strings_fill("SD FAILURE", "--");
+        if (sd_load_project(newprj)) {
+          GUI.setPage(&page);
+          reload_slot_models = 0;
+          curpage = 0;
+          return true;
+        }
+        else {
+          GUI.flash_strings_fill("SD FAILURE", "--");
+          return false;
+          //  LCD.goLine(0);
+          //LCD.puts("SD Failure");
+        }
 
-        //  LCD.goLine(0);
-        //LCD.puts("SD Failure");
       }
 
       return true;
