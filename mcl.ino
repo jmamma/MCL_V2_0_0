@@ -4240,9 +4240,9 @@ void clear_Grid(int i) {
   temptrack.active = EMPTY_TRACK_TYPE;
   int32_t offset = (int32_t) GRID_SLOT_BYTES + (int32_t) i * (int32_t) GRID_SLOT_BYTES;
 
-  file.seekSet(offset);
+  /*if (file.seekSet(offset)) {
     //Serial.println("seek okay");
-   // }
+    }
     //Serial.println("Writing");
     //Serial.println(sizeof(temptrack.active)); */
   int b = file.write(( uint8_t*) & (temptrack.active), sizeof(temptrack.active));
