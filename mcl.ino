@@ -6,19 +6,22 @@
   Date: 2018
 */
 
-
 #include <MD.h>
 #include <A4.h>
-#include <Scales.h>
+
+#include "mcl_config.h"
 #include "GridPage.h"
 #include "TrackInfoPage.h"
 #include "PatternLoadPage.h"
 #include "OptionPage.h"
-#include <MidiClockPage.h>
+
 #include <SdFat.h>
+
+
+#include <Scales.h>
+#include <MidiClockPage.h>
 #include <string.h>
 #include <midi-common.hh>
-#include "mcl_config.h"
 
 uint16_t sd_write_fail = 0;
 uint16_t sd_read_fail = 0;
@@ -1014,11 +1017,9 @@ bool sd_load_init() {
 
       if (sd_read_data(( uint8_t*)&cfg, sizeof(Config), &cfgfile)) {
         DEBUG_PRINTLN("Config file read: success");
-        DEBUG_PRINT(b);
 
         if (cfg.version != CONFIG_VERSION) {
           DEBUG_PRINTLN("Incompatible config version");
-          DEBUG_PRINT(b);
           if (!cfg_init()) {
             return false;
           }
@@ -1029,7 +1030,6 @@ bool sd_load_init() {
 
         else if (cfg.number_projects > 0) {
           DEBUG_PRINTLN("Project count greater than 0, try to load existing");
-          DEBUG_PRINT(b);
           if (!sd_load_project(cfg.project)) {
 
             new_project_page();
@@ -1046,7 +1046,6 @@ bool sd_load_init() {
       }
       else {
         DEBUG_PRINTLN("Could not read cfg file.");
-        DEBUG_PRINT(b);
 
         if (!cfg_init()) {
           return false;
@@ -1058,7 +1057,6 @@ bool sd_load_init() {
     }
     else {
       DEBUG_PRINTLN("Could not open cfg file. Let's try to create it");
-      DEBUG_PRINT(b);
       if (!cfg_init()) {
         return false;
       }
@@ -2260,6 +2258,7 @@ void a4_setup() {
       uart2_device = DEVICE_A4;
       turboSetSpeed(cfg_speed_to_turbo(cfg.uart2_turbo), 2);
     }
+ 
   }
   if (Analog4.connected == false) {
     //If sysex not receiverd assume generic midi device;
@@ -2913,8 +2912,9 @@ class MCLMidiEvents : public MidiCallback {
 
         if (noteproceed == 1) {
           for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
-            if (msg[1] == MD.global.drumMapping[i])
+            if (msg[1] == MD.global.drumMapping[i]) {
               note_num = i;
+            }
           }
           uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[note_num] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[note_num]));
 
@@ -2937,6 +2937,7 @@ class MCLMidiEvents : public MidiCallback {
           timing[note_num][step_count] = utiming;
 
         }
+        return;
       }
       else if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) ) {
 
@@ -3394,11 +3395,11 @@ class MDHandler2 : public MDCallback {
       else if (patternswitch == PATTERN_STORE) {
 
         /*Retrieve the pattern from the Sysex buffer and store it in the pattern_rec object. The MD header is 5 bytes long, hence the offset and length change*/
-        if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
+//        if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
 
 
           //patternswitch = PATTERN_UDEF;
-        }
+  //      }
         /*If the pattern can't be retrieved from the sysex data then there's been a problem*/
         //  else { GUI.flash_strings_fill("SYSEX", "ERROR");  }
 
@@ -3680,6 +3681,7 @@ void toggle_fx2() {
 */
 
 void store_tracks_in_mem( int column, int row, int store_behaviour_) {
+  int16_t tclock = slowclock;
   uint8_t readpattern = MD.currentPattern;
   if ((patternload_param1.getValue() * 16 + patternload_param2.getValue()) != MD.currentPattern) {
     readpattern = (patternload_param1.getValue() * 16 + patternload_param2.getValue());
@@ -3710,14 +3712,21 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
     if (!MD.getBlockingPattern(readpattern)) {
       return;
     }
+    if (MidiSysex.data[3] == 0x02) {
+            DEBUG_PRINTLN("MD Pattern");
+
+    }
+      if (!pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
+      DEBUG_PRINTLN("could not get pattern rec");
+      return;
+      }
 
     int curkit;
     if (readpattern != MD.currentPattern) {
       curkit = pattern_rec.kit;
     }
     else {
-      curkit = last_md_track;
-      //MD.getCurrentKit(CALLBACK_TIMEOUT);
+      curkit = MD.getCurrentKit(CALLBACK_TIMEOUT);
       MD.saveCurrentKit(curkit);
 
     }
@@ -3781,6 +3790,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
 
 
   clearLed();
+  DEBUG_PRINTLN(slowclock - tclock);
 
 }
 
@@ -3831,6 +3841,7 @@ void write_tracks_to_md( int column, int row, int b) {
   //    MD.saveCurrentKit(currentkit_temp);
   //   MD.getBlockingKit(currentkit_temp);
   if (!MD.getBlockingPattern(MD.currentPattern)) {
+        DEBUG_PRINTLN("could not get blocking pattern");
     return;
   }
 
@@ -3838,6 +3849,10 @@ void write_tracks_to_md( int column, int row, int b) {
 
     send_pattern_kit_to_md();
     patternswitch = PATTERN_UDEF;
+  }
+  else {
+            DEBUG_PRINTLN("could not get blocking pattern");
+
   }
 
 
@@ -4377,7 +4392,7 @@ void load_seq_page(uint8_t page) {
   if (curpage == 0) {
     create_chars_seq();
     currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
-    curpage = page;
+    //curpage = page;
 
     //Don't save kit if sequencer is running, otherwise parameter locks will be stored.
     if (MidiClock.state != 2) {
@@ -6180,7 +6195,7 @@ void exploit_on() {
   //  MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,200);
   exploit_start_clock = slowclock;
 
-  collect_trigs = true;
+ // collect_trigs = true;
   //in_sysex = 0;
 }
 
@@ -6193,7 +6208,6 @@ void exploit_off() {
   if (exploit == 0) {
     return;
   }
-  exploit = 0;
   collect_trigs = false;
 
   //
@@ -6224,6 +6238,8 @@ void exploit_off() {
   else {
     MD.setStatus(0x22, last_md_track);
   }
+    exploit = 0;
+
   //in_sysex = 0;
 }
 static uint8_t turbomidi_sysex_header[] = {
@@ -6629,7 +6645,7 @@ bool handleEvent(gui_event_t *evt) {
 
       return true;
     }
-    if (BUTTON_PRESSED(Buttons.ENCODER2))  {
+    if (EVENT_PRESSED(evt, Buttons.ENCODER2))  {
 
 
       load_seq_page(SEQ_RTRK_PAGE);
@@ -6639,7 +6655,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
     }
-    if (BUTTON_PRESSED(Buttons.ENCODER3))  {
+    if (EVENT_PRESSED(evt, Buttons.ENCODER3))  {
 
       load_seq_page(SEQ_PARAM_A_PAGE);
 
@@ -6647,7 +6663,7 @@ bool handleEvent(gui_event_t *evt) {
 
       return true;
     }
-    if (BUTTON_PRESSED(Buttons.ENCODER4))  {
+    if (EVENT_PRESSED(evt, Buttons.ENCODER4))  {
 
       load_seq_page(SEQ_PTC_PAGE);
 
