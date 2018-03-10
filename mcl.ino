@@ -1,81 +1,31 @@
 /*
   ==============================
-  MiniCommand Live Firmware:
+  MegaCommand Live Firmware:
   ==============================
-  Author: Justin Valer
-  Date: July/2016
+  Author: Justin Mammarella
+  Date: 2018
 */
-///#include <Wire.h>
-//#include <SPI.h>
 
 #include <MD.h>
 #include <A4.h>
-#include <Scales.h>
+
+#include "mcl_config.h"
 #include "GridPage.h"
 #include "TrackInfoPage.h"
 #include "PatternLoadPage.h"
 #include "OptionPage.h"
-#include <MidiClockPage.h>
-//#include <cfg.uart1_turboMidi.hh>
+
 #include <SdFat.h>
+
+
+#include <Scales.h>
+#include <MidiClockPage.h>
 #include <string.h>
 #include <midi-common.hh>
-//#include <SimpleFS.hh>
-//#include <TrigCapture.h>
-//RELEASE 1 BYTE/STABLE-BETA 1 BYTE /REVISION 2 BYTES
-#define VERSION 2013
-#define CONFIG_VERSION 2012
-#define LOCK_AMOUNT 256
-#define GRID_LENGTH 130
-#define GRID_WIDTH 22
-#define GRID_SLOT_BYTES 4096
-#define CALLBACK_TIMEOUT 500
-#define GUI_NAME_TIMEOUT 800
 
-#define CUE_PAGE 5
-#define NEW_PROJECT_PAGE 7
-#define MIXER_PAGE 10
-#define S_PAGE 3
-#define W_PAGE 4
-#define SEQ_STEP_PAGE 1
-#define SEQ_EXTSTEP_PAGE 18
-#define SEQ_EUC_PAGE 20
-#define SEQ_EUCPTC_PAGE 21
-#define SEQ_RLCK_PAGE 13
-#define SEQ_RTRK_PAGE 11
-#define SEQ_RPTC_PAGE 14
-#define SEQ_PARAM_A_PAGE 12
-#define SEQ_PARAM_B_PAGE 15
-#define SEQ_PTC_PAGE 16
-#define SEQ_NOTEBUF_SIZE 8
-#define EXPLOIT_DELAY_TIME 350
-#define TRIG_HOLD_TIME 200
+uint16_t sd_write_fail = 0;
+uint16_t sd_read_fail = 0;
 
-#define OLED_CLK 52
-#define OLED_MOSI 51
-
-// Used for software or hardware SPI
-#define OLED_CS 42
-#define OLED_DC 44
-
-// Used for I2C or SPI
-#define OLED_RESET 38
-
-#define A4_TRACK_TYPE 2
-#define MD_TRACK_TYPE 1
-#define EXT_TRACK_TYPE 3
-
-#define EMPTY_TRACK_TYPE 0
-#define DEVICE_NULL 0
-#define DEVICE_MIDI 128
-#define DEVICE_MD 2
-#define DEVICE_A4 6
-
-#define ENCODER_RES_GRID 2
-#define ENCODER_RES_SEQ 2
-#define ENCODER_RES_SYS 2
-#define ENCODER_RES_PAT 2
-//Adafruit_SSD1305 display(OLED_DC, OLED_RESET, OLED_CS);
 uint8_t uart1_device = DEVICE_NULL;
 uint8_t uart2_device = DEVICE_NULL;
 uint8_t cur_col = 0;
@@ -155,7 +105,7 @@ uint8_t in_sysex = 0;
 uint8_t in_sysex2 = 0;
 
 uint8_t seq_page_select = 0;
-uint8_t load_grid_models = 0;
+uint8_t reload_slot_models = 0;
 uint8_t grid_models[22];
 
 uint8_t euclid_scale = 0;
@@ -251,14 +201,6 @@ uint16_t exploit_start_clock = 0;
 void clear_step_locks(int curtrack, int i) ;
 /*A toggle for handling incoming pattern and kit data.*/
 
-#define SEQ_MUTE_ON 1
-#define SEQ_MUTE_OFF 0
-
-#define PATTERN_STORE 0
-#define PATTERN_UDEF 254
-#define STORE_IN_PLACE 0
-#define STORE_AT_SPECIFIC 254
-
 char currentkitName[16];
 
 uint8_t patternswitch = PATTERN_UDEF;
@@ -319,6 +261,10 @@ struct musical_notes  {
   const char *notes_lower[16] = { "c ", "c#", "d ", "d#", "e ", "f", "f#", "g ", "g#", "a ", "a#", "b " };
 
 };
+
+bool sd_read_data(void *data, size_t len, FatFile *filep);
+bool sd_write_data(void *data, size_t len, FatFile *filep);
+
 /*
    ==============
    class: MDTrack
@@ -374,29 +320,51 @@ class ExtSeqTrack {
 
     }
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
+      bool ret;
+      int b = 0;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
       int32_t len;
-      file.seekSet(offset);
+      ret = file.seekSet(offset);
+      if (!ret) {
+        DEBUG_PRINT_FN();
+        DEBUG_PRINTLN("Seek failed");
+        return false;
+      }
       if (m > 0) {
-        file.read(( uint8_t*) (this), m);
+        ret = sd_read_data(( uint8_t*) (this), m, &file);
       }
       else {
-        file.read(( uint8_t*) (this), sizeof(ExtSeqTrack));
+        ret = sd_read_data(( uint8_t*) (this), sizeof(ExtSeqTrack), &file);
+      }
+
+      if (!ret) {
+        DEBUG_PRINT_FN();
+        DEBUG_PRINTLN("Read failed");
+        return false;
       }
       return true;
     }
     bool store_track_in_grid(int track, int32_t column, int32_t row) {
       /*Assign a track to Grid i*/
       /*Extraact track data from received pattern and kit and store in track object*/
+      bool ret;
 
+      int b = 0;
+      DEBUG_PRINT_FN();
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
-      file.seekSet(offset);
+      ret = file.seekSet(offset);
+      if (!ret) {
+        DEBUG_PRINTLN("Seek failed");
+        return false;
+      }
 
       getTrack_from_sysex(track - 16, column - 16);
-      int b;
-      b = file.write(( uint8_t*) this, sizeof(ExtSeqTrack));
-
+      ret = sd_write_data(( uint8_t*) this, sizeof(ExtSeqTrack), &file);
+      if (!ret) {
+        DEBUG_PRINTLN("Write failed");
+        return false;
+      }
       return true;
 
     }
@@ -446,33 +414,53 @@ class A4Track : public ExtSeqTrack {
       }
     }
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
-
+      bool ret;
+      int b = 0;
+      DEBUG_PRINT_FN();
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
       int32_t len;
-      file.seekSet(offset);
-
+      ret = file.seekSet(offset);
+      if (!ret) {
+        DEBUG_PRINTLN("Seek failed");
+        return false;
+      }
       if (Analog4.connected) {
         if (m > 0) {
-          file.read(( uint8_t*) (this), m);
+          ret = sd_read_data(( uint8_t*) (this), m, &file);
         }
         else {
-          file.read(( uint8_t*) (this), sizeof(A4Track));
+          ret = sd_read_data(( uint8_t*) (this), sizeof(A4Track), &file);
         }
+        if (!ret) {
+          DEBUG_PRINTLN("Write failed");
+          return false;
+        }
+        return true;
       }
-      return true;
+      return false;
     }
     bool store_track_in_grid(int track, int32_t column, int32_t row) {
       /*Assign a track to Grid i*/
       /*Extraact track data from received pattern and kit and store in track object*/
-
+      bool ret;
+      int b = 0;
+      DEBUG_PRINT_FN();
+      DEBUG_PRINTLN("storing a4 track");
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
-      file.seekSet(offset);
+      ret = file.seekSet(offset);
+      if (!ret) {
+        DEBUG_PRINTLN("Seek failed");
+        return false;
+      }
 
       /*analog 4 tracks*/
       if (Analog4.connected) {
         getTrack_from_sysex(track - 16, column - 16);
-        file.write(( uint8_t*)  this, sizeof(A4Track));
+        ret = sd_write_data(( uint8_t*)  this, sizeof(A4Track), &file);
+        if (!ret) {
+          return false;
+        }
         return true;
 
       }
@@ -665,11 +653,11 @@ class MDTrack {
         pattern_rec.swingPatterns[tracknumber] = swingPattern;
 
         for (int n = 0; n < arraysize; n ++) {
-          //Serial.println();
-          //Serial.println("Adding");
-          //Serial.println(step[n]);
-          //Serial.println(param_number[n]);
-          //Serial.println(value[n]);
+          //DEBUG_PRINTLN();
+          //DEBUG_PRINTLN("Adding");
+          //DEBUG_PRINTLN(step[n]);
+          //DEBUG_PRINTLN(param_number[n]);
+          //DEBUG_PRINTLN(value[n]);
 
           //  if (arraysize > 5) {     GUI.flash_string_fill("greater than 5"); }
           pattern_rec.addLock(tracknumber, step[n], param_number[n], value[n]);
@@ -716,43 +704,102 @@ class MDTrack {
     }
     bool load_track_from_grid(int32_t column, int32_t row, int m) {
 
+      bool ret;
+      int b = 0;
+
+      DEBUG_PRINT_FN();
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t)GRID_WIDTH)) * (int32_t) GRID_SLOT_BYTES;
 
       int32_t len;
 
-      file.seekSet(offset);
+      ret = file.seekSet(offset);
+      if (!ret) {
+        DEBUG_PRINTLN("Seek failed");
+        return false;
+      }
+
       len = (sizeof(MDTrack) - sizeof(kitextra) - (LOCK_AMOUNT * 3));
 
       //len = (sizeof(MDTrack)  - (LOCK_AMOUNT * 3));
 
-      file.read(( uint8_t*) this, len);
+      ret = sd_read_data(( uint8_t*) this, len, &file);
+
+      if (!ret) {
+        DEBUG_PRINTLN("read failed");
+        return false;
+      }
 
       if (m == 0) {
 
 
-        file.read(( uint8_t*) & (this->kitextra), sizeof(kitextra));
-        file.read(( uint8_t*) & (this->param_number[0]), arraysize);
-        file.read(( uint8_t*) & (this->value[0]), arraysize);
-        file.read(( uint8_t*) & (this->step[0]), arraysize);
+        ret = sd_read_data(( uint8_t*) & (this->kitextra), sizeof(kitextra), &file);
+        if (!ret) {
+          DEBUG_PRINTLN("read failed");
+          return false;
+        }
+
+        ret = sd_read_data(( uint8_t*) & (this->param_number[0]), arraysize, &file);
+        if (!ret) {
+          DEBUG_PRINTLN("read failed");
+          return false;
+        }
+
+        ret = sd_read_data(( uint8_t*) & (this->value[0]), arraysize, &file);
+        if (!ret) {
+          DEBUG_PRINTLN("read failed");
+          return false;
+        }
+
+        ret = sd_read_data(( uint8_t*) & (this->step[0]), arraysize, &file);
+        if (!ret) {
+          DEBUG_PRINTLN("read failed");
+          return false;
+        }
+
       }
       return true;
     }
     bool store_track_in_grid(int track, int32_t column, int32_t row) {
       /*Assign a track to Grid i*/
       /*Extraact track data from received pattern and kit and store in track object*/
-
+      bool ret;
+      int b = 0;
+      DEBUG_PRINT_FN();
       int32_t len;
       int32_t offset = (int32_t) GRID_SLOT_BYTES + (column + (row * (int32_t) GRID_WIDTH)) *  (int32_t) GRID_SLOT_BYTES;
-      file.seekSet(offset);
+      ret = file.seekSet(offset);
+      if (!ret) {
+        DEBUG_PRINTLN( "seek failed");
+        return false;
+      }
 
       getTrack_from_sysex(track, column);
       len = sizeof(MDTrack) - (LOCK_AMOUNT * 3);
 
-      file.write(( uint8_t*)  (this), len);
+      ret = sd_write_data(( uint8_t*)  (this), len, &file);
+      if (!ret) {
+        DEBUG_PRINTLN( "write failed");
+        return false;
+      }
 
-      file.write(( uint8_t*)  & (this->param_number[0]), arraysize);
-      file.write(( uint8_t*)  & (this->value[0]), arraysize);
-      file.write(( uint8_t*)  & (this->step[0]), arraysize);
+      ret = sd_write_data(( uint8_t*)  & (this->param_number[0]), arraysize, &file);
+      if (!ret) {
+        DEBUG_PRINTLN( "write failed");
+        return false;
+      }
+
+      ret = sd_write_data(( uint8_t*)  & (this->value[0]), arraysize, &file);
+      if (!ret) {
+        DEBUG_PRINTLN( "write failed");
+        return false;
+      }
+
+      ret = sd_write_data(( uint8_t*)  & (this->step[0]), arraysize, &file);
+      if (!ret) {
+        DEBUG_PRINTLN( "write failed");
+        return false;
+      }
+
       return true;
 
 
@@ -825,7 +872,106 @@ Project project_header;
 
 
 
+/*
+   Function for writing to the project file
+*/
+bool sd_write_data(void *data, size_t len, FatFile *filep) {
 
+  int b;
+  bool pass = false;
+  bool ret;
+  uint32_t pos = filep->curPosition();
+
+  uint8_t n = 0;
+
+  for (n = 0; n < SD_MAX_RETRIES && pass == false; n++) {
+
+
+    b = filep->write(( uint8_t*) data, len);
+
+
+    if (b < len) {
+      DEBUG_PRINT_FN();
+      DEBUG_PRINT("Write Attempt: ");
+      DEBUG_PRINTLN(n);
+      DEBUG_PRINT("Write failed: ");
+      DEBUG_PRINT(b);
+      DEBUG_PRINT(" of ");
+      DEBUG_PRINTLN(len);
+      sd_write_fail++;
+      pass = false;
+      /*reset position*/
+      ret = filep->seekSet(pos);
+      if (!ret) {
+        DEBUG_PRINTLN("Could not seek, failing");
+        return false;
+      }
+    }
+    if (b == len) {
+      pass = true;
+    }
+  }
+
+  if (pass) {
+    return true;
+  }
+  else {
+    DEBUG_PRINTLN("Total write failures");
+    DEBUG_PRINTLN(sd_write_fail);
+    return false;
+  }
+}
+/*
+   Function for reading from the project file
+*/
+bool sd_read_data(void *data, size_t len, FatFile *filep) {
+
+  int b;
+  bool pass = false;
+  bool ret;
+  uint32_t pos = filep->curPosition();
+
+  uint8_t n = 0;
+
+  for (n = 0; n < SD_MAX_RETRIES && pass == false; n++) {
+
+
+    b = filep->read(( uint8_t*) data, len);
+
+
+    if (b < len) {
+      DEBUG_PRINT_FN();
+      DEBUG_PRINT("Read Attempt: ");
+      DEBUG_PRINTLN(n);
+      DEBUG_PRINT("Read failed: ");
+      DEBUG_PRINT(b);
+      DEBUG_PRINT(" of ");
+      DEBUG_PRINTLN(len);
+      sd_read_fail++;
+
+      /*reset position*/
+      ret = filep->seekSet(pos);
+      if (!ret) {
+        DEBUG_PRINTLN("Could not seek, failing");
+        return false;
+      }
+      pass = false;
+    }
+    if (b == len) {
+      pass = true;
+    }
+  }
+
+  if (pass) {
+    return true;
+  }
+  else {
+    DEBUG_PRINTLN("Total read failures");
+    DEBUG_PRINTLN(sd_read_fail);
+
+    return false;
+  }
+}
 /*
 
    /*
@@ -843,51 +989,82 @@ Project project_header;
   If the cfg file does exist then the last used project is loaded.
 
 */
-void sd_load_init() {
+bool sd_load_init() {
+  bool ret = false;
+  int b;
+
+  DEBUG_PRINT_FN();
+  DEBUG_PRINTLN("Initializing SD Card");
   //File file("/test.mcl",O_WRITE);
   /*Configuration file used to store settings when Minicommand is turned off*/
-  if (!SD.begin(53, SPI_FULL_SPEED)) {
-    //Serial.println("SD err");
+  for (uint8_t n = 0; n < SD_MAX_RETRIES && ret == false; n++) {
+    ret = SD.begin(53, SPI_FULL_SPEED);
+    if (!ret) {
+      delay(500);
+    }
+  }
+  if (ret == false) {
+    DEBUG_PRINTLN("SD Card Initializing failed");
     GUI.flash_strings_fill("SD CARD ERROR", "");
+    return false;
   }
 
   else {
-    //Serial.println("sd ok");
+    DEBUG_PRINTLN("SD Init okay");
 
     if (cfgfile.open("/config.mcls", O_RDWR)) {
-      //Serial.println("CFG read");
-      if (int b = cfgfile.read(( uint8_t*)&cfg, sizeof(Config)) > 0) {
-        //Serial.println("CFG read");
+      DEBUG_PRINTLN("Config file open: success");
 
-        //Serial.println(b);
+      if (sd_read_data(( uint8_t*)&cfg, sizeof(Config), &cfgfile)) {
+        DEBUG_PRINTLN("Config file read: success");
 
         if (cfg.version != CONFIG_VERSION) {
-          //Serial.println("bad cfg version");
-
-          cfg_init();
+          DEBUG_PRINTLN("Incompatible config version");
+          if (!cfg_init()) {
+            return false;
+          }
           new_project_page();
+          return true;
+
         }
 
         else if (cfg.number_projects > 0) {
-
+          DEBUG_PRINTLN("Project count greater than 0, try to load existing");
           if (!sd_load_project(cfg.project)) {
+
             new_project_page();
+            return true;
+
           }
+          return true;
         }
         else {
           new_project_page();
+          return true;
+
         }
       }
       else {
-        cfg_init();
+        DEBUG_PRINTLN("Could not read cfg file.");
+
+        if (!cfg_init()) {
+          return false;
+        }
         new_project_page();
+        return true;
+
       }
     }
     else {
-      //Serial.println("could not open conf");
-      cfg_init();
+      DEBUG_PRINTLN("Could not open cfg file. Let's try to create it");
+      if (!cfg_init()) {
+        return false;
+      }
       new_project_page();
+      return true;
+
     }
+    return true;
   }
 
 }
@@ -908,6 +1085,11 @@ void sd_load_init() {
 char file_entries[30][16];
 
 void load_project_page() {
+  bool ret;
+  int b;
+
+  DEBUG_PRINT_FN();
+  DEBUG_PRINTLN("Load project page");
 
   char temp_entry[16];
 
@@ -925,7 +1107,7 @@ void load_project_page() {
     char mcl[3] = "mcl";
     bool is_mcl_file = true;
 
-    // //Serial.println(temp_entry);
+    DEBUG_PRINTLN(temp_entry);
 
     for (uint8_t a = 1; a < 3; a++) {
       if (temp_entry[14 - a] != mcl[3 - a]) {
@@ -934,7 +1116,8 @@ void load_project_page() {
     }
     if (is_mcl_file) {
       strcpy(&file_entries[numEntries][0], &temp_entry[0]);
-      //Serial.println(file_entries[index]);
+      DEBUG_PRINTLN("project file identified");
+      DEBUG_PRINTLN(file_entries[index]);
       numEntries++;
     }
     index++;
@@ -961,12 +1144,22 @@ void load_project_page() {
   Loads the GUI for the new project page.
 
 */
-void cfg_init() {
+bool cfg_init() {
+  bool ret;
+  int b;
 
-  //Serial.println("conf ext");
+  DEBUG_PRINT_FN();
+  DEBUG_PRINTLN("Initialising cfgfile");
+
+  //DEBUG_PRINTLN("conf ext");
   cfgfile.remove();
-  if ( cfgfile.createContiguous("/config.mcls", (uint32_t) GRID_SLOT_BYTES)) {
-    //Serial.println("created new conf");
+  ret = cfgfile.createContiguous("/config.mcls", (uint32_t) GRID_SLOT_BYTES);
+  if (ret) {
+    DEBUG_PRINTLN("Created new cfgfile");
+  }
+  else {
+    DEBUG_PRINTLN("Failed to create new cfgfile");
+    return false;
   }
 
   char my_string[16] = "/project000.mcl";
@@ -982,14 +1175,15 @@ void cfg_init() {
   cur_col = 0;
   cfg.cues = 0;
   cfgfile.close();
-  write_cfg();
+
+  ret = write_cfg();
+  if (!ret) {
+    return false;
+  }
+  return true;
 }
+
 void new_project_page() {
-  // if (cfg.version != CONFIG_VERSION) {
-  //            cfg_init();
-
-  // }
-
 
   char my_string[16] = "/project___.mcl";
 
@@ -1015,54 +1209,78 @@ void new_project_page() {
   Opens a new file and fills it with empty data for all the Grids in the Grid.
 
 */
-void write_project_header() {
+bool write_project_header() {
+
+  bool ret;
+  int b;
+
+  DEBUG_PRINT_FN();
+  DEBUG_PRINTLN("Writing project header");
+
   project_header.version = VERSION;
   //  Config cfg;
   //  uint8_t reserved[16];
   project_header.hash = 0;
-  file.seekSet(0);
-  int b = file.write(( uint8_t*)&project_header, sizeof(project_header));
-  //Serial.println("bytes written project header");
-  //Serial.println(b);
-  /* file.write(( uint8_t*)&project_header.version, sizeof(project_header.version));
-    file.write(( uint8_t*)&cfg, sizeof(project_header.cfg));
-    file.write(( uint8_t*)&project_header.reserved, sizeof(project_header.reserved));
-    file.write(( uint8_t*)&project_header.hash, sizeof(project_header.hash));*/
+
+  ret = file.seekSet(0);
+
+  if (!ret) {
+
+    DEBUG_PRINTLN("Seek failed");
+
+    return false;
+
+  }
+
+  ret = sd_write_data(( uint8_t*)&project_header, sizeof(project_header), &file);
+
+  if (!ret) {
+    DEBUG_PRINTLN("Write header failed");
+    return false;
+  }
+  DEBUG_PRINTLN("Write header success");
+  return true;
 }
 
 
 bool sd_new_project(char *projectname) {
 
+  bool ret;
 
-
-
+  DEBUG_PRINT_FN();
+  DEBUG_PRINTLN("Creating new project");
   numProjects++;
 
-
   file.close();
-
-  bool exitcode;
 
   temptrack.active = EMPTY_TRACK_TYPE;
 
+  // DEBUG_PRINTLN(exitcode);
 
-  //Serial.println(exitcode);
-  //Make sure the file is large enough for the entire GRID
-  exitcode = file.createContiguous(projectname, (uint32_t) GRID_SLOT_BYTES + (uint32_t) GRID_SLOT_BYTES * (uint32_t) GRID_LENGTH * (uint32_t) GRID_WIDTH);
+  ret = file.createContiguous(projectname, (uint32_t) GRID_SLOT_BYTES + (uint32_t) GRID_SLOT_BYTES * (uint32_t) GRID_LENGTH * (uint32_t) GRID_WIDTH);
 
- // Serial.println(exitcode);
-  if (exitcode == false) {
+  if (!ret) {
     file.close();
-    //Serial.println("could not extend file");
-
+    DEBUG_PRINTLN("Could not extend file");
     return false;
   }
-  //Serial.println("file extended");
+
   file.close();
-  file.open(projectname, O_RDWR);
-  write_project_header();
+
+  ret = file.open(projectname, O_RDWR);
+
+  if (!ret) {
+    file.close();
+
+    DEBUG_PRINTLN("Could not open file");
+    return false;
+  }
+
 
   uint8_t ledstatus = 0;
+
+  DEBUG_PRINTLN("Initializing project.. please wait");
+
   //Initialise the project file by filling the grid with blank data.
   for (int32_t i = 0; i < GRID_LENGTH * GRID_WIDTH; i++) {
     if (i % 25 == 0) {
@@ -1076,34 +1294,35 @@ bool sd_new_project(char *projectname) {
       }
     }
 
-    //file.write(( uint8_t*)&temptrack.active, 550);
-    //  int x = sizeof(MDTrack);
-    //  int size = 100;
-    //  int count = 0;
-    //   while (x > 0) {
-    //      x = x - size;
-    //      if (x < 0) { size = 100 - x; }
-    //      int b = file.write(( uint8_t*)&temptrack + count, size);
-    //      count = count + size;
-    //   }
-
-    //Clear the Grid at position i
-    clear_Grid(i);
-
-    //              LCD.goLine(0);
-    //              char str[5];
-    //  itoa(b, &str[0],10);
-    //  GUI.flash_string(str, 2000);
-    //   LCD.puts(str);
+    ret = clear_Grid(i);
+    if (!ret) {
+      return false;
+    }
 
 
   }
   clearLed2();
-  file.seekSet(0);
-  m_strncpy(cfg.project, projectname, 16);
+  ret = file.seekSet(0);
 
+  if (!ret) {
+    DEBUG_PRINTLN("Could not seek");
+    return false;
+  }
+
+  if (!write_project_header()) {
+    return false;
+  }
+
+  //m_strncpy(cfg.project, projectname, 16);
+  file.close();
   cfg.number_projects++;
   write_cfg();
+
+  // if (!ret) {
+  // return false;
+  // }
+
+
   return true;
 }
 
@@ -1117,37 +1336,60 @@ bool sd_new_project(char *projectname) {
 */
 
 bool sd_load_project(char *projectname) {
+
+  bool ret;
+
+  DEBUG_PRINT_FN();
+  DEBUG_PRINTLN("Loading project");
+  DEBUG_PRINTLN(projectname);
+
   file.close();
-  if (!file.open(projectname, O_RDWR)) {
-    //Serial.println("could not load project");
+
+  ret = file.open(projectname, O_RDWR);
+  if (!ret) {
+
+    DEBUG_PRINTLN("Could not open project file");
     return false;
   }
-  else {
-    //Serial.println("project load okay");
-    //Serial.println(projectname);
+  ret = check_project_version();
 
-  }
-
-  if (!check_project_version()) {
+  if (!ret) {
+    DEBUG_PRINTLN("Project version incompatible");
     file.close();
     return false;
   }
 
   m_strncpy(cfg.project, projectname, 16);
-  write_cfg();
-  //
+
+  ret = write_cfg();
+
+  if (!ret) {
+    return false;
+  }
 
   return true;
 
 }
 
 bool check_project_version() {
-  file.seekSet(0);
+  bool ret;
   int b = 0;
-  b = file.read(( uint8_t*) & (project_header), sizeof(project_header));
-  //Serial.println("Project Header Size: ");
-  //Serial.println(b);
-  //  file.read(( uint8_t*)&(project_header.cfg),sizeof(project_header.cfg));
+
+  DEBUG_PRINT_FN();
+  DEBUG_PRINTLN("Check project version");
+
+  ret = file.seekSet(0);
+
+  if (!ret) {
+    DEBUG_PRINTLN("Seek failed");
+    return false;
+  }
+  ret = sd_read_data(( uint8_t*) & (project_header), sizeof(project_header), &file);
+
+  if (!ret) {
+    DEBUG_PRINTLN("Could not read project header");
+    return false;
+  }
   if (project_header.version >= VERSION) {
     return true;
   }
@@ -1165,11 +1407,28 @@ bool check_project_version() {
 
 */
 
-void write_cfg() {
-  cfgfile.open("/config.mcls", O_RDWR);
-  cfgfile.write(( uint8_t*)&cfg, sizeof(Config));
+bool write_cfg() {
+  bool ret;
+  int b;
+
+  DEBUG_PRINT_FN();
+  DEBUG_PRINTLN("Writing cfg");
+
+  cfgfile.close();
+  ret = cfgfile.open("/config.mcls", O_RDWR);
+  if (!ret) {
+    DEBUG_PRINTLN("Open cfg file failed");
+    return false;
+  }
+
+  ret = sd_write_data(( uint8_t*)&cfg, sizeof(Config), &cfgfile);
+  if (!ret) {
+    DEBUG_PRINTLN("Write cfg failed");
+  }
+  DEBUG_PRINTLN("Write cfg okay");
   cfgfile.close();
   cfg_save_lastclock = slowclock;
+  return true;
 }
 
 
@@ -1666,32 +1925,13 @@ uint8_t globalbasechannel_to_channel(uint8_t b) {
   }
 }
 void encoder_param2_handle(Encoder *enc) {
-  // for (int i = 0; i < 16; i++) {
-  //  PatternMasks[i] = getPatternMask(i, enc->getValue(), 3, true);
-  //  PatternLengths[i] = temptrack.length;
-  // }
-  A4Track *track_bufx;
+
   if (enc->hasChanged()) {
     grid_lastclock = slowclock;
 
-    getGridModel(0, param2.getValue(), true, track_bufx);
-
-    if ((temptrack.active != EMPTY_TRACK_TYPE)) {
-      for (uint8_t c = 0; c < 17; c++) {
-        currentkitName[c] = temptrack.kitName[c] ;
-      }
-    }
-    for (uint8_t c = 0; c < 17; c++) {
-      currentkitName[c] = ' ';
-    }
+    reload_slot_models = 0;
   }
-
-  load_grid_models = 0;
 }
-
-
-
-
 
 
 uint8_t note_to_track_map(uint8_t note) {
@@ -1944,7 +2184,7 @@ bool place_track_inpattern(int curtrack, int column, int row, A4Sound *analogfou
 
     if (temptrack.load_track_from_grid(column, row, 0)) {
       if (temptrack.active != EMPTY_TRACK_TYPE) {
-      temptrack.placeTrack_in_sysex(curtrack, column);
+        temptrack.placeTrack_in_sysex(curtrack, column);
       }
     }
   }
@@ -1952,19 +2192,21 @@ bool place_track_inpattern(int curtrack, int column, int row, A4Sound *analogfou
     if (Analog4.connected) {
       A4Track track_buf;
 
-      track_buf.load_track_from_grid(column, row, 0);
-            if (track_buf.active != EMPTY_TRACK_TYPE) {
+      if (track_buf.load_track_from_grid(column, row, 0)) {
+        if (track_buf.active != EMPTY_TRACK_TYPE) {
 
-      return track_buf.placeTrack_in_sysex(curtrack, column, analogfour_sound);
-            }
+          return track_buf.placeTrack_in_sysex(curtrack, column, analogfour_sound);
+        }
+      }
     }
     else {
       ExtSeqTrack track_buf;
-      track_buf.load_track_from_grid(column, row, 0);
-                  if (track_buf.active != EMPTY_TRACK_TYPE) {
+      if (track_buf.load_track_from_grid(column, row, 0)) {
+        if (track_buf.active != EMPTY_TRACK_TYPE) {
 
-      return track_buf.placeTrack_in_sysex(curtrack, column);
-                  }
+          return track_buf.placeTrack_in_sysex(curtrack, column);
+        }
+      }
     }
   }
 
@@ -2016,6 +2258,7 @@ void a4_setup() {
       uart2_device = DEVICE_A4;
       turboSetSpeed(cfg_speed_to_turbo(cfg.uart2_turbo), 2);
     }
+ 
   }
   if (Analog4.connected == false) {
     //If sysex not receiverd assume generic midi device;
@@ -2663,14 +2906,15 @@ class MCLMidiEvents : public MidiCallback {
       if ((curpage == SEQ_RTRK_PAGE) && (msg[0] == 153)) {
 
         if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
-          
+
           noteproceed = 1;
         }
 
         if (noteproceed == 1) {
           for (uint8_t i = 0; i < sizeof(MD.global.drumMapping); i++) {
-            if (msg[1] == MD.global.drumMapping[i])
+            if (msg[1] == MD.global.drumMapping[i]) {
               note_num = i;
+            }
           }
           uint8_t step_count = (MidiClock.div16th_counter - pattern_start_clock32th / 2) - (PatternLengths[note_num] * ((MidiClock.div16th_counter - pattern_start_clock32th / 2) / PatternLengths[note_num]));
 
@@ -2693,6 +2937,7 @@ class MCLMidiEvents : public MidiCallback {
           timing[note_num][step_count] = utiming;
 
         }
+        return;
       }
       else if ((curpage == SEQ_RPTC_PAGE) || (curpage == SEQ_PTC_PAGE) ) {
 
@@ -2798,8 +3043,8 @@ class MCLMidiEvents : public MidiCallback {
 
           //We need to wait 500ms for the exploit to take effect before collecting notes
           if (clock_diff(exploit_start_clock, current_clock) > EXPLOIT_DELAY_TIME) {
-              //      Serial.println("Note proceed on");
-                //  Serial.println(clock_diff(exploit_start_clock, current_clock));
+            //      DEBUG_PRINTLN("Note proceed on");
+            //  DEBUG_PRINTLN(clock_diff(exploit_start_clock, current_clock));
 
             noteproceed = 1;
           }
@@ -3150,11 +3395,11 @@ class MDHandler2 : public MDCallback {
       else if (patternswitch == PATTERN_STORE) {
 
         /*Retrieve the pattern from the Sysex buffer and store it in the pattern_rec object. The MD header is 5 bytes long, hence the offset and length change*/
-        if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
+//        if (pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
 
 
           //patternswitch = PATTERN_UDEF;
-        }
+  //      }
         /*If the pattern can't be retrieved from the sysex data then there's been a problem*/
         //  else { GUI.flash_strings_fill("SYSEX", "ERROR");  }
 
@@ -3436,6 +3681,7 @@ void toggle_fx2() {
 */
 
 void store_tracks_in_mem( int column, int row, int store_behaviour_) {
+  int16_t tclock = slowclock;
   uint8_t readpattern = MD.currentPattern;
   if ((patternload_param1.getValue() * 16 + patternload_param2.getValue()) != MD.currentPattern) {
     readpattern = (patternload_param1.getValue() * 16 + patternload_param2.getValue());
@@ -3466,14 +3712,21 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
     if (!MD.getBlockingPattern(readpattern)) {
       return;
     }
+    if (MidiSysex.data[3] == 0x02) {
+            DEBUG_PRINTLN("MD Pattern");
+
+    }
+      if (!pattern_rec.fromSysex(MidiSysex.data + 5, MidiSysex.recordLen - 5)) {
+      DEBUG_PRINTLN("could not get pattern rec");
+      return;
+      }
 
     int curkit;
     if (readpattern != MD.currentPattern) {
       curkit = pattern_rec.kit;
     }
     else {
-      curkit = last_md_track;
-      //MD.getCurrentKit(CALLBACK_TIMEOUT);
+      curkit = MD.getCurrentKit(CALLBACK_TIMEOUT);
       MD.saveCurrentKit(curkit);
 
     }
@@ -3511,7 +3764,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
       if (store_behaviour == STORE_IN_PLACE) {
         if ((i >= 16) && (i < 20)) {
           if (Analog4.connected) {
-
+            DEBUG_PRINTLN("a4 get sound");
             Analog4.getBlockingSoundX(i - 16);
             analogfour_track.sound.fromSysex(MidiSysex2.data + 8, MidiSysex2.recordLen - 8);
           }
@@ -3537,6 +3790,7 @@ void store_tracks_in_mem( int column, int row, int store_behaviour_) {
 
 
   clearLed();
+  DEBUG_PRINTLN(slowclock - tclock);
 
 }
 
@@ -3587,6 +3841,7 @@ void write_tracks_to_md( int column, int row, int b) {
   //    MD.saveCurrentKit(currentkit_temp);
   //   MD.getBlockingKit(currentkit_temp);
   if (!MD.getBlockingPattern(MD.currentPattern)) {
+        DEBUG_PRINTLN("could not get blocking pattern");
     return;
   }
 
@@ -3594,6 +3849,10 @@ void write_tracks_to_md( int column, int row, int b) {
 
     send_pattern_kit_to_md();
     patternswitch = PATTERN_UDEF;
+  }
+  else {
+            DEBUG_PRINTLN("could not get blocking pattern");
+
   }
 
 
@@ -4133,15 +4392,15 @@ void load_seq_page(uint8_t page) {
   if (curpage == 0) {
     create_chars_seq();
     currentkit_temp = MD.getCurrentKit(CALLBACK_TIMEOUT);
-        curpage = page;
+    //curpage = page;
 
     //Don't save kit if sequencer is running, otherwise parameter locks will be stored.
-   if (MidiClock.state != 2) {
+    if (MidiClock.state != 2) {
       MD.saveCurrentKit(currentkit_temp);
     }
 
-     MD.getBlockingKit(currentkit_temp);
-     MD.getCurrentTrack(CALLBACK_TIMEOUT);
+    MD.getBlockingKit(currentkit_temp);
+    MD.getCurrentTrack(CALLBACK_TIMEOUT);
 
     exploit_on();
   }
@@ -4223,7 +4482,7 @@ void load_seq_page(uint8_t page) {
     trackinfo_param3.cur = PatternLengths[last_md_track];
 
   }
-          curpage = page;
+  curpage = page;
 
   GUI.setPage(&trackinfo_page);
 
@@ -4236,17 +4495,33 @@ void clear_row (int row) {
     clear_Grid(x + (row * GRID_WIDTH));
   }
 }
-void clear_Grid(int i) {
+bool clear_Grid(int i) {
+
+  bool ret;
+  int b;
+
+
+
   temptrack.active = EMPTY_TRACK_TYPE;
   int32_t offset = (int32_t) GRID_SLOT_BYTES + (int32_t) i * (int32_t) GRID_SLOT_BYTES;
 
-  /*if (file.seekSet(offset)) {
-    //Serial.println("seek okay");
-    }
-    //Serial.println("Writing");
-    //Serial.println(sizeof(temptrack.active)); */
-  int b = file.write(( uint8_t*) & (temptrack.active), sizeof(temptrack.active));
-  // //Serial.println(b);
+  ret = file.seekSet(offset);
+  if (!ret) {
+    DEBUG_PRINT_FN();
+    DEBUG_PRINTLN("Clear grid failed: ");
+    DEBUG_PRINTLN(i);
+    return false;
+  }
+  //DEBUG_PRINTLN("Writing");
+  //DEBUG_PRINTLN(sizeof(temptrack.active));
+
+  ret = sd_write_data(( uint8_t*) & (temptrack.active), sizeof(temptrack.active), &file);
+
+  if (!ret) {
+    DEBUG_PRINTLN("Write failed");
+    return false;
+  }
+  return true;
 }
 
 /*
@@ -4421,10 +4696,10 @@ void create_chars_mixer() {
 }
 
 void setup() {
+  Serial.begin(9600);
+  DEBUG_PRINTLN("Welcome to MegaCommand Live");
+  DEBUG_PRINTLN(VERSION);
 
-  //Serial.begin(9600);
-  //Serial.println("MegaCommand");
-  //Serial.println(VERSION);
 
   uint8_t charmap[8] = { 10, 10, 10, 10, 10, 10, 10, 00 };
 
@@ -4482,7 +4757,13 @@ void setup() {
   //Start the SD Card Initialisation.
 
   //sd_new_project(newprj);
-  sd_load_init();
+  bool ret = false;
+
+  ret = sd_load_init();
+
+  //if (!ret) { }
+
+
   // MidiClock.mode = MidiClock.EXTERNAL_MIDI;
 
 
@@ -5504,24 +5785,33 @@ void GridEncoderPage::loop() {
 */
 A4Track track_bufx;
 
-void load_gridf_models() {
+void load_slot_models() {
 
-  if (load_grid_models == 0) {
-    for (uint8_t i = 0; i < 22; i++) {
-      grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
-      if ((temptrack.active != EMPTY_TRACK_TYPE) && (i == 0)) {
+  DEBUG_PRINT_FN(x);
+
+  DEBUG_PRINT("Row: "); DEBUG_PRINTLN(param2.getValue());
+  for (uint8_t i = 0; i < 22; i++) {
+    grid_models[i] = getGridModel(i, param2.getValue(), true, (A4Track*) &track_bufx);
+    DEBUG_PRINT("Slot: "); DEBUG_PRINT(i); DEBUG_PRINT(" Model: ");
+    DEBUG_PRINTLN(grid_models[i]);
+    if (i == 0) {
+      if (temptrack.active != EMPTY_TRACK_TYPE) {
         for (uint8_t c = 0; c < 17; c++) {
           currentkitName[c] = temptrack.kitName[c] ;
         }
-
       }
-
-
-
+      else {
+        for (uint8_t c = 0; c < 17; c++) {
+          currentkitName[c] = ' ' ;
+        }
+      }
     }
-    load_grid_models = 1;
+
+
+
 
   }
+
 }
 
 void GridEncoderPage::display() {
@@ -5548,11 +5838,14 @@ void GridEncoderPage::display() {
   if (slowclock < grid_lastclock) {
     grid_lastclock = 0xFFFF - grid_lastclock;
   }
-  load_gridf_models();
+  if (reload_slot_models == 0) {
+    load_slot_models();
+    reload_slot_models = 1;
+  }
 
-  if (clock_diff(grid_lastclock,slowclock) < GUI_NAME_TIMEOUT) {
+  if (clock_diff(grid_lastclock, slowclock) < GUI_NAME_TIMEOUT) {
     display_name = 1;
-    if (clock_diff(cfg_save_lastclock,slowclock) > GUI_NAME_TIMEOUT) {
+    if (clock_diff(cfg_save_lastclock, slowclock) > GUI_NAME_TIMEOUT) {
       cfg.cur_col = param1.cur;
       cfg.cur_row = param2.cur;
       write_cfg();
@@ -5846,13 +6139,16 @@ void cfg_midi_ports() {
 }
 
 void exploit_on() {
-    //Serial.println("Exploit on");
-      //  Serial.println(slowclock);
+  //DEBUG_PRINTLN("Exploit on");
+  //  DEBUG_PRINTLN(slowclock);
 
 
   // in_sysex = 1;
   noteproceed = 0;
-  if (exploit == 1) { exploit_start_clock = slowclock; return; }
+  if (exploit == 1) {
+    exploit_start_clock = slowclock;
+    return;
+  }
   exploit = 1;
   //last_md_track = MD.getCurrentTrack(CALLBACK_TIMEOUT);
   last_md_track = MD.currentTrack;
@@ -5886,7 +6182,7 @@ void exploit_on() {
     MidiUart.m_putc_immediate(MIDI_STOP);
   }
   //   }
-  
+
   MD.global.baseChannel = 4;
 
   switchGlobal(6);
@@ -5897,20 +6193,21 @@ void exploit_on() {
   }
   //    }
   //  MD.getBlockingStatus(MD_CURRENT_GLOBAL_SLOT_REQUEST,200);
-      exploit_start_clock = slowclock;
+  exploit_start_clock = slowclock;
 
-  collect_trigs = true;
+ // collect_trigs = true;
   //in_sysex = 0;
 }
 
 
 void exploit_off() {
   noteproceed = 0;
- //Serial.println("Exploit off");
-   //     Serial.println(slowclock);
-        // in_sysex = 1;
-  if (exploit == 0) { return; }
-  exploit = 0;
+  //DEBUG_PRINTLN("Exploit off");
+  //     DEBUG_PRINTLN(slowclock);
+  // in_sysex = 1;
+  if (exploit == 0) {
+    return;
+  }
   collect_trigs = false;
 
   //
@@ -5941,6 +6238,8 @@ void exploit_off() {
   else {
     MD.setStatus(0x22, last_md_track);
   }
+    exploit = 0;
+
   //in_sysex = 0;
 }
 static uint8_t turbomidi_sysex_header[] = {
@@ -6042,7 +6341,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
         if (sd_load_project(temp)) {
-          load_grid_models = 0;
+          reload_slot_models = 0;
           GUI.setPage(&page);
           curpage = 0;
         }
@@ -6060,23 +6359,28 @@ bool handleEvent(gui_event_t *evt) {
       LCD.puts("Please Wait");
       LCD.goLine(1);
       LCD.puts("Creating Project");
-     
-     
+
+
       if (SD.exists(newprj)) {
-        GUI.flash_strings_fill("Project exists","");
+        GUI.flash_strings_fill("Project exists", "");
         return true;
       }
-      
-      bool exitcode = sd_new_project(newprj);
-      if (exitcode == true) {
-        GUI.setPage(&page);
-        load_grid_models = 0;
-        curpage = 0;
-      }
-      else {
-        GUI.flash_strings_fill("SD FAILURE", "--");
-        //  LCD.goLine(0);
-        //LCD.puts("SD Failure");
+
+      bool ret = sd_new_project(newprj);
+      if (ret) {
+        if (sd_load_project(newprj)) {
+          GUI.setPage(&page);
+          reload_slot_models = 0;
+          curpage = 0;
+          return true;
+        }
+        else {
+          GUI.flash_strings_fill("SD FAILURE", "--");
+          return false;
+          //  LCD.goLine(0);
+          //LCD.puts("SD Failure");
+        }
+
       }
 
       return true;
@@ -6341,7 +6645,7 @@ bool handleEvent(gui_event_t *evt) {
 
       return true;
     }
-    if (BUTTON_PRESSED(Buttons.ENCODER2))  {
+    if (EVENT_PRESSED(evt, Buttons.ENCODER2))  {
 
 
       load_seq_page(SEQ_RTRK_PAGE);
@@ -6351,7 +6655,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
     }
-    if (BUTTON_PRESSED(Buttons.ENCODER3))  {
+    if (EVENT_PRESSED(evt, Buttons.ENCODER3))  {
 
       load_seq_page(SEQ_PARAM_A_PAGE);
 
@@ -6359,7 +6663,7 @@ bool handleEvent(gui_event_t *evt) {
 
       return true;
     }
-    if (BUTTON_PRESSED(Buttons.ENCODER4))  {
+    if (EVENT_PRESSED(evt, Buttons.ENCODER4))  {
 
       load_seq_page(SEQ_PTC_PAGE);
 
@@ -6584,7 +6888,7 @@ bool handleEvent(gui_event_t *evt) {
     //CLEAR ROW
     if (BUTTON_RELEASED(Buttons.BUTTON1) && BUTTON_DOWN(Buttons.BUTTON3)) {
       clear_row(param2.getValue());
-      load_grid_models = 0;
+      reload_slot_models = 0;
       return true;
     }
     //TRACK READ PAGE
@@ -6601,7 +6905,7 @@ bool handleEvent(gui_event_t *evt) {
       curpage = S_PAGE;
 
       GUI.setPage(&patternload_page);
-      load_grid_models = 0;
+      reload_slot_models = 0;
 
       return true;
     }
