@@ -1,7 +1,7 @@
 /*To enable serial port debugging,
    Uncomment DEBUG_MCL line below
 */
-#define DEBUG_MCL 1
+//#define DEBUG_MCL 1
 
 #ifdef DEBUG_MCL
 #define DEBUG_PRINT(x)  Serial.print(x)
