@@ -6903,6 +6903,7 @@ bool handleEvent(gui_event_t *evt) {
 
 
       curpage = S_PAGE;
+      collect_trigs = true;
 
       GUI.setPage(&patternload_page);
       reload_slot_models = 0;
@@ -6926,6 +6927,7 @@ bool handleEvent(gui_event_t *evt) {
 
       //MD.requestKit(currentkit_temp);
       exploit_on();
+      collect_trigs = true;
       GUI.setPage(&patternload_page);
       // GUI.display();
       curpage = W_PAGE;
@@ -6954,6 +6956,7 @@ bool handleEvent(gui_event_t *evt) {
       level_pressmode = 0;
       mixer_param1.cur = 60;
       exploit_on();
+      collect_trigs = true;
 
       GUI.setPage(&mixer_page);
       //   draw_levels();
