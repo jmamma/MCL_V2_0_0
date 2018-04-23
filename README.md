@@ -1,7 +1,9 @@
 # MegaCommand Live
 
-## Compatibility: 
+This repo is now deprecated.
 
-Version 2.0 works on the original MiniCommand hardware.
+All MCL code has been ported to libraries in MIDICtrl20 code base.
 
-Version > 2.0 is no longer supported for the MiniCommand due to program space constraints. 
+See:
+
+https://github.com/jmamma/MIDICtrl20_MegaCommand
